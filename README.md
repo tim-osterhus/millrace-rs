@@ -26,6 +26,10 @@ binary that report the Rust runtime's experimental state.
 Do not depend on runtime behavior from this crate yet. Public APIs may change
 while the Rust implementation is brought toward parity with the Python runtime.
 
+## Rust Port Roadmap
+
+The behavioral parity plan lives in [docs/rust-port-roadmap.md](docs/rust-port-roadmap.md).
+
 ## License
 
 Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).

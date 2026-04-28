@@ -10,7 +10,14 @@ homepage = "https://millrace.ai"
 readme = "README.md"
 keywords = ["ai", "agents", "runtime", "workflow"]
 categories = ["command-line-utilities", "development-tools"]
-include = ["Cargo.lock", "Cargo.toml", "README.md", "LICENSE", "src/**/*.rs"]
+include = [
+    "Cargo.lock",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE",
+    "docs/**/*.md",
+    "src/**/*.rs",
+]
 
 [lib]
 name = "millrace_ai"
@@ -21,3 +28,9 @@ name = "millrace"
 path = "src/main.rs"
 
 [dependencies]
+
+[dev-dependencies]
+assert_cmd = "2"
+insta = "1"
+serde_json = "1"
+tempfile = "3"
