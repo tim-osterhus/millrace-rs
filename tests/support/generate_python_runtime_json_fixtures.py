@@ -1,0 +1,212 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from pathlib import Path
+
+from millrace_ai.contracts.compile_diagnostics import CompileDiagnostics
+from millrace_ai.contracts.enums import (
+    ExecutionStageName,
+    ExecutionTerminalResult,
+    MailboxCommand,
+    Plane,
+    PlanningStageName,
+    PlanningTerminalResult,
+    ResultClass,
+    RuntimeErrorCode,
+    RuntimeMode,
+    WatcherMode,
+    WorkItemKind,
+)
+from millrace_ai.contracts.mailbox import MailboxCommandEnvelope
+from millrace_ai.contracts.recovery import RecoveryCounterEntry, RecoveryCounters
+from millrace_ai.contracts.runtime_errors import RuntimeErrorContext
+from millrace_ai.contracts.runtime_snapshot import ActiveRunState, RuntimeSnapshot
+from millrace_ai.contracts.stage_results import StageResultEnvelope
+from millrace_ai.contracts.token_usage import TokenUsage
+
+
+NOW = datetime(2026, 4, 15, tzinfo=timezone.utc)
+
+
+def build_fixtures() -> dict[str, object]:
+    token_usage = TokenUsage(
+        input_tokens=100,
+        cached_input_tokens=20,
+        output_tokens=30,
+        thinking_tokens=5,
+        total_tokens=135,
+    )
+
+    return {
+        "runtime_snapshot.json": RuntimeSnapshot(
+            runtime_mode=RuntimeMode.DAEMON,
+            process_running=True,
+            paused=False,
+            active_mode_id="learning_codex",
+            execution_loop_id="execution.standard",
+            planning_loop_id="planning.standard",
+            learning_loop_id="learning.standard",
+            loop_ids_by_plane={
+                Plane.EXECUTION: "execution.standard",
+                Plane.PLANNING: "planning.standard",
+                Plane.LEARNING: "learning.standard",
+            },
+            compiled_plan_id="plan-001",
+            compiled_plan_path="millrace-agents/state/compiled_plan.json",
+            active_runs_by_plane={
+                Plane.EXECUTION: ActiveRunState(
+                    plane=Plane.EXECUTION,
+                    stage=ExecutionStageName.BUILDER,
+                    node_id="builder",
+                    stage_kind_id="builder",
+                    run_id="run-001",
+                    request_kind="active_work_item",
+                    work_item_kind=WorkItemKind.TASK,
+                    work_item_id="task-001",
+                    active_since=NOW,
+                    running_status_marker="BUILDER_RUNNING",
+                )
+            },
+            execution_status_marker="### BUILDER_RUNNING",
+            planning_status_marker="### IDLE",
+            learning_status_marker="### IDLE",
+            status_markers_by_plane={
+                Plane.EXECUTION: "### BUILDER_RUNNING",
+                Plane.PLANNING: "### IDLE",
+                Plane.LEARNING: "### IDLE",
+            },
+            queue_depth_execution=2,
+            queue_depth_planning=7,
+            queue_depth_learning=0,
+            queue_depths_by_plane={
+                Plane.EXECUTION: 2,
+                Plane.PLANNING: 7,
+                Plane.LEARNING: 0,
+            },
+            last_terminal_result=ExecutionTerminalResult.UPDATE_COMPLETE,
+            last_stage_result_path=(
+                "millrace-agents/runs/run-000/stage_results/request-000.json"
+            ),
+            config_version="cfg-001",
+            watcher_mode=WatcherMode.WATCH,
+            updated_at=NOW,
+        ),
+        "recovery_counters.json": RecoveryCounters(
+            entries=(
+                RecoveryCounterEntry(
+                    failure_class="missing_terminal_result",
+                    work_item_id="task-001",
+                    work_item_kind=WorkItemKind.TASK,
+                    troubleshoot_attempt_count=1,
+                    mechanic_attempt_count=0,
+                    fix_cycle_count=0,
+                    consultant_invocations=0,
+                    last_updated_at=NOW,
+                ),
+            )
+        ),
+        "mailbox_command_envelope.json": MailboxCommandEnvelope(
+            command_id="cmd-001",
+            command=MailboxCommand.RELOAD_CONFIG,
+            issued_at=NOW,
+            issuer="operator",
+            payload={"reason": "test"},
+        ),
+        "compile_diagnostics.json": CompileDiagnostics(
+            ok=False,
+            mode_id="standard_plain",
+            errors=("missing loop",),
+            warnings=("deprecated alias",),
+            emitted_at=NOW,
+        ),
+        "stage_result_envelope.json": StageResultEnvelope(
+            run_id="run-001",
+            plane=Plane.EXECUTION,
+            stage=ExecutionStageName.BUILDER,
+            node_id="builder",
+            stage_kind_id="builder",
+            work_item_kind=WorkItemKind.TASK,
+            work_item_id="task-001",
+            terminal_result=ExecutionTerminalResult.BUILDER_COMPLETE,
+            result_class=ResultClass.SUCCESS,
+            summary_status_marker="### BUILDER_COMPLETE",
+            success=True,
+            retryable=False,
+            exit_code=0,
+            duration_seconds=1.25,
+            prompt_artifact="prompt.md",
+            report_artifact="builder_summary.md",
+            artifact_paths=("builder_summary.md",),
+            detected_marker="### BUILDER_COMPLETE",
+            stdout_path="stdout.txt",
+            stderr_path="stderr.txt",
+            runner_name="codex_cli",
+            model_name="gpt-5",
+            model_reasoning_effort="medium",
+            token_usage=token_usage,
+            notes=("builder pass",),
+            metadata={"request_id": "request-001"},
+            started_at=NOW,
+            completed_at=NOW,
+        ),
+        "stage_result_request_driven_terminal_identity.json": StageResultEnvelope(
+            run_id="run-001",
+            plane=Plane.EXECUTION,
+            stage=ExecutionStageName.BUILDER,
+            node_id="builder",
+            stage_kind_id="builder",
+            work_item_kind=WorkItemKind.TASK,
+            work_item_id="task-001",
+            terminal_result=ExecutionTerminalResult.CHECKER_PASS,
+            result_class=ResultClass.SUCCESS,
+            summary_status_marker="### CHECKER_PASS",
+            success=True,
+            retryable=False,
+            exit_code=0,
+            duration_seconds=1.25,
+            prompt_artifact="prompt.md",
+            report_artifact="checker_summary.md",
+            artifact_paths=("checker_summary.md",),
+            detected_marker="### CHECKER_PASS",
+            stdout_path="stdout.txt",
+            stderr_path="stderr.txt",
+            runner_name="codex_cli",
+            model_name="gpt-5",
+            model_reasoning_effort="medium",
+            token_usage=token_usage,
+            notes=("request-driven terminal identity",),
+            metadata={"request_id": "request-001"},
+            started_at=NOW,
+            completed_at=NOW,
+        ),
+        "runtime_error_context.json": RuntimeErrorContext(
+            error_code=RuntimeErrorCode.PLANNING_POST_STAGE_APPLY_FAILED,
+            plane=Plane.PLANNING,
+            failed_stage=PlanningStageName.MANAGER,
+            repair_stage=PlanningStageName.MECHANIC,
+            work_item_kind=WorkItemKind.SPEC,
+            work_item_id="spec-001",
+            run_id="run-001",
+            router_action="route_to_mechanic",
+            terminal_result=PlanningTerminalResult.BLOCKED,
+            stage_result_path=(
+                "millrace-agents/runs/run-001/stage_results/request-001.json"
+            ),
+            report_path="millrace-agents/runs/run-001/troubleshoot_report.md",
+            exception_type="RuntimeError",
+            exception_message="post-stage apply failed",
+            captured_at=NOW,
+        ),
+        "token_usage.json": token_usage,
+    }
+
+
+def main() -> None:
+    fixture_dir = Path(__file__).resolve().parents[1] / "fixtures" / "runtime_json"
+    fixture_dir.mkdir(parents=True, exist_ok=True)
+    for name, model in build_fixtures().items():
+        (fixture_dir / name).write_text(model.model_dump_json(indent=2) + "\n")
+
+
+if __name__ == "__main__":
+    main()

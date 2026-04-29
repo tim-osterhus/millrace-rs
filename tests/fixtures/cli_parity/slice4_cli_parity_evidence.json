@@ -1,0 +1,146 @@
+{
+  "schema_version": "1.0",
+  "kind": "slice4_cli_parity_evidence",
+  "python_reference": {
+    "cli_docs": "../millrace-py/docs/runtime/millrace-cli-reference.md",
+    "cli_tests": "../millrace-py/tests/cli/test_cli.py",
+    "cli_sources": [
+      "../millrace-py/src/millrace_ai/cli/app.py",
+      "../millrace-py/src/millrace_ai/cli/commands/run.py",
+      "../millrace-py/src/millrace_ai/cli/commands/queue.py",
+      "../millrace-py/src/millrace_ai/cli/commands/control.py",
+      "../millrace-py/src/millrace_ai/cli/commands/config.py",
+      "../millrace-py/src/millrace_ai/cli/commands/status.py",
+      "../millrace-py/src/millrace_ai/cli/commands/runs.py",
+      "../millrace-py/src/millrace_ai/cli/commands/modes.py",
+      "../millrace-py/src/millrace_ai/cli/commands/skills.py",
+      "../millrace-py/src/millrace_ai/cli/commands/upgrade.py"
+    ]
+  },
+  "normalization": [
+    "absolute workspace paths",
+    "generated command ids",
+    "timestamps",
+    "package versions",
+    "content hashes where covered by compiler fixtures",
+    "Python-only runtime execution lines for run once and run daemon"
+  ],
+  "required_evidence_axes": [
+    "exit_codes",
+    "key_output_lines",
+    "read_only_guarantees",
+    "file_mutations",
+    "mailbox_artifacts",
+    "initialized_workspace_refusal",
+    "parse_failures"
+  ],
+  "coverage": [
+    {
+      "surface": "version-about-init-doctor",
+      "exit_codes": true,
+      "key_output_lines": true,
+      "read_only_guarantees": true,
+      "file_mutations": true,
+      "mailbox_artifacts": false,
+      "initialized_workspace_refusal": true,
+      "parse_failures": true
+    },
+    {
+      "surface": "compile",
+      "exit_codes": true,
+      "key_output_lines": true,
+      "read_only_guarantees": false,
+      "file_mutations": true,
+      "mailbox_artifacts": false,
+      "initialized_workspace_refusal": true,
+      "parse_failures": true
+    },
+    {
+      "surface": "read-only-operator",
+      "exit_codes": true,
+      "key_output_lines": true,
+      "read_only_guarantees": true,
+      "file_mutations": false,
+      "mailbox_artifacts": false,
+      "initialized_workspace_refusal": true,
+      "parse_failures": true
+    },
+    {
+      "surface": "queue-intake",
+      "exit_codes": true,
+      "key_output_lines": true,
+      "read_only_guarantees": false,
+      "file_mutations": true,
+      "mailbox_artifacts": true,
+      "initialized_workspace_refusal": true,
+      "parse_failures": true
+    },
+    {
+      "surface": "control-planning-config",
+      "exit_codes": true,
+      "key_output_lines": true,
+      "read_only_guarantees": false,
+      "file_mutations": true,
+      "mailbox_artifacts": true,
+      "initialized_workspace_refusal": true,
+      "parse_failures": true
+    },
+    {
+      "surface": "skills",
+      "exit_codes": true,
+      "key_output_lines": true,
+      "read_only_guarantees": true,
+      "file_mutations": true,
+      "mailbox_artifacts": false,
+      "initialized_workspace_refusal": true,
+      "parse_failures": true
+    },
+    {
+      "surface": "upgrade",
+      "exit_codes": true,
+      "key_output_lines": true,
+      "read_only_guarantees": true,
+      "file_mutations": true,
+      "mailbox_artifacts": false,
+      "initialized_workspace_refusal": true,
+      "parse_failures": true
+    },
+    {
+      "surface": "queue-repair-lineage",
+      "exit_codes": true,
+      "key_output_lines": true,
+      "read_only_guarantees": true,
+      "file_mutations": true,
+      "mailbox_artifacts": false,
+      "initialized_workspace_refusal": true,
+      "parse_failures": true,
+      "evidence": [
+        "preview writes a non-applied repair report without changing work documents or queue-depth snapshot fields",
+        "apply repairs queued/incoming safe documents through the workspace boundary and refreshes snapshot queue depths",
+        "successful output includes root_spec_id, apply, repair_count, change_count, repaired_count, skipped_count, repair_report, change, and skipped lines",
+        "active runtime ownership lock and active runtime stage refuse apply before work-document mutation",
+        "invalid root-spec id, missing target, malformed target, and option parse failures keep CLI failure classes"
+      ]
+    },
+    {
+      "surface": "run-placeholders",
+      "exit_codes": true,
+      "key_output_lines": true,
+      "read_only_guarantees": true,
+      "file_mutations": false,
+      "mailbox_artifacts": false,
+      "initialized_workspace_refusal": true,
+      "parse_failures": true
+    }
+  ],
+  "non_goals": [
+    "runtime ticks",
+    "daemon scheduling",
+    "stage request rendering",
+    "runner dispatch",
+    "mailbox consumption",
+    "tick-result application",
+    "closure activation",
+    "recovery routing"
+  ]
+}

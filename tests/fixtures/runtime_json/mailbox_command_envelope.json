@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0",
+  "kind": "mailbox_command",
+  "command_id": "cmd-001",
+  "command": "reload_config",
+  "issued_at": "2026-04-15T00:00:00Z",
+  "issuer": "operator",
+  "payload": {
+    "reason": "test"
+  }
+}

@@ -1,0 +1,475 @@
+{
+  "schema_version": "1.0",
+  "kind": "slice7_runner_adapter_parity_evidence",
+  "python_reference": {
+    "runner_architecture_doc": "../millrace-py/docs/runtime/millrace-runner-architecture.md",
+    "runner_contract": "StageRunRequest -> RunnerRawResult -> StageResultEnvelope",
+    "runner_artifact_filenames": [
+      "runner_prompt.<request_id>.md",
+      "runner_invocation.<request_id>.json",
+      "runner_stdout.<request_id>.txt",
+      "runner_stderr.<request_id>.txt",
+      "runner_events.<request_id>.jsonl",
+      "runner_completion.<request_id>.json"
+    ],
+    "runner_modules": [
+      "../millrace-py/src/millrace_ai/runners/requests.py",
+      "../millrace-py/src/millrace_ai/runners/registry.py",
+      "../millrace-py/src/millrace_ai/runners/dispatcher.py",
+      "../millrace-py/src/millrace_ai/runners/process.py",
+      "../millrace-py/src/millrace_ai/runners/contracts.py",
+      "../millrace-py/src/millrace_ai/runners/adapters/_prompting.py",
+      "../millrace-py/src/millrace_ai/runners/adapters/codex_cli.py",
+      "../millrace-py/src/millrace_ai/runners/adapters/codex_cli_command.py",
+      "../millrace-py/src/millrace_ai/runners/adapters/codex_cli_artifacts.py",
+      "../millrace-py/src/millrace_ai/runners/adapters/codex_cli_tokens.py",
+      "../millrace-py/src/millrace_ai/runners/adapters/pi_rpc.py",
+      "../millrace-py/src/millrace_ai/runners/adapters/pi_rpc_client.py",
+      "../millrace-py/src/millrace_ai/config/models.py"
+    ],
+    "runner_tests": [
+      "../millrace-py/tests/runners/test_runner.py",
+      "../millrace-py/tests/runners/test_runners_registry.py",
+      "../millrace-py/tests/runners/test_runners_codex_adapter.py",
+      "../millrace-py/tests/runners/test_runners_pi_rpc_adapter.py"
+    ],
+    "runtime_and_cli_tests": [
+      "../millrace-py/tests/runtime/test_runtime.py",
+      "../millrace-py/tests/cli/test_cli.py"
+    ]
+  },
+  "normalization": [
+    "Python behavior is represented by named docs, modules, and tests rather than byte-for-byte subprocess transcripts.",
+    "Rust scenarios use fake runners, mocked Codex process execution, mocked Pi RPC clients/transports, and short-lived shell scripts for always-on coverage.",
+    "Live Codex and Pi smoke commands are not part of this committed fixture because external binaries, credentials, subscriptions, and network access are operator-specific.",
+    "The opt-in live-smoke surface lives in tests/runners_live_smoke.rs; missing gate variables skip before real adapter construction and before any external process can start.",
+    "Volatile identities, paths, timing, process details, token counts, and generated runtime artifacts are compared by shape and contract fields."
+  ],
+  "normalized_fields": [
+    "request_id",
+    "run_id",
+    "timestamp",
+    "absolute_workspace_path",
+    "run_dir",
+    "entrypoint_path",
+    "active_work_item_path",
+    "runtime_snapshot_path",
+    "recovery_counters_path",
+    "summary_status_path",
+    "stage_result_path",
+    "runner_raw_result_path",
+    "terminal_marker_path",
+    "router_decision_path",
+    "runtime_error_report_path",
+    "runner_prompt_path",
+    "runner_invocation_path",
+    "runner_stdout_path",
+    "runner_stderr_path",
+    "runner_events_path",
+    "runner_completion_path",
+    "compiled_plan_id",
+    "config_version",
+    "process_id",
+    "host_name",
+    "command_started_at",
+    "command_ended_at",
+    "duration_ms",
+    "timeout_seconds",
+    "token_usage",
+    "live_smoke_gate_variable"
+  ],
+  "preserved_contracts": {
+    "runner_request_result_contract": "StageRunRequest -> RunnerRawResult",
+    "normalization_contract": "RunnerRawResult -> StageResultEnvelope",
+    "dispatch_resolution_order": [
+      "StageRunRequest.runner_name",
+      "runners.default_runner",
+      "codex_cli"
+    ],
+    "artifact_filenames": [
+      "runner_prompt.<request_id>.md",
+      "runner_invocation.<request_id>.json",
+      "runner_stdout.<request_id>.txt",
+      "runner_stderr.<request_id>.txt",
+      "runner_events.<request_id>.jsonl",
+      "runner_completion.<request_id>.json"
+    ],
+    "adapter_state_boundary": [
+      "runner adapters persist runner artifacts and return RunnerRawResult",
+      "runtime-owned code persists stage results, terminal markers, router decisions, queue/status/snapshot/recovery state, closure state, mailbox state, and compiled-plan state"
+    ]
+  },
+  "required_coverage_axes": [
+    "registry_resolution",
+    "dispatcher_unknown_runner",
+    "request_result_artifacts",
+    "codex_cli_command",
+    "codex_artifacts",
+    "codex_token_usage",
+    "codex_timeout_reconciliation",
+    "codex_failure_mapping",
+    "pi_rpc_lifecycle",
+    "pi_event_policy",
+    "pi_timeout_abort_kill",
+    "pi_failure_mapping",
+    "runtime_runner_config",
+    "config_validation",
+    "runtime_serial_dispatch",
+    "runtime_daemon_dispatch",
+    "cli_once_dispatch",
+    "cli_daemon_dispatch",
+    "public_exports",
+    "no_live_runner_invocation",
+    "live_smoke_gate"
+  ],
+  "runner_guarantees": [
+    "mocked_processes_for_always_on_tests",
+    "no_live_codex_cli_process",
+    "no_live_pi_rpc_process",
+    "live_smoke_opt_in_only",
+    "live_smoke_gates_checked_before_real_adapter_construction",
+    "live_smoke_credentials_inherited_from_operator_environment_only"
+  ],
+  "live_smoke": {
+    "normal_no_live_command": "cargo test --test runners_live_smoke",
+    "codex": {
+      "gate_variable": "MILLRACE_REAL_CODEX_SMOKE",
+      "test_name": "codex_real_adapter_live_smoke",
+      "opt_in_command": "MILLRACE_REAL_CODEX_SMOKE=1 cargo test --test runners_live_smoke codex_real_adapter_live_smoke -- --ignored --nocapture",
+      "optional_configuration": [
+        "MILLRACE_REAL_CODEX_COMMAND",
+        "MILLRACE_REAL_CODEX_ARGS",
+        "MILLRACE_REAL_CODEX_PROFILE",
+        "MILLRACE_REAL_CODEX_MODEL",
+        "MILLRACE_REAL_CODEX_REASONING_EFFORT",
+        "MILLRACE_REAL_CODEX_TIMEOUT_SECONDS",
+        "MILLRACE_REAL_CODEX_PERMISSION"
+      ]
+    },
+    "pi": {
+      "gate_variable": "MILLRACE_REAL_PI_SMOKE",
+      "test_name": "pi_real_adapter_live_smoke",
+      "opt_in_command": "MILLRACE_REAL_PI_SMOKE=1 cargo test --test runners_live_smoke pi_real_adapter_live_smoke -- --ignored --nocapture",
+      "optional_configuration": [
+        "MILLRACE_REAL_PI_COMMAND",
+        "MILLRACE_REAL_PI_ARGS",
+        "MILLRACE_REAL_PI_MODEL",
+        "MILLRACE_REAL_PI_PROVIDER",
+        "MILLRACE_REAL_PI_THINKING",
+        "MILLRACE_REAL_PI_TIMEOUT_SECONDS"
+      ]
+    },
+    "outside_ci_reason": "Live Codex and Pi execution requires operator-provided external binaries, credentials or subscriptions, and network access, so normal CI runs only the gate/no-op assertions and mocked adapter coverage."
+  },
+  "scenarios": [
+    {
+      "scenario": "shared-runner-contract-registry-and-dispatcher",
+      "coverage": [
+        "registry_resolution",
+        "dispatcher_unknown_runner",
+        "request_result_artifacts",
+        "public_exports",
+        "no_live_runner_invocation"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/docs/runtime/millrace-runner-architecture.md",
+          "sections": [
+            "Scope",
+            "Resolution Order",
+            "Artifacts",
+            "Phase 2 Compatibility"
+          ]
+        },
+        {
+          "path": "../millrace-py/src/millrace_ai/runners/requests.py",
+          "types": [
+            "StageRunRequest",
+            "RunnerRawResult"
+          ]
+        },
+        {
+          "path": "../millrace-py/src/millrace_ai/runners/contracts.py",
+          "types": [
+            "RunnerInvocationArtifact",
+            "RunnerCompletionArtifact"
+          ]
+        },
+        {
+          "path": "../millrace-py/src/millrace_ai/runners/registry.py",
+          "types": [
+            "RunnerRegistry"
+          ]
+        },
+        {
+          "path": "../millrace-py/src/millrace_ai/runners/dispatcher.py",
+          "types": [
+            "StageRunnerDispatcher"
+          ]
+        },
+        {
+          "path": "../millrace-py/tests/runners/test_runner.py",
+          "tests": [
+            "test_runner_module_is_facade_over_runners_package",
+            "test_render_stage_request_context_lines_covers_all_stage_run_request_fields",
+            "test_runner_artifacts_surface_request_kind_and_closure_target_identity"
+          ]
+        },
+        {
+          "path": "../millrace-py/tests/runners/test_runners_registry.py",
+          "tests": [
+            "test_dispatcher_prefers_request_runner_name",
+            "test_dispatcher_uses_default_runner_when_request_runner_missing",
+            "test_dispatcher_raises_for_unknown_runner"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "runner_artifact_contracts_capture_invocation_completion_and_process_evidence",
+        "runner_registry_and_dispatcher_resolve_in_python_compatible_order",
+        "runner_registry_reports_duplicate_and_unknown_adapter_names",
+        "public_contract_exports_remain_importable"
+      ]
+    },
+    {
+      "scenario": "codex-cli-command-artifacts-token-timeout-and-failures",
+      "coverage": [
+        "codex_cli_command",
+        "codex_artifacts",
+        "codex_token_usage",
+        "codex_timeout_reconciliation",
+        "codex_failure_mapping",
+        "no_live_runner_invocation"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/src/millrace_ai/runners/process.py",
+          "functions": [
+            "run_process"
+          ]
+        },
+        {
+          "path": "../millrace-py/src/millrace_ai/runners/adapters/_prompting.py",
+          "functions": [
+            "build_stage_prompt"
+          ]
+        },
+        {
+          "path": "../millrace-py/src/millrace_ai/runners/adapters/codex_cli.py",
+          "types": [
+            "CodexCliRunnerAdapter"
+          ]
+        },
+        {
+          "path": "../millrace-py/src/millrace_ai/runners/adapters/codex_cli_command.py",
+          "functions": [
+            "build_codex_command",
+            "permission_flags"
+          ]
+        },
+        {
+          "path": "../millrace-py/src/millrace_ai/runners/adapters/codex_cli_artifacts.py",
+          "functions": [
+            "codex_artifact_paths",
+            "materialize_stdout_from_last_message",
+            "preserve_event_log"
+          ]
+        },
+        {
+          "path": "../millrace-py/src/millrace_ai/runners/adapters/codex_cli_tokens.py",
+          "functions": [
+            "extract_token_usage",
+            "token_usage_from_payload"
+          ]
+        },
+        {
+          "path": "../millrace-py/tests/runners/test_runners_codex_adapter.py",
+          "tests": [
+            "test_codex_adapter_writes_invocation_and_completion_artifacts",
+            "test_codex_adapter_uses_one_hour_fallback_timeout_when_request_timeout_missing",
+            "test_codex_adapter_reconciles_timeout_after_final_terminal_marker",
+            "test_codex_adapter_resolves_permission_precedence_and_command_mapping",
+            "test_codex_adapter_passes_request_reasoning_effort_after_extra_config",
+            "test_codex_adapter_maps_missing_binary_to_runner_error",
+            "test_codex_adapter_maps_transport_error_to_runner_error_even_with_zero_exit_code",
+            "test_codex_adapter_prompt_includes_stage_request_context_fields"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "codex_adapter_writes_prompt_invocation_completion_events_stdout_and_tokens",
+        "codex_command_preserves_python_flag_order_and_environment_delta",
+        "codex_adapter_resolves_permission_precedence_and_mapping",
+        "codex_adapter_uses_one_hour_fallback_timeout_when_request_timeout_is_zero",
+        "codex_adapter_reconciles_timeout_after_final_terminal_marker",
+        "codex_adapter_maps_failure_modes_to_inspectable_raw_results_and_completion_notes",
+        "codex_adapter_preserves_empty_final_text_for_normalization_failure"
+      ]
+    },
+    {
+      "scenario": "pi-rpc-lifecycle-event-policy-timeout-and-failures",
+      "coverage": [
+        "pi_rpc_lifecycle",
+        "pi_event_policy",
+        "pi_timeout_abort_kill",
+        "pi_failure_mapping",
+        "no_live_runner_invocation"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/src/millrace_ai/runners/adapters/pi_rpc.py",
+          "types": [
+            "PiRpcRunnerAdapter",
+            "PiRpcSessionResult"
+          ]
+        },
+        {
+          "path": "../millrace-py/src/millrace_ai/runners/adapters/pi_rpc_client.py",
+          "types": [
+            "PiRpcJsonlClient",
+            "SubprocessPiRpcTransport"
+          ]
+        },
+        {
+          "path": "../millrace-py/tests/runners/test_runners_pi_rpc_adapter.py",
+          "tests": [
+            "test_pi_adapter_omits_event_log_for_success_by_default",
+            "test_pi_request_carries_compiled_identity_defaults",
+            "test_pi_adapter_persists_event_log_when_full_policy_is_enabled",
+            "test_pi_adapter_persists_event_log_for_failures_by_default",
+            "test_pi_adapter_omits_event_log_when_only_message_updates_would_remain"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "pi_adapter_writes_prompt_artifacts_stdout_tokens_and_default_command",
+        "pi_command_preserves_provider_model_thinking_defaults_env_and_rejects_reserved_args",
+        "pi_event_log_policy_filters_message_updates_for_success_and_failure",
+        "pi_adapter_maps_provider_empty_text_invalid_json_binary_and_timeout_failures",
+        "pi_jsonl_client_runs_prompt_queries_final_text_and_session_stats",
+        "pi_jsonl_client_detects_provider_failure_invalid_json_timeout_abort_and_hard_kill",
+        "pi_normalization_preserves_success_and_token_usage"
+      ]
+    },
+    {
+      "scenario": "runtime-runner-config-and-validation",
+      "coverage": [
+        "runtime_runner_config",
+        "config_validation",
+        "public_exports"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/src/millrace_ai/config/models.py",
+          "types": [
+            "RuntimeConfig",
+            "RunnersSection",
+            "CodexRunnerSection",
+            "PiRunnerSection",
+            "StageConfig"
+          ]
+        },
+        {
+          "path": "../millrace-py/tests/cli/test_cli.py",
+          "tests": [
+            "test_config_show_renders_effective_runtime_and_reload_state",
+            "test_config_validate_returns_nonzero_for_invalid_config",
+            "test_run_once_defaults_config_to_workspace_toml",
+            "test_run_daemon_defaults_config_to_workspace_toml"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "runtime_config_loading_exposes_real_runner_adapter_settings",
+        "runtime_config_loading_rejects_real_runner_config_failures_with_paths",
+        "rust_config_validate_compiles_selected_or_explicit_config_modes",
+        "rust_status_config_and_modes_read_only_commands_render_without_mutation",
+        "public_contract_exports_remain_importable"
+      ]
+    },
+    {
+      "scenario": "runtime-and-cli-dispatch-with-mocked-real-adapters",
+      "coverage": [
+        "runtime_serial_dispatch",
+        "runtime_daemon_dispatch",
+        "cli_once_dispatch",
+        "cli_daemon_dispatch",
+        "dispatcher_unknown_runner",
+        "no_live_runner_invocation"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/tests/runtime/test_runtime.py",
+          "tests": [
+            "test_runtime_writes_snapshot_status_events_and_stage_result_artifacts",
+            "test_runtime_advances_after_reconciled_builder_timeout",
+            "test_runtime_stage_request_uses_compiled_node_binding"
+          ]
+        },
+        {
+          "path": "../millrace-py/tests/cli/test_cli.py",
+          "tests": [
+            "test_run_once_invokes_runtime_engine_once",
+            "test_run_once_returns_nonzero_on_runner_transport_failure",
+            "test_run_once_fails_fast_on_unknown_configured_stage_runner",
+            "test_run_daemon_respects_max_ticks",
+            "test_run_daemon_without_monitor_stays_quiet"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "serial_tick_can_dispatch_through_registry_dispatcher_without_real_runner",
+        "runtime_configured_dispatcher_registers_real_adapters_and_fake_test_adapter",
+        "serial_tick_normalizes_dispatcher_unknown_runner_through_recovery_path",
+        "rust_run_once_executes_one_fake_runner_tick_and_run_views_inspect_artifacts",
+        "rust_run_daemon_bounded_execution_uses_fake_runner_and_run_views",
+        "rust_run_daemon_default_stdout_is_quiet_except_summary_lines"
+      ]
+    },
+    {
+      "scenario": "real-adapter-live-smoke-opt-in",
+      "coverage": [
+        "live_smoke_gate",
+        "no_live_runner_invocation"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/docs/runtime/millrace-runner-architecture.md",
+          "sections": [
+            "Runner Adapter Smoke Coverage",
+            "Artifacts"
+          ]
+        },
+        {
+          "path": "../millrace-py/src/millrace_ai/runners/adapters/codex_cli.py",
+          "types": [
+            "CodexCliRunnerAdapter"
+          ]
+        },
+        {
+          "path": "../millrace-py/src/millrace_ai/runners/adapters/pi_rpc.py",
+          "types": [
+            "PiRpcRunnerAdapter"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "codex_live_smoke_gate_skips_without_env",
+        "codex_real_adapter_live_smoke",
+        "pi_live_smoke_gate_skips_without_env",
+        "pi_real_adapter_live_smoke"
+      ]
+    }
+  ],
+  "non_goals": [
+    "live Codex smoke tests in always-on cargo test",
+    "live Pi smoke tests in always-on cargo test",
+    "broader compiled-plan semantics changes",
+    "queue-state or stage-machine changes beyond existing runtime dispatch",
+    "native filesystem watcher integration",
+    "advanced usage governance",
+    "subscription quota telemetry",
+    "learning promotion",
+    "Slice 8 advanced parity surfaces"
+  ]
+}

@@ -1,0 +1,551 @@
+{
+  "schema_version": "1.0",
+  "kind": "slice8_advanced_parity_evidence",
+  "summary": "Consolidated Slice 8 parity evidence for fixture-backed advanced runtime surfaces implemented in Rust while preserving Python-owned runtime contracts.",
+  "python_reference": {
+    "usage_governance_modules": [
+      "../millrace-py/src/millrace_ai/runtime/usage_governance/__init__.py",
+      "../millrace-py/src/millrace_ai/runtime/usage_governance/evaluation.py",
+      "../millrace-py/src/millrace_ai/runtime/usage_governance/io.py",
+      "../millrace-py/src/millrace_ai/runtime/usage_governance/ledger.py",
+      "../millrace-py/src/millrace_ai/runtime/usage_governance/models.py",
+      "../millrace-py/src/millrace_ai/runtime/usage_governance/monitoring.py",
+      "../millrace-py/src/millrace_ai/runtime/usage_governance/runtime_tokens.py",
+      "../millrace-py/src/millrace_ai/runtime/usage_governance/state.py",
+      "../millrace-py/src/millrace_ai/runtime/usage_governance/subscription_quota.py",
+      "../millrace-py/src/millrace_ai/runtime/usage_governance/time_windows.py"
+    ],
+    "learning_modules": [
+      "../millrace-py/src/millrace_ai/runtime/learning_promotions.py",
+      "../millrace-py/src/millrace_ai/runtime/skill_evidence.py"
+    ],
+    "closure_modules": [
+      "../millrace-py/src/millrace_ai/runtime/completion_behavior.py",
+      "../millrace-py/src/millrace_ai/runtime/closure_transitions.py",
+      "../millrace-py/src/millrace_ai/runtime/handoff_incidents.py",
+      "../millrace-py/src/millrace_ai/workspace/lineage_integrity.py"
+    ],
+    "inspection_module": "../millrace-py/src/millrace_ai/runtime/inspection.py",
+    "tests": [
+      "../millrace-py/tests/runtime/test_usage_governance.py",
+      "../millrace-py/tests/runtime/test_learning_promotions.py",
+      "../millrace-py/tests/runtime/test_run_inspection.py",
+      "../millrace-py/tests/runtime/test_completion_behavior.py",
+      "../millrace-py/tests/runtime/test_runtime.py",
+      "../millrace-py/tests/integration/test_e2e_handoffs.py"
+    ]
+  },
+  "required_advanced_coverage_areas": [
+    "usage_governance",
+    "subscription_quota_telemetry",
+    "learning_promotion",
+    "skill_revision_evidence",
+    "closure_transitions",
+    "run_inspection_depth",
+    "e2e_handoffs"
+  ],
+  "required_coverage_axes": [
+    "usage_inert_default",
+    "token_ledger_once",
+    "ledger_reconciliation",
+    "manual_resume_guard",
+    "auto_resume_governance_pause",
+    "operator_pause_separation",
+    "malformed_governance_state_errors",
+    "subscription_quota_degraded_fail_open",
+    "subscription_quota_degraded_fail_closed",
+    "subscription_quota_threshold_block",
+    "subscription_quota_status_rendering",
+    "governance_monitor_events",
+    "learning_trigger_enqueue",
+    "curator_promotion_deferred",
+    "curator_promotion_applied",
+    "curator_rejected_evidence",
+    "curator_blocked_evidence",
+    "skill_revision_evidence",
+    "operator_controlled_source_promotion",
+    "closure_target_creation",
+    "closure_target_backfill",
+    "closure_target_request_activation",
+    "queued_lineage_suppression",
+    "active_blocked_lineage_ids",
+    "lineage_drift_diagnostics",
+    "arbiter_complete_close",
+    "arbiter_remediation_incident",
+    "repeated_remediation_block",
+    "repair_lineage_regression",
+    "run_list_show_tail_depth",
+    "incomplete_malformed_runs_visible",
+    "primary_runner_artifacts",
+    "governance_ledger_links",
+    "closure_metadata",
+    "remediation_references",
+    "skill_evidence_run_inspection",
+    "no_mutation_run_inspection",
+    "e2e_direct_task_success",
+    "e2e_repair_loop",
+    "e2e_malformed_recovery",
+    "e2e_illegal_terminal_recovery",
+    "e2e_planning_reentry",
+    "e2e_arbiter_completion",
+    "e2e_arbiter_remediation"
+  ],
+  "normalization": [
+    "Python behavior is represented by named source modules and tests rather than byte-for-byte workspace transcripts.",
+    "Rust coverage uses deterministic fake runners, mocked adapters, fixture-backed quota telemetry, and read-only CLI fixtures for always-on validation.",
+    "Volatile request ids, run ids, timestamps, workspace roots, run directories, stage-result paths, token totals, process ids, host names, generated incident ids, Arbiter report paths, and quota reset timestamps are compared by shape and stable semantic fields."
+  ],
+  "preserved_python_contracts": [
+    "on_disk_workspace_shape",
+    "headed_work_documents",
+    "typed_runtime_json",
+    "runner_artifact_filenames",
+    "queue_lineage",
+    "closure_target_state",
+    "operator_controlled_source_promotion",
+    "legal_terminal_markers"
+  ],
+  "advanced_coverage_areas": [
+    {
+      "area": "usage_governance",
+      "coverage": [
+        "usage_inert_default",
+        "token_ledger_once",
+        "ledger_reconciliation",
+        "manual_resume_guard",
+        "auto_resume_governance_pause",
+        "operator_pause_separation",
+        "malformed_governance_state_errors",
+        "governance_monitor_events"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/tests/runtime/test_usage_governance.py",
+          "tests": [
+            "test_usage_governance_is_fully_inert_by_default",
+            "test_runtime_token_rule_pauses_between_stages_and_counts_once",
+            "test_missing_ledger_entry_is_reconciled_from_stage_result_after_restart",
+            "test_manual_resume_cannot_bypass_active_governance_blocker",
+            "test_auto_resume_clears_governance_pause_when_rolling_window_expires",
+            "test_operator_pause_never_auto_resumes"
+          ]
+        },
+        {
+          "path": "../millrace-py/src/millrace_ai/runtime/usage_governance/",
+          "modules": [
+            "evaluation.py",
+            "ledger.py",
+            "runtime_tokens.py",
+            "state.py",
+            "time_windows.py",
+            "monitoring.py"
+          ]
+        }
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "usage_governance_is_inert_by_default_for_contract_evaluation"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "usage_governance_ledger_records_once_and_reconciles_stage_results"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "malformed_usage_governance_state_and_ledger_fail_with_paths"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "serial_runtime_governance_pauses_after_token_stage_and_auto_resumes"
+        },
+        {
+          "file": "tests/workspace_runtime_control.rs",
+          "name": "direct_resume_preserves_governance_pause_when_blocker_is_active"
+        },
+        {
+          "file": "tests/runtime_daemon.rs",
+          "name": "basic_monitor_renders_reload_watcher_governance_and_fanout_lines"
+        },
+        {
+          "file": "tests/runtime_daemon.rs",
+          "name": "daemon_supervisor_governance_pause_after_completion_blocks_new_claims"
+        }
+      ]
+    },
+    {
+      "area": "subscription_quota_telemetry",
+      "coverage": [
+        "subscription_quota_degraded_fail_open",
+        "subscription_quota_degraded_fail_closed",
+        "subscription_quota_threshold_block",
+        "subscription_quota_status_rendering",
+        "governance_monitor_events"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/tests/runtime/test_usage_governance.py",
+          "tests": [
+            "test_subscription_quota_degraded_defaults_fail_open",
+            "test_subscription_quota_fail_closed_blocks_when_telemetry_degraded",
+            "test_subscription_quota_reading_blocks_at_configured_percent"
+          ]
+        },
+        {
+          "path": "../millrace-py/src/millrace_ai/runtime/usage_governance/subscription_quota.py",
+          "functions": [
+            "SubscriptionQuotaStatus",
+            "SubscriptionQuotaWindowReading"
+          ]
+        }
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "usage_governance_evaluates_token_windows_and_subscription_quota_contracts"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "serial_runtime_subscription_quota_degraded_fail_open_and_fail_closed"
+        },
+        {
+          "file": "tests/runtime_daemon.rs",
+          "name": "runtime_config_loading_exposes_real_runner_adapter_settings"
+        },
+        {
+          "file": "tests/runtime_daemon.rs",
+          "name": "runtime_config_loading_rejects_real_runner_config_failures_with_paths"
+        },
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "rust_status_config_and_modes_read_only_commands_render_without_mutation"
+        }
+      ]
+    },
+    {
+      "area": "learning_promotion",
+      "coverage": [
+        "learning_trigger_enqueue",
+        "curator_promotion_deferred",
+        "curator_promotion_applied",
+        "curator_rejected_evidence",
+        "curator_blocked_evidence",
+        "operator_controlled_source_promotion"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/tests/runtime/test_learning_promotions.py",
+          "tests": [
+            "test_curator_promotion_defers_until_foreground_planes_drain"
+          ]
+        },
+        {
+          "path": "../millrace-py/src/millrace_ai/runtime/learning_promotions.py",
+          "functions": [
+            "handle_learning_curator_promotion_boundary",
+            "apply_deferred_learning_promotions_if_safe"
+          ]
+        }
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "serial_tick_learning_trigger_enqueues_targeted_curator_request"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "serial_tick_curator_promotion_defers_until_foreground_drain"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "serial_tick_curator_rejected_decision_keeps_evidence_without_promotion_or_source_mutation"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "serial_tick_curator_blocked_decision_keeps_evidence_without_promotion_or_source_mutation"
+        },
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "rust_skills_install_export_and_promote_file_backed_packages"
+        }
+      ]
+    },
+    {
+      "area": "skill_revision_evidence",
+      "coverage": [
+        "skill_revision_evidence",
+        "learning_trigger_enqueue",
+        "skill_evidence_run_inspection"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/src/millrace_ai/runtime/skill_evidence.py",
+          "functions": [
+            "write_skill_revision_evidence"
+          ]
+        },
+        {
+          "path": "../millrace-py/tests/runtime/test_runtime.py",
+          "tests": [
+            "test_learning_mode_stage_requests_persist_skill_revision_evidence"
+          ]
+        },
+        {
+          "path": "../millrace-py/tests/runners/test_runner.py",
+          "tests": [
+            "test_render_stage_request_context_lines_includes_skill_revision_evidence_path"
+          ]
+        }
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "serial_tick_activates_learning_request_only_when_learning_graph_exists"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "serial_tick_learning_trigger_enqueues_targeted_curator_request"
+        },
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "rust_runs_read_only_commands_surface_advanced_inspection_evidence"
+        }
+      ]
+    },
+    {
+      "area": "closure_transitions",
+      "coverage": [
+        "closure_target_creation",
+        "closure_target_backfill",
+        "closure_target_request_activation",
+        "queued_lineage_suppression",
+        "active_blocked_lineage_ids",
+        "lineage_drift_diagnostics",
+        "arbiter_complete_close",
+        "arbiter_remediation_incident",
+        "repeated_remediation_block",
+        "repair_lineage_regression"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/tests/runtime/test_completion_behavior.py",
+          "tests": [
+            "test_activate_claim_opens_closure_target_and_snapshots_canonical_contracts",
+            "test_maybe_activate_completion_stage_marks_target_blocked_when_lineage_work_remains",
+            "test_maybe_activate_completion_stage_blocks_on_closure_lineage_drift",
+            "test_maybe_activate_completion_stage_sets_snapshot_to_arbiter_when_target_is_eligible",
+            "test_maybe_activate_completion_stage_backfills_open_target_from_done_root_spec"
+          ]
+        },
+        {
+          "path": "../millrace-py/src/millrace_ai/runtime/completion_behavior.py",
+          "functions": [
+            "maybe_activate_completion_target",
+            "refresh_closure_target_readiness"
+          ]
+        },
+        {
+          "path": "../millrace-py/src/millrace_ai/runtime/closure_transitions.py",
+          "functions": [
+            "apply_closure_terminal_result"
+          ]
+        }
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "serial_tick_opens_closure_target_when_root_spec_claim_activates"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "serial_tick_backfills_closure_target_from_done_root_spec"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "serial_tick_activates_closure_target_request_without_active_work_item"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "serial_tick_suppresses_closure_target_when_queued_lineage_work_remains"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "serial_tick_suppresses_closure_target_when_blocked_lineage_work_remains"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "serial_tick_reports_active_spec_and_blocked_incident_lineage_ids_before_arbiter"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "serial_tick_blocks_closure_target_on_lineage_drift_diagnostic"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "serial_tick_closes_closure_target_on_arbiter_complete"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "serial_tick_enqueues_remediation_incident_for_arbiter_gap"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "serial_tick_blocks_repeated_arbiter_remediation_without_execution"
+        },
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "rust_queue_repair_lineage_preview_writes_report_skips_unsafe_findings_and_does_not_mutate"
+        },
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "rust_queue_repair_lineage_apply_repairs_safe_documents_refreshes_snapshot_and_emits_event"
+        }
+      ]
+    },
+    {
+      "area": "run_inspection_depth",
+      "coverage": [
+        "run_list_show_tail_depth",
+        "incomplete_malformed_runs_visible",
+        "primary_runner_artifacts",
+        "governance_ledger_links",
+        "closure_metadata",
+        "remediation_references",
+        "skill_evidence_run_inspection",
+        "no_mutation_run_inspection"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/tests/runtime/test_run_inspection.py",
+          "tests": [
+            "test_inspect_run_surfaces_stage_result_and_primary_artifacts",
+            "test_inspect_run_aggregates_duration_and_token_usage",
+            "test_inspect_run_marks_incomplete_when_stage_results_are_missing",
+            "test_inspect_run_marks_malformed_stage_result_json",
+            "test_list_runs_keeps_incomplete_and_malformed_runs_visible",
+            "test_inspect_run_surfaces_closure_target_request_metadata"
+          ]
+        },
+        {
+          "path": "../millrace-py/src/millrace_ai/runtime/inspection.py",
+          "functions": [
+            "inspect_run",
+            "list_runs",
+            "tail_run_artifact"
+          ]
+        }
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "rust_runs_read_only_commands_inspect_and_tail_artifacts_without_mutation"
+        },
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "rust_runs_read_only_commands_surface_advanced_inspection_evidence"
+        }
+      ]
+    },
+    {
+      "area": "e2e_handoffs",
+      "coverage": [
+        "e2e_direct_task_success",
+        "e2e_repair_loop",
+        "e2e_malformed_recovery",
+        "e2e_illegal_terminal_recovery",
+        "e2e_planning_reentry",
+        "e2e_arbiter_completion",
+        "e2e_arbiter_remediation"
+      ],
+      "companion_fixture": "tests/fixtures/cli_parity/slice8_e2e_handoff_parity_evidence.json",
+      "python_sources": [
+        {
+          "path": "../millrace-py/tests/integration/test_e2e_handoffs.py",
+          "tests": [
+            "test_e2e_direct_task_handoff_happy_path",
+            "test_e2e_repair_loop_fix_needed_cycle",
+            "test_e2e_recovery_malformed_result_routes_to_consultant",
+            "test_e2e_recovery_illegal_terminal_result_routes_to_consultant",
+            "test_e2e_needs_planning_incident_intake_reenters_execution",
+            "test_e2e_lineage_drain_triggers_arbiter_complete",
+            "test_e2e_lineage_drain_triggers_arbiter_remediation_gap"
+          ]
+        },
+        {
+          "path": "../millrace-py/src/millrace_ai/runtime/handoff_incidents.py",
+          "functions": [
+            "enqueue_handoff_incident"
+          ]
+        }
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "e2e_direct_task_handoff_happy_path_uses_runtime_queue_and_status_transitions"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "e2e_repair_loop_fix_needed_cycle_preserves_fix_evidence_and_finishes"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "e2e_recovery_malformed_result_routes_to_consultant_with_incident_evidence"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "e2e_recovery_illegal_terminal_result_routes_to_consultant_with_incident_evidence"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "e2e_needs_planning_incident_intake_reenters_execution_preserving_lineage"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "e2e_lineage_drain_triggers_arbiter_complete_and_closes_target"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "e2e_lineage_drain_triggers_arbiter_remediation_gap_and_blocks_repeat"
+        }
+      ]
+    }
+  ],
+  "always_on_guarantees": [
+    "fixture_backed_subscription_quota_telemetry",
+    "scripted_fake_runner_only_for_e2e_handoffs",
+    "mocked_runner_adapters_for_runtime_dispatch",
+    "no_live_codex_cli_process",
+    "no_live_pi_rpc_process",
+    "no_network_or_credentials",
+    "no_external_quota_service",
+    "runtime_owned_queue_mutation_only",
+    "read_only_run_inspection_does_not_mutate"
+  ],
+  "preview_only_surfaces": [
+    "native filesystem watcher integration",
+    "live subscription quota provider polling",
+    "live Codex runner smoke",
+    "live Pi runner smoke"
+  ],
+  "completed_slice_validation": [
+    "cargo fmt --check",
+    "cargo test --test runtime_serial",
+    "cargo test --test runtime_daemon",
+    "cargo test --test workspace_runtime_control",
+    "cargo test --test parity_cli",
+    "cargo test"
+  ],
+  "non_goals": [
+    "native filesystem watcher integration",
+    "live subscription quota provider polling in normal CI",
+    "live Codex runner execution in normal CI",
+    "live Pi runner execution in normal CI",
+    "network access",
+    "credentialed subscription services",
+    "external quota services",
+    "new queue states",
+    "new stage names",
+    "new terminal results",
+    "byte-for-byte Python workspace transcripts"
+  ]
+}

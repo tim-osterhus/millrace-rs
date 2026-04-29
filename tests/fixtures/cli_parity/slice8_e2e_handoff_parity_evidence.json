@@ -1,0 +1,250 @@
+{
+  "schema_version": "1.0",
+  "kind": "slice8_e2e_handoff_parity_evidence",
+  "python_reference": {
+    "handoff_tests": "../millrace-py/tests/integration/test_e2e_handoffs.py",
+    "handoff_incidents_source": "../millrace-py/src/millrace_ai/runtime/handoff_incidents.py",
+    "completion_behavior_source": "../millrace-py/src/millrace_ai/runtime/completion_behavior.py",
+    "runtime_sources": [
+      "../millrace-py/src/millrace_ai/runtime/__init__.py",
+      "../millrace-py/src/millrace_ai/runtime/handoff_incidents.py",
+      "../millrace-py/src/millrace_ai/runtime/completion_behavior.py"
+    ]
+  },
+  "normalization": [
+    "Python scenarios are represented by named E2E tests and runtime modules rather than byte-for-byte workspace transcripts.",
+    "Rust scenarios use a scripted fake runner that writes normal runner stdout, Arbiter report, and Arbiter verdict artifacts through the runtime-owned tick path.",
+    "Volatile ids, timestamps, workspace roots, run directories, stage-result paths, incident ids, Arbiter verdict paths, report paths, and runtime event ordering are compared by stable semantic fields."
+  ],
+  "normalized_fields": [
+    "request_id",
+    "run_id",
+    "timestamp",
+    "absolute_workspace_path",
+    "run_dir",
+    "fix_contract_path",
+    "stage_result_path",
+    "runner_stdout_path",
+    "runtime_error_report_path",
+    "runtime_error_context_path",
+    "incident_id",
+    "related_stage_result_path",
+    "arbiter_verdict_path",
+    "arbiter_report_path",
+    "compiled_plan_id",
+    "process_id",
+    "host_name"
+  ],
+  "required_coverage_axes": [
+    "direct_task_success",
+    "checker_fixer_repair_loop",
+    "fix_contract_evidence",
+    "malformed_result_recovery",
+    "illegal_terminal_recovery",
+    "runtime_error_evidence",
+    "consultant_handoff_incident",
+    "related_artifact_evidence",
+    "planning_incident_reentry",
+    "root_lineage_preservation",
+    "lineage_drain_closure",
+    "arbiter_completion",
+    "arbiter_remediation_handoff",
+    "remediation_incident_enqueue",
+    "repeated_remediation_block",
+    "queue_status_transitions",
+    "active_plane_transitions",
+    "closure_target_state",
+    "no_real_runner_invocation"
+  ],
+  "runner_guarantees": [
+    "scripted_fake_runner_only",
+    "no_codex_cli_process",
+    "no_pi_rpc_transport",
+    "no_network_or_credentials",
+    "runtime_owned_queue_mutation_only"
+  ],
+  "scenarios": [
+    {
+      "scenario": "direct-task-handoff-success",
+      "coverage": [
+        "direct_task_success",
+        "queue_status_transitions",
+        "active_plane_transitions",
+        "no_real_runner_invocation"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/tests/integration/test_e2e_handoffs.py",
+          "tests": [
+            "test_e2e_direct_task_handoff_happy_path"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "e2e_direct_task_handoff_happy_path_uses_runtime_queue_and_status_transitions"
+      ]
+    },
+    {
+      "scenario": "checker-fixer-doublechecker-repair-loop",
+      "coverage": [
+        "checker_fixer_repair_loop",
+        "fix_contract_evidence",
+        "queue_status_transitions",
+        "active_plane_transitions"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/tests/integration/test_e2e_handoffs.py",
+          "tests": [
+            "test_e2e_repair_loop_fix_needed_cycle"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "e2e_repair_loop_fix_needed_cycle_preserves_fix_evidence_and_finishes"
+      ]
+    },
+    {
+      "scenario": "malformed-stage-result-recovery-to-consultant",
+      "coverage": [
+        "malformed_result_recovery",
+        "runtime_error_evidence",
+        "consultant_handoff_incident",
+        "related_artifact_evidence"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/tests/integration/test_e2e_handoffs.py",
+          "tests": [
+            "test_e2e_recovery_malformed_result_routes_to_consultant"
+          ]
+        },
+        {
+          "path": "../millrace-py/src/millrace_ai/runtime/handoff_incidents.py",
+          "functions": [
+            "enqueue_handoff_incident"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "e2e_recovery_malformed_result_routes_to_consultant_with_incident_evidence"
+      ]
+    },
+    {
+      "scenario": "illegal-terminal-result-recovery-to-consultant",
+      "coverage": [
+        "illegal_terminal_recovery",
+        "runtime_error_evidence",
+        "consultant_handoff_incident",
+        "related_artifact_evidence"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/tests/integration/test_e2e_handoffs.py",
+          "tests": [
+            "test_e2e_recovery_illegal_terminal_result_routes_to_consultant"
+          ]
+        },
+        {
+          "path": "../millrace-py/src/millrace_ai/runtime/handoff_incidents.py",
+          "functions": [
+            "enqueue_handoff_incident"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "e2e_recovery_illegal_terminal_result_routes_to_consultant_with_incident_evidence"
+      ]
+    },
+    {
+      "scenario": "planning-incident-reentry-to-execution",
+      "coverage": [
+        "planning_incident_reentry",
+        "root_lineage_preservation",
+        "queue_status_transitions",
+        "active_plane_transitions"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/tests/integration/test_e2e_handoffs.py",
+          "tests": [
+            "test_e2e_needs_planning_incident_intake_reenters_execution"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "e2e_needs_planning_incident_intake_reenters_execution_preserving_lineage"
+      ]
+    },
+    {
+      "scenario": "lineage-drain-arbiter-completion",
+      "coverage": [
+        "lineage_drain_closure",
+        "arbiter_completion",
+        "closure_target_state",
+        "queue_status_transitions",
+        "active_plane_transitions"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/tests/integration/test_e2e_handoffs.py",
+          "tests": [
+            "test_e2e_lineage_drain_triggers_arbiter_complete"
+          ]
+        },
+        {
+          "path": "../millrace-py/src/millrace_ai/runtime/completion_behavior.py",
+          "functions": [
+            "maybe_activate_completion_target",
+            "refresh_closure_target_readiness"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "e2e_lineage_drain_triggers_arbiter_complete_and_closes_target"
+      ]
+    },
+    {
+      "scenario": "lineage-drain-arbiter-remediation-gap",
+      "coverage": [
+        "arbiter_remediation_handoff",
+        "remediation_incident_enqueue",
+        "repeated_remediation_block",
+        "closure_target_state",
+        "related_artifact_evidence"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/tests/integration/test_e2e_handoffs.py",
+          "tests": [
+            "test_e2e_lineage_drain_triggers_arbiter_remediation_gap"
+          ]
+        },
+        {
+          "path": "../millrace-py/src/millrace_ai/runtime/handoff_incidents.py",
+          "functions": [
+            "enqueue_handoff_incident"
+          ]
+        },
+        {
+          "path": "../millrace-py/src/millrace_ai/runtime/completion_behavior.py",
+          "functions": [
+            "maybe_activate_completion_target"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "e2e_lineage_drain_triggers_arbiter_remediation_gap_and_blocks_repeat"
+      ]
+    }
+  ],
+  "non_goals": [
+    "live Codex runner execution",
+    "live Pi runner execution",
+    "network access",
+    "credentialed subscription services",
+    "new stage names or terminal results",
+    "byte-for-byte Python workspace transcripts",
+    "native filesystem watcher integration"
+  ]
+}

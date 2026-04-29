@@ -1,0 +1,7 @@
+{
+  "input_tokens": 100,
+  "cached_input_tokens": 20,
+  "output_tokens": 30,
+  "thinking_tokens": 5,
+  "total_tokens": 135
+}

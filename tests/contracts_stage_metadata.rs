@@ -1,0 +1,366 @@
+use millrace_ai::contracts::{
+    ContractError, ExecutionStageName, ExecutionTerminalResult, IdentifierErrorReason,
+    IncidentDecision, IncidentSeverity, LearningRequestAction, LearningStageName,
+    LearningTerminalResult, LoopEdgeKind, MailboxCommand, Plane, PlanningStageName,
+    PlanningTerminalResult, ReloadOutcome, ResultClass, RuntimeErrorCode, RuntimeMode, StageName,
+    TaskStatusHint, TerminalResult, WatcherMode, WorkItemKind, allowed_result_classes_by_outcome,
+    blocked_terminal_for_plane, known_stage_values, known_stage_values_for_plane,
+    legal_terminal_markers, legal_terminal_results, parse_terminal_marker_for_plane,
+    running_status_marker, stage_metadata, stage_metadata_for_value, stage_name_for_plane,
+    stage_name_for_value, stage_plane, terminal_result_for_plane, validate_safe_identifier,
+    validate_stage_result_class, validate_terminal_marker_for_stage,
+};
+
+fn values<T: Copy>(items: &'static [T], as_str: impl Fn(T) -> &'static str) -> Vec<&'static str> {
+    items.iter().copied().map(as_str).collect()
+}
+
+#[test]
+fn enum_values_match_python_reference_contracts() {
+    assert_eq!(
+        values(Plane::ALL, Plane::as_str),
+        ["execution", "planning", "learning"]
+    );
+    assert_eq!(
+        values(ExecutionStageName::ALL, ExecutionStageName::as_str),
+        [
+            "builder",
+            "checker",
+            "fixer",
+            "doublechecker",
+            "updater",
+            "troubleshooter",
+            "consultant",
+        ]
+    );
+    assert_eq!(
+        values(PlanningStageName::ALL, PlanningStageName::as_str),
+        ["planner", "manager", "mechanic", "auditor", "arbiter"]
+    );
+    assert_eq!(
+        values(LearningStageName::ALL, LearningStageName::as_str),
+        ["analyst", "professor", "curator"]
+    );
+    assert_eq!(
+        values(
+            ExecutionTerminalResult::ALL,
+            ExecutionTerminalResult::as_str
+        ),
+        [
+            "BUILDER_COMPLETE",
+            "CHECKER_PASS",
+            "FIX_NEEDED",
+            "FIXER_COMPLETE",
+            "DOUBLECHECK_PASS",
+            "UPDATE_COMPLETE",
+            "TROUBLESHOOT_COMPLETE",
+            "CONSULT_COMPLETE",
+            "NEEDS_PLANNING",
+            "BLOCKED",
+        ]
+    );
+    assert_eq!(
+        values(PlanningTerminalResult::ALL, PlanningTerminalResult::as_str),
+        [
+            "PLANNER_COMPLETE",
+            "MANAGER_COMPLETE",
+            "MECHANIC_COMPLETE",
+            "AUDITOR_COMPLETE",
+            "ARBITER_COMPLETE",
+            "REMEDIATION_NEEDED",
+            "BLOCKED",
+        ]
+    );
+    assert_eq!(
+        values(LearningTerminalResult::ALL, LearningTerminalResult::as_str),
+        [
+            "ANALYST_COMPLETE",
+            "PROFESSOR_COMPLETE",
+            "CURATOR_COMPLETE",
+            "BLOCKED",
+        ]
+    );
+    assert_eq!(
+        values(ResultClass::ALL, ResultClass::as_str),
+        [
+            "success",
+            "followup_needed",
+            "recoverable_failure",
+            "escalate_planning",
+            "blocked",
+        ]
+    );
+    assert_eq!(
+        values(WorkItemKind::ALL, WorkItemKind::as_str),
+        ["task", "spec", "incident", "learning_request"]
+    );
+    assert_eq!(
+        values(LearningRequestAction::ALL, LearningRequestAction::as_str),
+        ["create", "improve", "promote", "export", "install"]
+    );
+    assert_eq!(
+        values(TaskStatusHint::ALL, TaskStatusHint::as_str),
+        ["queued", "active", "blocked", "done"]
+    );
+    assert_eq!(
+        values(IncidentSeverity::ALL, IncidentSeverity::as_str),
+        ["low", "medium", "high", "critical"]
+    );
+    assert_eq!(
+        values(IncidentDecision::ALL, IncidentDecision::as_str),
+        ["needs_planning", "blocked"]
+    );
+    assert_eq!(
+        values(RuntimeMode::ALL, RuntimeMode::as_str),
+        ["once", "daemon"]
+    );
+    assert_eq!(
+        values(WatcherMode::ALL, WatcherMode::as_str),
+        ["watch", "poll", "off"]
+    );
+    assert_eq!(
+        values(ReloadOutcome::ALL, ReloadOutcome::as_str),
+        ["applied", "failed_retained_previous_plan"]
+    );
+    assert_eq!(
+        values(RuntimeErrorCode::ALL, RuntimeErrorCode::as_str),
+        [
+            "planning_work_item_completion_conflict",
+            "execution_work_item_completion_conflict",
+            "planning_post_stage_apply_failed",
+            "execution_post_stage_apply_failed",
+        ]
+    );
+    assert_eq!(
+        values(MailboxCommand::ALL, MailboxCommand::as_str),
+        [
+            "stop",
+            "pause",
+            "resume",
+            "reload_config",
+            "add_task",
+            "add_spec",
+            "add_idea",
+            "retry_active",
+            "clear_stale_state",
+        ]
+    );
+    assert_eq!(
+        values(LoopEdgeKind::ALL, LoopEdgeKind::as_str),
+        ["normal", "retry", "escalation", "handoff", "terminal"]
+    );
+}
+
+#[test]
+fn every_stage_has_metadata_and_plane() {
+    assert_eq!(
+        known_stage_values(),
+        values(StageName::ALL, StageName::as_str)
+    );
+
+    for stage in StageName::ALL.iter().copied() {
+        let metadata = stage_metadata(stage);
+
+        assert_eq!(stage_metadata_for_value(stage.as_str()).unwrap(), metadata);
+        assert_eq!(stage_name_for_value(stage.as_str()).unwrap(), stage);
+        assert_eq!(stage_plane(stage), metadata.plane);
+        assert_eq!(
+            stage_name_for_plane(metadata.plane, stage.as_str()).unwrap(),
+            stage
+        );
+    }
+
+    assert_eq!(
+        known_stage_values_for_plane(Plane::Execution),
+        [
+            "builder",
+            "checker",
+            "fixer",
+            "doublechecker",
+            "updater",
+            "troubleshooter",
+            "consultant",
+        ]
+    );
+    assert_eq!(
+        known_stage_values_for_plane(Plane::Planning),
+        ["planner", "manager", "mechanic", "auditor", "arbiter"]
+    );
+    assert_eq!(
+        known_stage_values_for_plane(Plane::Learning),
+        ["analyst", "professor", "curator"]
+    );
+}
+
+#[test]
+fn legal_markers_and_running_markers_derive_from_metadata() {
+    assert_eq!(running_status_marker(StageName::Builder), "BUILDER_RUNNING");
+    assert_eq!(running_status_marker(StageName::Curator), "CURATOR_RUNNING");
+    assert_eq!(
+        legal_terminal_markers(StageName::Builder),
+        vec!["### BUILDER_COMPLETE".to_owned(), "### BLOCKED".to_owned()]
+    );
+    assert_eq!(
+        legal_terminal_markers(StageName::Consultant),
+        vec![
+            "### CONSULT_COMPLETE".to_owned(),
+            "### NEEDS_PLANNING".to_owned(),
+            "### BLOCKED".to_owned()
+        ]
+    );
+    assert_eq!(
+        legal_terminal_markers(StageName::Arbiter),
+        vec![
+            "### ARBITER_COMPLETE".to_owned(),
+            "### REMEDIATION_NEEDED".to_owned(),
+            "### BLOCKED".to_owned()
+        ]
+    );
+
+    for stage in StageName::ALL.iter().copied() {
+        let metadata = stage_metadata(stage);
+        let expected: Vec<String> = legal_terminal_results(stage)
+            .iter()
+            .map(|result| format!("### {}", result.as_str()))
+            .collect();
+
+        assert_eq!(metadata.legal_terminal_markers(), expected);
+        assert_eq!(legal_terminal_markers(stage), expected);
+    }
+}
+
+#[test]
+fn terminal_result_lookup_is_plane_specific() {
+    assert_eq!(
+        terminal_result_for_plane(Plane::Execution, "BLOCKED").unwrap(),
+        TerminalResult::Execution(ExecutionTerminalResult::Blocked)
+    );
+    assert_eq!(
+        terminal_result_for_plane(Plane::Planning, "BLOCKED").unwrap(),
+        TerminalResult::Planning(PlanningTerminalResult::Blocked)
+    );
+    assert_eq!(
+        terminal_result_for_plane(Plane::Learning, "CURATOR_COMPLETE").unwrap(),
+        TerminalResult::Learning(LearningTerminalResult::CuratorComplete)
+    );
+    assert_eq!(
+        blocked_terminal_for_plane(Plane::Learning),
+        TerminalResult::Learning(LearningTerminalResult::Blocked)
+    );
+}
+
+#[test]
+fn invalid_stage_terminal_marker_and_result_class_fail_with_typed_errors() {
+    assert!(matches!(
+        stage_name_for_value("fake_stage"),
+        Err(ContractError::UnknownStageValue { .. })
+    ));
+    assert!(matches!(
+        stage_name_for_plane(Plane::Planning, "builder"),
+        Err(ContractError::StagePlaneMismatch { .. })
+    ));
+    assert!(matches!(
+        parse_terminal_marker_for_plane(Plane::Execution, "BUILDER_COMPLETE"),
+        Err(ContractError::InvalidTerminalMarker { .. })
+    ));
+    assert!(matches!(
+        validate_terminal_marker_for_stage(StageName::Builder, "### CHECKER_PASS"),
+        Err(ContractError::TerminalResultNotAllowed { .. })
+    ));
+    assert!(matches!(
+        validate_stage_result_class(
+            StageName::Builder,
+            TerminalResult::Execution(ExecutionTerminalResult::BuilderComplete),
+            ResultClass::Blocked,
+        ),
+        Err(ContractError::ResultClassNotAllowed { .. })
+    ));
+    assert!(matches!(
+        validate_stage_result_class(
+            StageName::Builder,
+            TerminalResult::Execution(ExecutionTerminalResult::CheckerPass),
+            ResultClass::Success,
+        ),
+        Err(ContractError::TerminalResultNotAllowed { .. })
+    ));
+    assert!(matches!(
+        validate_stage_result_class(
+            StageName::Builder,
+            TerminalResult::Planning(PlanningTerminalResult::Blocked),
+            ResultClass::Blocked,
+        ),
+        Err(ContractError::TerminalResultNotAllowed { .. })
+    ));
+}
+
+#[test]
+fn legal_stage_result_class_combinations_validate() {
+    validate_stage_result_class(
+        StageName::Builder,
+        TerminalResult::Execution(ExecutionTerminalResult::BuilderComplete),
+        ResultClass::Success,
+    )
+    .unwrap();
+    validate_stage_result_class(
+        StageName::Builder,
+        TerminalResult::Execution(ExecutionTerminalResult::Blocked),
+        ResultClass::RecoverableFailure,
+    )
+    .unwrap();
+    validate_stage_result_class(
+        StageName::Consultant,
+        TerminalResult::Execution(ExecutionTerminalResult::NeedsPlanning),
+        ResultClass::EscalatePlanning,
+    )
+    .unwrap();
+    validate_stage_result_class(
+        StageName::Arbiter,
+        TerminalResult::Planning(PlanningTerminalResult::RemediationNeeded),
+        ResultClass::FollowupNeeded,
+    )
+    .unwrap();
+
+    let builder_allowed = allowed_result_classes_by_outcome(StageName::Builder);
+    assert_eq!(builder_allowed.len(), 2);
+    assert_eq!(
+        builder_allowed[0].result_classes,
+        &[ResultClass::Success][..]
+    );
+}
+
+#[test]
+fn safe_identifier_validation_matches_python_reference_contract() {
+    assert_eq!(
+        validate_safe_identifier("task-001.alpha_beta", "task_id").unwrap(),
+        "task-001.alpha_beta"
+    );
+
+    assert!(matches!(
+        validate_safe_identifier(" task-001", "task_id"),
+        Err(ContractError::UnsafeIdentifier {
+            reason: IdentifierErrorReason::SurroundingWhitespace,
+            ..
+        })
+    ));
+    assert!(matches!(
+        validate_safe_identifier("", "task_id"),
+        Err(ContractError::UnsafeIdentifier {
+            reason: IdentifierErrorReason::Empty,
+            ..
+        })
+    ));
+    assert!(matches!(
+        validate_safe_identifier("-task-001", "task_id"),
+        Err(ContractError::UnsafeIdentifier {
+            reason: IdentifierErrorReason::InvalidCharacters,
+            ..
+        })
+    ));
+    assert!(matches!(
+        validate_safe_identifier("task/001", "task_id"),
+        Err(ContractError::UnsafeIdentifier {
+            reason: IdentifierErrorReason::InvalidCharacters,
+            ..
+        })
+    ));
+}

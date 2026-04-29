@@ -1,0 +1,406 @@
+{
+  "schema_version": "1.0",
+  "kind": "compiled_run_plan",
+  "compiled_plan_id": "plan-default_codex-fixture",
+  "compile_input_fingerprint": {
+    "mode_id": "default_codex",
+    "config_fingerprint": "cfg-fixture",
+    "assets_fingerprint": "assets-fixture"
+  },
+  "mode_id": "default_codex",
+  "loop_ids_by_plane": {
+    "execution": "execution.standard",
+    "planning": "planning.standard"
+  },
+  "execution_loop_id": "execution.standard",
+  "planning_loop_id": "planning.standard",
+  "learning_loop_id": null,
+  "graphs_by_plane": {
+    "execution": {
+      "loop_id": "execution.standard",
+      "plane": "execution",
+      "nodes": [
+        {
+          "node_id": "builder",
+          "stage_kind_id": "builder",
+          "plane": "execution",
+          "entrypoint_path": "entrypoints/execution/builder.md",
+          "entrypoint_contract_id": "builder.contract.v1",
+          "running_status_marker": "BUILDER_RUNNING",
+          "allowed_result_classes_by_outcome": {
+            "BUILDER_COMPLETE": ["success"],
+            "BLOCKED": ["blocked", "recoverable_failure"]
+          },
+          "declared_output_artifacts": ["stage_result", "report"],
+          "required_skill_paths": ["skills/stage/execution/builder-core/SKILL.md"],
+          "attached_skill_additions": [],
+          "runner_name": "codex_cli",
+          "model_name": null,
+          "model_reasoning_effort": "medium",
+          "timeout_seconds": 3600
+        }
+      ],
+      "entry_nodes": [
+        {
+          "entry_key": "task",
+          "node_id": "builder"
+        }
+      ],
+      "transitions": [
+        {
+          "edge_id": "builder-complete-to-terminal",
+          "from_node_id": "builder",
+          "terminal_state_id": "done",
+          "on_outcomes": ["BUILDER_COMPLETE"],
+          "kind": "terminal"
+        }
+      ],
+      "compiled_entries": [
+        {
+          "entry_key": "task",
+          "node_id": "builder",
+          "stage_kind_id": "builder",
+          "plane": "execution"
+        }
+      ],
+      "compiled_completion_entry": null,
+      "compiled_transitions": [
+        {
+          "edge_id": "builder-complete-to-terminal",
+          "source_node_id": "builder",
+          "outcome": "BUILDER_COMPLETE",
+          "target_node_id": null,
+          "terminal_state_id": "done",
+          "kind": "terminal",
+          "priority": 100,
+          "max_attempts": null
+        }
+      ],
+      "compiled_resume_policies": [],
+      "compiled_threshold_policies": [],
+      "terminal_states": [
+        {
+          "terminal_state_id": "done",
+          "terminal_class": "success",
+          "writes_status": "BUILDER_COMPLETE",
+          "emits_artifacts": ["stage_result"],
+          "ends_plane_run": true
+        }
+      ],
+      "completion_behavior": null
+    },
+    "planning": {
+      "loop_id": "planning.standard",
+      "plane": "planning",
+      "nodes": [
+        {
+          "node_id": "arbiter",
+          "stage_kind_id": "arbiter",
+          "plane": "planning",
+          "entrypoint_path": "entrypoints/planning/arbiter.md",
+          "entrypoint_contract_id": "arbiter.contract.v1",
+          "running_status_marker": "ARBITER_RUNNING",
+          "allowed_result_classes_by_outcome": {
+            "ARBITER_COMPLETE": ["success"],
+            "REMEDIATION_NEEDED": ["followup_needed"],
+            "BLOCKED": ["blocked", "recoverable_failure"]
+          },
+          "declared_output_artifacts": ["stage_result", "verdict", "report"],
+          "required_skill_paths": ["skills/stage/planning/arbiter-core/SKILL.md"],
+          "attached_skill_additions": [],
+          "runner_name": "codex_cli",
+          "model_name": null,
+          "model_reasoning_effort": null,
+          "timeout_seconds": 3600
+        }
+      ],
+      "entry_nodes": [
+        {
+          "entry_key": "spec",
+          "node_id": "arbiter"
+        }
+      ],
+      "transitions": [
+        {
+          "edge_id": "arbiter-complete-to-terminal",
+          "from_node_id": "arbiter",
+          "terminal_state_id": "arbiter_complete",
+          "on_outcomes": ["ARBITER_COMPLETE"],
+          "kind": "terminal"
+        }
+      ],
+      "compiled_entries": [
+        {
+          "entry_key": "spec",
+          "node_id": "arbiter",
+          "stage_kind_id": "arbiter",
+          "plane": "planning"
+        }
+      ],
+      "compiled_completion_entry": {
+        "entry_key": "closure_target",
+        "node_id": "arbiter",
+        "stage_kind_id": "arbiter",
+        "plane": "planning",
+        "trigger": "backlog_drained",
+        "readiness_rule": "no_open_lineage_work",
+        "request_kind": "closure_target",
+        "target_selector": "active_closure_target",
+        "rubric_policy": "reuse_or_create",
+        "blocked_work_policy": "suppress",
+        "skip_if_already_closed": true,
+        "on_pass_terminal_state_id": "arbiter_complete",
+        "on_gap_terminal_state_id": "remediation_needed",
+        "create_incident_on_gap": true
+      },
+      "compiled_transitions": [
+        {
+          "edge_id": "arbiter-complete-to-terminal",
+          "source_node_id": "arbiter",
+          "outcome": "ARBITER_COMPLETE",
+          "target_node_id": null,
+          "terminal_state_id": "arbiter_complete",
+          "kind": "terminal",
+          "priority": 100,
+          "max_attempts": null
+        }
+      ],
+      "compiled_resume_policies": [],
+      "compiled_threshold_policies": [],
+      "terminal_states": [
+        {
+          "terminal_state_id": "arbiter_complete",
+          "terminal_class": "success",
+          "writes_status": "ARBITER_COMPLETE",
+          "emits_artifacts": ["stage_result", "verdict", "report"],
+          "ends_plane_run": true
+        },
+        {
+          "terminal_state_id": "remediation_needed",
+          "terminal_class": "followup_needed",
+          "writes_status": "REMEDIATION_NEEDED",
+          "emits_artifacts": ["stage_result", "incident_report", "verdict", "report"],
+          "ends_plane_run": true
+        }
+      ],
+      "completion_behavior": {
+        "trigger": "backlog_drained",
+        "readiness_rule": "no_open_lineage_work",
+        "target_node_id": "arbiter",
+        "request_kind": "closure_target",
+        "target_selector": "active_closure_target",
+        "rubric_policy": "reuse_or_create",
+        "blocked_work_policy": "suppress",
+        "skip_if_already_closed": true,
+        "on_pass_terminal_state_id": "arbiter_complete",
+        "on_gap_terminal_state_id": "remediation_needed",
+        "create_incident_on_gap": true
+      }
+    }
+  },
+  "execution_graph": {
+    "loop_id": "execution.standard",
+    "plane": "execution",
+    "nodes": [
+      {
+        "node_id": "builder",
+        "stage_kind_id": "builder",
+        "plane": "execution",
+        "entrypoint_path": "entrypoints/execution/builder.md",
+        "entrypoint_contract_id": "builder.contract.v1",
+        "running_status_marker": "BUILDER_RUNNING",
+        "allowed_result_classes_by_outcome": {
+          "BUILDER_COMPLETE": ["success"],
+          "BLOCKED": ["blocked", "recoverable_failure"]
+        },
+        "declared_output_artifacts": ["stage_result", "report"],
+        "required_skill_paths": ["skills/stage/execution/builder-core/SKILL.md"],
+        "attached_skill_additions": [],
+        "runner_name": "codex_cli",
+        "model_name": null,
+        "model_reasoning_effort": "medium",
+        "timeout_seconds": 3600
+      }
+    ],
+    "entry_nodes": [
+      {
+        "entry_key": "task",
+        "node_id": "builder"
+      }
+    ],
+    "transitions": [
+      {
+        "edge_id": "builder-complete-to-terminal",
+        "from_node_id": "builder",
+        "terminal_state_id": "done",
+        "on_outcomes": ["BUILDER_COMPLETE"],
+        "kind": "terminal"
+      }
+    ],
+    "compiled_entries": [
+      {
+        "entry_key": "task",
+        "node_id": "builder",
+        "stage_kind_id": "builder",
+        "plane": "execution"
+      }
+    ],
+    "compiled_completion_entry": null,
+    "compiled_transitions": [
+      {
+        "edge_id": "builder-complete-to-terminal",
+        "source_node_id": "builder",
+        "outcome": "BUILDER_COMPLETE",
+        "target_node_id": null,
+        "terminal_state_id": "done",
+        "kind": "terminal",
+        "priority": 100,
+        "max_attempts": null
+      }
+    ],
+    "compiled_resume_policies": [],
+    "compiled_threshold_policies": [],
+    "terminal_states": [
+      {
+        "terminal_state_id": "done",
+        "terminal_class": "success",
+        "writes_status": "BUILDER_COMPLETE",
+        "emits_artifacts": ["stage_result"],
+        "ends_plane_run": true
+      }
+    ],
+    "completion_behavior": null
+  },
+  "planning_graph": {
+    "loop_id": "planning.standard",
+    "plane": "planning",
+    "nodes": [
+      {
+        "node_id": "arbiter",
+        "stage_kind_id": "arbiter",
+        "plane": "planning",
+        "entrypoint_path": "entrypoints/planning/arbiter.md",
+        "entrypoint_contract_id": "arbiter.contract.v1",
+        "running_status_marker": "ARBITER_RUNNING",
+        "allowed_result_classes_by_outcome": {
+          "ARBITER_COMPLETE": ["success"],
+          "REMEDIATION_NEEDED": ["followup_needed"],
+          "BLOCKED": ["blocked", "recoverable_failure"]
+        },
+        "declared_output_artifacts": ["stage_result", "verdict", "report"],
+        "required_skill_paths": ["skills/stage/planning/arbiter-core/SKILL.md"],
+        "attached_skill_additions": [],
+        "runner_name": "codex_cli",
+        "model_name": null,
+        "model_reasoning_effort": null,
+        "timeout_seconds": 3600
+      }
+    ],
+    "entry_nodes": [
+      {
+        "entry_key": "spec",
+        "node_id": "arbiter"
+      }
+    ],
+    "transitions": [
+      {
+        "edge_id": "arbiter-complete-to-terminal",
+        "from_node_id": "arbiter",
+        "terminal_state_id": "arbiter_complete",
+        "on_outcomes": ["ARBITER_COMPLETE"],
+        "kind": "terminal"
+      }
+    ],
+    "compiled_entries": [
+      {
+        "entry_key": "spec",
+        "node_id": "arbiter",
+        "stage_kind_id": "arbiter",
+        "plane": "planning"
+      }
+    ],
+    "compiled_completion_entry": {
+      "entry_key": "closure_target",
+      "node_id": "arbiter",
+      "stage_kind_id": "arbiter",
+      "plane": "planning",
+      "trigger": "backlog_drained",
+      "readiness_rule": "no_open_lineage_work",
+      "request_kind": "closure_target",
+      "target_selector": "active_closure_target",
+      "rubric_policy": "reuse_or_create",
+      "blocked_work_policy": "suppress",
+      "skip_if_already_closed": true,
+      "on_pass_terminal_state_id": "arbiter_complete",
+      "on_gap_terminal_state_id": "remediation_needed",
+      "create_incident_on_gap": true
+    },
+    "compiled_transitions": [
+      {
+        "edge_id": "arbiter-complete-to-terminal",
+        "source_node_id": "arbiter",
+        "outcome": "ARBITER_COMPLETE",
+        "target_node_id": null,
+        "terminal_state_id": "arbiter_complete",
+        "kind": "terminal",
+        "priority": 100,
+        "max_attempts": null
+      }
+    ],
+    "compiled_resume_policies": [],
+    "compiled_threshold_policies": [],
+    "terminal_states": [
+      {
+        "terminal_state_id": "arbiter_complete",
+        "terminal_class": "success",
+        "writes_status": "ARBITER_COMPLETE",
+        "emits_artifacts": ["stage_result", "verdict", "report"],
+        "ends_plane_run": true
+      },
+      {
+        "terminal_state_id": "remediation_needed",
+        "terminal_class": "followup_needed",
+        "writes_status": "REMEDIATION_NEEDED",
+        "emits_artifacts": ["stage_result", "incident_report", "verdict", "report"],
+        "ends_plane_run": true
+      }
+    ],
+    "completion_behavior": {
+      "trigger": "backlog_drained",
+      "readiness_rule": "no_open_lineage_work",
+      "target_node_id": "arbiter",
+      "request_kind": "closure_target",
+      "target_selector": "active_closure_target",
+      "rubric_policy": "reuse_or_create",
+      "blocked_work_policy": "suppress",
+      "skip_if_already_closed": true,
+      "on_pass_terminal_state_id": "arbiter_complete",
+      "on_gap_terminal_state_id": "remediation_needed",
+      "create_incident_on_gap": true
+    }
+  },
+  "learning_graph": null,
+  "concurrency_policy": null,
+  "learning_trigger_rules": [],
+  "compiled_at": "2026-04-15T00:00:00Z",
+  "resolved_assets": [
+    {
+      "asset_family": "mode",
+      "logical_id": "mode:default_codex",
+      "compile_time_path": "modes/default_codex.json",
+      "content_sha256": "missing"
+    },
+    {
+      "asset_family": "entrypoint",
+      "logical_id": "entrypoint:entrypoints/execution/builder.md",
+      "compile_time_path": "entrypoints/execution/builder.md",
+      "content_sha256": "missing"
+    }
+  ],
+  "source_refs": [
+    "mode:default_codex",
+    "graph_loop:execution.standard",
+    "graph_loop:planning.standard",
+    "graph_completion_behavior:planning.standard"
+  ]
+}

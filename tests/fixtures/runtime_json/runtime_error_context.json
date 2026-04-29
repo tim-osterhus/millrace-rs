@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "kind": "runtime_error_context",
+  "error_code": "planning_post_stage_apply_failed",
+  "plane": "planning",
+  "failed_stage": "manager",
+  "repair_stage": "mechanic",
+  "work_item_kind": "spec",
+  "work_item_id": "spec-001",
+  "run_id": "run-001",
+  "router_action": "route_to_mechanic",
+  "terminal_result": "BLOCKED",
+  "stage_result_path": "millrace-agents/runs/run-001/stage_results/request-001.json",
+  "report_path": "millrace-agents/runs/run-001/troubleshoot_report.md",
+  "exception_type": "RuntimeError",
+  "exception_message": "post-stage apply failed",
+  "captured_at": "2026-04-15T00:00:00Z"
+}

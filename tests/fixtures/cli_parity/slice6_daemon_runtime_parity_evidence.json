@@ -1,0 +1,333 @@
+{
+  "schema_version": "1.0",
+  "kind": "slice6_daemon_runtime_parity_evidence",
+  "python_reference": {
+    "cli_tests": "../millrace-py/tests/cli/test_cli.py",
+    "monitor_tests": "../millrace-py/tests/cli/test_monitoring.py",
+    "supervisor_tests": "../millrace-py/tests/runtime/test_supervisor.py",
+    "watcher_tests": "../millrace-py/tests/runtime/test_watchers.py",
+    "runtime_sources": [
+      "../millrace-py/src/millrace_ai/cli/commands/run.py",
+      "../millrace-py/src/millrace_ai/cli/monitoring.py",
+      "../millrace-py/src/millrace_ai/runtime/supervisor.py",
+      "../millrace-py/src/millrace_ai/runtime/mailbox_intake.py",
+      "../millrace-py/src/millrace_ai/runtime/watcher_intake.py"
+    ]
+  },
+  "normalization": [
+    "Python scenarios are represented as named source tests and runtime modules, not byte-for-byte daemon transcripts.",
+    "Rust scenarios use deterministic fake-runner workers and bounded daemon loops so always-on CI does not start real stage agents.",
+    "Daemon key-line and structural parity normalize volatile identity, timing, process, and workspace fields while preserving command names, state transitions, event order, mailbox archive classes, monitor line classes, and summary keys."
+  ],
+  "normalized_fields": [
+    "request_id",
+    "run_id",
+    "timestamp",
+    "absolute_workspace_path",
+    "run_dir",
+    "stage_result_path",
+    "runner_raw_result_path",
+    "router_decision_path",
+    "runtime_error_report_path",
+    "mailbox_command_id",
+    "watcher_event_path",
+    "process_id",
+    "generated_command_id",
+    "compact_run_handle",
+    "compiled_plan_id",
+    "config_version",
+    "host_name"
+  ],
+  "required_coverage_axes": [
+    "daemon_startup",
+    "bounded_loop",
+    "supervisor_scheduling",
+    "mailbox_reload",
+    "watcher_intake",
+    "monitor_rendering",
+    "shutdown",
+    "lock_contention",
+    "cli_summary",
+    "no_real_runner_invocation"
+  ],
+  "runner_guarantees": [
+    "fake_runner_only",
+    "no_codex_cli_process",
+    "no_pi_rpc_transport",
+    "no_real_stage_agent_execution"
+  ],
+  "scenarios": [
+    {
+      "scenario": "daemon-startup-config-and-lock-contention",
+      "coverage": [
+        "daemon_startup",
+        "lock_contention",
+        "cli_summary"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/src/millrace_ai/cli/commands/run.py",
+          "functions": [
+            "run_daemon"
+          ]
+        },
+        {
+          "path": "../millrace-py/tests/cli/test_cli.py",
+          "tests": [
+            "test_run_daemon_respects_max_ticks",
+            "test_run_daemon_fails_fast_when_workspace_daemon_lock_is_held",
+            "test_run_daemon_defaults_config_to_workspace_toml"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "daemon_startup_requires_initialized_workspace_without_creating_it",
+        "daemon_startup_projects_mode_config_and_deterministic_watcher_state",
+        "daemon_config_loading_uses_python_compatible_defaults_and_validation",
+        "daemon_startup_lock_contention_preserves_compiler_and_state_artifacts",
+        "daemon_startup_failure_releases_matching_lock_and_preserves_state",
+        "rust_run_daemon_reports_lock_contention_without_mutating_workspace"
+      ]
+    },
+    {
+      "scenario": "supervisor-plane-scheduling-and-worker-completion",
+      "coverage": [
+        "supervisor_scheduling",
+        "no_real_runner_invocation"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/src/millrace_ai/runtime/supervisor.py",
+          "functions": [
+            "RuntimeDaemonSupervisor.run_cycle",
+            "RuntimeDaemonSupervisor.dispatch_ready_work",
+            "RuntimeDaemonSupervisor.drain_completed",
+            "apply_stage_completion"
+          ]
+        },
+        {
+          "path": "../millrace-py/tests/runtime/test_supervisor.py",
+          "tests": [
+            "test_supervisor_dispatches_learning_and_execution_before_either_completes",
+            "test_supervisor_does_not_dispatch_execution_with_planning",
+            "test_supervisor_workers_return_typed_outcomes",
+            "test_supervisor_applies_completed_workers_before_new_claims"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "daemon_supervisor_default_mode_dispatches_only_one_foreground_lane",
+        "daemon_supervisor_learning_mode_dispatches_learning_beside_execution",
+        "daemon_supervisor_learning_mode_keeps_planning_and_execution_mutually_exclusive",
+        "daemon_supervisor_drains_completed_workers_before_new_claims",
+        "daemon_supervisor_refuses_worker_metadata_mismatch_before_artifact_application"
+      ]
+    },
+    {
+      "scenario": "bounded-loop-shutdown-and-idle-control",
+      "coverage": [
+        "bounded_loop",
+        "shutdown",
+        "cli_summary"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/src/millrace_ai/cli/commands/run.py",
+          "functions": [
+            "_run_daemon_supervisor_loop",
+            "_run_daemon_tick_loop"
+          ]
+        },
+        {
+          "path": "../millrace-py/src/millrace_ai/runtime/supervisor.py",
+          "functions": [
+            "RuntimeDaemonSupervisor.wait_for_next_completion_or_timeout",
+            "RuntimeDaemonSupervisor._stop_runtime",
+            "RuntimeDaemonSupervisor._emit_idle_cycle"
+          ]
+        },
+        {
+          "path": "../millrace-py/tests/cli/test_cli.py",
+          "tests": [
+            "test_run_daemon_respects_max_ticks",
+            "test_run_daemon_sleeps_between_ticks_when_unbounded"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "daemon_loop_runs_one_max_tick_drains_worker_and_releases_lock",
+        "daemon_loop_uses_configured_idle_sleep_without_spinning",
+        "daemon_loop_can_exit_after_clean_no_work_idle_cycle",
+        "daemon_loop_pause_drains_workers_without_claiming_new_work",
+        "daemon_loop_stop_drains_workers_resets_state_and_releases_matching_lock"
+      ]
+    },
+    {
+      "scenario": "daemon-mailbox-and-config-reload",
+      "coverage": [
+        "mailbox_reload",
+        "shutdown"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/src/millrace_ai/runtime/mailbox_intake.py",
+          "functions": [
+            "drain_mailbox",
+            "handle_mailbox_command",
+            "reload_config_from_mailbox",
+            "enqueue_task_from_mailbox",
+            "enqueue_spec_from_mailbox",
+            "enqueue_idea_from_mailbox"
+          ]
+        },
+        {
+          "path": "../millrace-py/tests/cli/test_cli.py",
+          "tests": [
+            "test_queue_add_commands_route_to_mailbox_when_daemon_owns_workspace",
+            "test_reload_config_routes_to_mailbox_when_workspace_has_daemon_owner"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "daemon_mailbox_drains_control_and_intake_commands_into_processed_archives",
+        "daemon_mailbox_preserves_invalid_and_failed_payloads_and_continues",
+        "daemon_mailbox_retry_active_supports_unscoped_and_planning_scoped_retries",
+        "daemon_mailbox_clear_stale_requeues_active_items_and_resets_daemon_state",
+        "daemon_mailbox_reload_defers_while_active_and_applies_after_planes_drain",
+        "daemon_mailbox_reload_failure_preserves_previous_plan_and_failed_archive",
+        "rust_control_and_config_reload_route_to_mailbox_when_daemon_lock_is_active",
+        "rust_queue_intake_routes_to_mailbox_when_daemon_lock_is_active"
+      ]
+    },
+    {
+      "scenario": "deterministic-watcher-poll-intake",
+      "coverage": [
+        "watcher_intake"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/src/millrace_ai/runtime/watcher_intake.py",
+          "functions": [
+            "rebuild_watcher_session",
+            "consume_watcher_events",
+            "handle_watch_event",
+            "normalize_idea_watch_event",
+            "idea_already_represented"
+          ]
+        },
+        {
+          "path": "../millrace-py/tests/runtime/test_watchers.py",
+          "tests": [
+            "test_resolve_watcher_mode_degrades_to_poll_when_watchdog_unavailable",
+            "test_poll_watcher_discovers_config_task_spec_and_idea_changes",
+            "test_poll_watcher_debounces_rapid_repeat_events",
+            "test_poll_watcher_emits_debounced_change_after_quiet_period_without_new_write",
+            "test_poll_watcher_handles_missing_roots_and_deleted_files_safely"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "daemon_watcher_rebuild_hook_updates_snapshot_without_claiming_work",
+        "daemon_watcher_startup_scan_normalizes_idea_before_claiming_work",
+        "daemon_watcher_observes_queue_and_config_changes_with_debounce",
+        "daemon_watcher_handles_missing_roots_deleted_files_and_bad_idea_payloads",
+        "daemon_watcher_skips_duplicate_idea_normalization_by_existing_spec_lineage_or_reference"
+      ]
+    },
+    {
+      "scenario": "basic-monitor-rendering-and-fanout",
+      "coverage": [
+        "monitor_rendering",
+        "cli_summary"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/src/millrace_ai/cli/monitoring.py",
+          "functions": [
+            "BasicTerminalMonitor.emit",
+            "_render_event_lines",
+            "_render_runtime_started",
+            "_render_stage_started",
+            "_render_stage_completed",
+            "_render_router_decision",
+            "_render_usage_governance_paused"
+          ]
+        },
+        {
+          "path": "../millrace-py/tests/cli/test_monitoring.py",
+          "tests": [
+            "test_basic_terminal_monitor_renders_startup_context_lines",
+            "test_basic_terminal_monitor_renders_stage_done_and_run_update_lines",
+            "test_basic_terminal_monitor_compacts_stage_start_identity_and_run_id",
+            "test_basic_terminal_monitor_suppresses_redundant_stage_status_lines",
+            "test_basic_terminal_monitor_throttles_repeated_no_work_idle_heartbeat",
+            "test_basic_terminal_monitor_renders_route_transitions_without_unknown_next_fields",
+            "test_basic_terminal_monitor_widens_colliding_short_run_handles",
+            "test_basic_terminal_monitor_renders_usage_governance_events"
+          ]
+        },
+        {
+          "path": "../millrace-py/tests/cli/test_cli.py",
+          "tests": [
+            "test_run_daemon_with_monitor_basic_installs_monitor_and_prints_output",
+            "test_run_daemon_without_monitor_stays_quiet",
+            "test_run_daemon_can_write_basic_monitor_log_without_stdout_monitor"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "basic_monitor_renders_startup_stage_router_and_status_lines",
+        "basic_monitor_renders_stage_completion_tokens_and_run_aggregate",
+        "basic_monitor_suppresses_repeated_idle_and_resets_after_activity",
+        "basic_monitor_renders_reload_watcher_governance_and_fanout_lines",
+        "monitor_events_parse_persisted_runtime_event_jsonl_data_payloads",
+        "daemon_loop_monitor_streams_owner_side_stage_and_router_events",
+        "daemon_loop_monitor_streams_pause_and_stop_lines",
+        "rust_run_daemon_default_stdout_is_quiet_except_summary_lines",
+        "rust_run_daemon_basic_monitor_prints_live_lines_to_stdout",
+        "rust_run_daemon_monitor_log_fanout_does_not_change_stdout_mode"
+      ]
+    },
+    {
+      "scenario": "run-daemon-cli-fake-runner-execution-and-run-views",
+      "coverage": [
+        "daemon_startup",
+        "bounded_loop",
+        "cli_summary",
+        "no_real_runner_invocation"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/src/millrace_ai/cli/commands/run.py",
+          "functions": [
+            "run_daemon"
+          ]
+        },
+        {
+          "path": "../millrace-py/tests/cli/test_cli.py",
+          "tests": [
+            "test_run_daemon_respects_max_ticks",
+            "test_run_daemon_without_monitor_stays_quiet"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "rust_run_daemon_bounded_execution_uses_fake_runner_and_run_views",
+        "rust_run_daemon_default_stdout_is_quiet_except_summary_lines"
+      ]
+    }
+  ],
+  "non_goals": [
+    "real Codex runner adapters",
+    "real Pi runner adapters",
+    "subprocess supervision",
+    "external timeout and cancellation cleanup",
+    "native filesystem watcher integration",
+    "advanced usage governance",
+    "subscription quota telemetry",
+    "learning promotion",
+    "Slice 8 advanced parity surfaces",
+    "Rust self-hosting",
+    "real stage-agent execution in daemon tests"
+  ]
+}

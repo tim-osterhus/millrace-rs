@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "kind": "stage_result",
+  "run_id": "run-001",
+  "plane": "execution",
+  "stage": "builder",
+  "node_id": "builder",
+  "stage_kind_id": "builder",
+  "work_item_kind": "task",
+  "work_item_id": "task-001",
+  "terminal_result": "BUILDER_COMPLETE",
+  "result_class": "success",
+  "summary_status_marker": "### BUILDER_COMPLETE",
+  "success": true,
+  "retryable": false,
+  "exit_code": 0,
+  "duration_seconds": 1.25,
+  "prompt_artifact": "prompt.md",
+  "report_artifact": "builder_summary.md",
+  "artifact_paths": [
+    "builder_summary.md"
+  ],
+  "detected_marker": "### BUILDER_COMPLETE",
+  "stdout_path": "stdout.txt",
+  "stderr_path": "stderr.txt",
+  "runner_name": "codex_cli",
+  "model_name": "gpt-5",
+  "model_reasoning_effort": "medium",
+  "token_usage": {
+    "input_tokens": 100,
+    "cached_input_tokens": 20,
+    "output_tokens": 30,
+    "thinking_tokens": 5,
+    "total_tokens": 135
+  },
+  "notes": [
+    "builder pass"
+  ],
+  "metadata": {
+    "request_id": "request-001"
+  },
+  "started_at": "2026-04-15T00:00:00Z",
+  "completed_at": "2026-04-15T00:00:00Z"
+}

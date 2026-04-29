@@ -1,0 +1,328 @@
+{
+  "schema_version": "1.0",
+  "kind": "slice5_serial_runtime_parity_evidence",
+  "python_reference": {
+    "runtime_tests": "../millrace-py/tests/runtime/test_runtime.py",
+    "result_application_tests": "../millrace-py/tests/runtime/test_result_application.py",
+    "router_tests": "../millrace-py/tests/runtime/test_router.py",
+    "handoff_tests": "../millrace-py/tests/integration/test_e2e_handoffs.py",
+    "runtime_sources": [
+      "../millrace-py/src/millrace_ai/runtime/__init__.py",
+      "../millrace-py/src/millrace_ai/runtime/result_application.py",
+      "../millrace-py/src/millrace_ai/router.py",
+      "../millrace-py/src/millrace_ai/runner.py",
+      "../millrace-py/src/millrace_ai/state_store.py"
+    ]
+  },
+  "normalization": [
+    "Python scenarios are represented as named source tests, not byte-for-byte transcripts.",
+    "Rust scenarios use deterministic fake-runner output and committed fixture metadata.",
+    "Volatile ids, timestamps, run directories, absolute workspace roots, and incident ids are compared by shape and semantic fields."
+  ],
+  "normalized_fields": [
+    "request_id",
+    "run_id",
+    "timestamp",
+    "absolute_workspace_path",
+    "run_dir",
+    "stage_result_path",
+    "runner_raw_result_path",
+    "router_decision_path",
+    "runtime_error_report_path",
+    "incident_id",
+    "compiled_plan_id",
+    "process_id",
+    "host_name"
+  ],
+  "required_coverage_axes": [
+    "startup",
+    "queue_transitions",
+    "snapshot_status_persistence",
+    "stage_request_fields",
+    "result_envelopes",
+    "lane_scoped_result_application",
+    "recovery_counters",
+    "closure_activation",
+    "lock_contention",
+    "no_work_outcomes",
+    "cli_run_once",
+    "no_real_runner_invocation"
+  ],
+  "runner_guarantees": [
+    "fake_runner_only",
+    "no_codex_cli_process",
+    "no_pi_rpc_transport"
+  ],
+  "scenarios": [
+    {
+      "scenario": "once-startup-and-lock-contention",
+      "coverage": [
+        "startup",
+        "lock_contention",
+        "snapshot_status_persistence"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/tests/runtime/test_runtime.py",
+          "tests": [
+            "test_runtime_once_startup_acquires_lock_and_close_releases_it",
+            "test_runtime_startup_rejects_run_once_when_workspace_lock_is_already_held",
+            "test_runtime_run_once_lock_contention_does_not_rewrite_compile_artifacts",
+            "test_runtime_startup_compile_failure_raises_typed_runtime_error"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "once_startup_requires_initialized_workspace_without_creating_it",
+        "once_startup_compiles_loads_state_projects_snapshot_and_close_releases_lock",
+        "once_startup_lock_contention_preserves_compiler_and_state_artifacts",
+        "once_startup_compile_failure_preserves_artifacts_and_releases_lock"
+      ]
+    },
+    {
+      "scenario": "activation-and-stage-request-fields",
+      "coverage": [
+        "queue_transitions",
+        "stage_request_fields",
+        "snapshot_status_persistence"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/tests/runtime/test_runtime.py",
+          "tests": [
+            "test_runtime_tick_prioritizes_planning_before_execution",
+            "test_runtime_tick_claim_activation_uses_compiled_plan_authority",
+            "test_runtime_stage_request_entrypoint_path_exists_after_startup",
+            "test_runtime_stage_request_uses_compiled_node_binding",
+            "test_runtime_writes_running_status_marker_while_stage_runner_is_active"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "stage_run_request_serializes_python_compatible_context_fields",
+        "serial_tick_claims_planning_before_execution_and_marks_stage_started",
+        "serial_tick_claims_execution_when_planning_has_no_work",
+        "serial_tick_activates_learning_request_only_when_learning_graph_exists"
+      ]
+    },
+    {
+      "scenario": "result-envelope-artifacts-and-graph-routing",
+      "coverage": [
+        "result_envelopes",
+        "queue_transitions",
+        "snapshot_status_persistence",
+        "no_real_runner_invocation"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/tests/runtime/test_runtime.py",
+          "tests": [
+            "test_runtime_writes_snapshot_status_events_and_stage_result_artifacts",
+            "test_runtime_single_tick_emits_stage_events_in_order"
+          ]
+        },
+        {
+          "path": "../millrace-py/tests/runtime/test_router.py",
+          "tests": [
+            "test_execution_transition_table_happy_and_repair_paths",
+            "test_execution_router_rejects_stage_result_identity_mismatch"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "fake_runner_success_normalizes_to_stage_result_envelope",
+        "malformed_stdout_terminal_output_becomes_typed_recoverable_failure",
+        "illegal_stdout_terminal_marker_becomes_valid_recoverable_failure",
+        "missing_terminal_output_becomes_typed_recoverable_failure",
+        "structured_terminal_rejects_illegal_result_class_combination",
+        "fake_runner_selection_is_deterministic",
+        "serial_tick_dispatches_fake_runner_persists_artifacts_and_routes_from_graph"
+      ]
+    },
+    {
+      "scenario": "lane-scoped-result-application",
+      "coverage": [
+        "lane_scoped_result_application",
+        "queue_transitions",
+        "snapshot_status_persistence"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/tests/runtime/test_result_application.py",
+          "tests": [
+            "test_learning_idle_result_does_not_clear_active_execution_lane",
+            "test_execution_run_stage_result_does_not_clear_active_learning_lane"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "serial_tick_execution_run_stage_preserves_active_learning_lane",
+        "serial_tick_learning_idle_preserves_active_execution_lane"
+      ]
+    },
+    {
+      "scenario": "recovery-routing-and-counters",
+      "coverage": [
+        "result_envelopes",
+        "recovery_counters",
+        "snapshot_status_persistence",
+        "stage_request_fields"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/tests/runtime/test_runtime.py",
+          "tests": [
+            "test_runtime_routes_malformed_stage_exit_into_recovery",
+            "test_runtime_routes_post_stage_planning_completion_conflict_into_mechanic",
+            "test_runtime_routes_post_stage_execution_completion_conflict_into_troubleshooter",
+            "test_runtime_tick_routes_unknown_execution_marker_into_troubleshooter",
+            "test_runtime_tick_routes_malformed_execution_marker_into_troubleshooter"
+          ]
+        },
+        {
+          "path": "../millrace-py/tests/runtime/test_router.py",
+          "tests": [
+            "test_troubleshooter_blocked_escalates_to_consultant_for_same_failure_class",
+            "test_recovery_routing_is_deterministic_for_same_inputs",
+            "test_counter_keying_is_stable_and_failure_class_scoped"
+          ]
+        },
+        {
+          "path": "../millrace-py/tests/integration/test_e2e_handoffs.py",
+          "tests": [
+            "test_e2e_recovery_malformed_result_routes_to_consultant",
+            "test_e2e_recovery_illegal_terminal_result_routes_to_consultant"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "serial_tick_dispatch_missing_terminal_routes_recovery_and_persists_error_context",
+        "serial_tick_dispatch_illegal_terminal_routes_recovery_and_persists_error_context",
+        "serial_tick_routes_execution_completion_conflict_into_troubleshooter_recovery",
+        "serial_tick_routes_planning_completion_conflict_into_mechanic_recovery"
+      ]
+    },
+    {
+      "scenario": "handoff-incident-and-blocked-work",
+      "coverage": [
+        "queue_transitions",
+        "snapshot_status_persistence",
+        "result_envelopes"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/tests/runtime/test_runtime.py",
+          "tests": [
+            "test_runtime_handoff_creates_incident_and_transitions_to_planning"
+          ]
+        },
+        {
+          "path": "../millrace-py/tests/runtime/test_router.py",
+          "tests": [
+            "test_consultant_transitions_cover_local_and_planning_escalation"
+          ]
+        },
+        {
+          "path": "../millrace-py/tests/integration/test_e2e_handoffs.py",
+          "tests": [
+            "test_e2e_needs_planning_incident_intake_reenters_execution"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "serial_tick_applies_consultant_handoff_through_typed_incident_and_blocked_task"
+      ]
+    },
+    {
+      "scenario": "closure-target-activation-and-arbiter-results",
+      "coverage": [
+        "closure_activation",
+        "queue_transitions",
+        "snapshot_status_persistence",
+        "stage_request_fields"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/tests/runtime/test_runtime.py",
+          "tests": [
+            "test_runtime_can_build_closure_target_request_without_active_work_item",
+            "test_runtime_closure_target_request_uses_compiled_node_binding",
+            "test_runtime_tick_with_no_work_suppresses_completion_when_lineage_work_remains",
+            "test_runtime_tick_closes_closure_target_on_arbiter_complete",
+            "test_runtime_tick_enqueues_remediation_incident_for_arbiter_gap",
+            "test_runtime_tick_blocks_repeated_arbiter_remediation_without_execution"
+          ]
+        },
+        {
+          "path": "../millrace-py/tests/integration/test_e2e_handoffs.py",
+          "tests": [
+            "test_e2e_lineage_drain_triggers_arbiter_complete",
+            "test_e2e_lineage_drain_triggers_arbiter_remediation_gap"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "serial_tick_activates_closure_target_request_without_active_work_item",
+        "serial_tick_suppresses_closure_target_when_blocked_lineage_work_remains",
+        "serial_tick_closes_closure_target_on_arbiter_complete",
+        "serial_tick_enqueues_remediation_incident_for_arbiter_gap",
+        "serial_tick_blocks_repeated_arbiter_remediation_without_execution"
+      ]
+    },
+    {
+      "scenario": "no-work-paused-and-stopped-outcomes",
+      "coverage": [
+        "no_work_outcomes",
+        "snapshot_status_persistence"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/tests/runtime/test_runtime.py",
+          "tests": [
+            "test_runtime_tick_enforces_pause_and_stop_commands",
+            "test_runtime_tick_stop_normalizes_active_snapshot_to_stopped_idle_invariant",
+            "test_runtime_tick_with_no_work_reports_non_blocked_idle_result"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "serial_tick_returns_no_work_paused_and_stopped_without_stage_request"
+      ]
+    },
+    {
+      "scenario": "cli-run-once-fake-runner-boundary",
+      "coverage": [
+        "cli_run_once",
+        "startup",
+        "lock_contention",
+        "no_work_outcomes",
+        "no_real_runner_invocation"
+      ],
+      "python_sources": [
+        {
+          "path": "../millrace-py/tests/runtime/test_runtime.py",
+          "tests": [
+            "test_runtime_once_startup_acquires_lock_and_close_releases_it",
+            "test_runtime_startup_rejects_run_once_when_workspace_lock_is_already_held",
+            "test_runtime_run_once_lock_contention_does_not_rewrite_compile_artifacts"
+          ]
+        }
+      ],
+      "rust_tests": [
+        "rust_run_once_executes_one_fake_runner_tick_and_run_views_inspect_artifacts",
+        "rust_run_once_reports_no_work_paused_and_stopped_outcomes",
+        "rust_run_once_reports_lock_contention_without_mutating_workspace",
+        "rust_run_once_reports_startup_compile_failure_and_releases_ownership",
+        "rust_run_daemon_placeholder_preserves_parse_workspace_and_monitor_guarantees"
+      ]
+    }
+  ],
+  "non_goals": [
+    "daemon scheduling",
+    "real Codex runner adapters",
+    "real Pi runner adapters",
+    "usage governance",
+    "monitor streaming",
+    "plane-concurrent daemon scheduling"
+  ]
+}

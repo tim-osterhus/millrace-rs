@@ -1,4 +1,5 @@
 use std::ffi::OsStr;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 
@@ -85,12 +86,45 @@ pub fn python_project_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../millrace-py")
 }
 
+pub fn fixture_path(relative_path: impl AsRef<Path>) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join(relative_path)
+}
+
+pub fn read_fixture(relative_path: impl AsRef<Path>) -> std::io::Result<String> {
+    fs::read_to_string(fixture_path(relative_path))
+}
+
 pub fn run_rust_millrace<I, S>(args: I) -> std::io::Result<CommandOutput>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
     let output = Command::new(cargo_bin("millrace")).args(args).output()?;
+
+    Ok(CommandOutput {
+        status: output.status,
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+    })
+}
+
+pub fn run_rust_millrace_with_env<I, S, E, K, V>(args: I, envs: E) -> std::io::Result<CommandOutput>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+    E: IntoIterator<Item = (K, V)>,
+    K: AsRef<OsStr>,
+    V: AsRef<OsStr>,
+{
+    let mut command = Command::new(cargo_bin("millrace"));
+    command.args(args);
+    for (key, value) in envs {
+        command.env(key, value);
+    }
+    let output = command.output()?;
 
     Ok(CommandOutput {
         status: output.status,
