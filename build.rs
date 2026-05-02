@@ -84,7 +84,7 @@ fn should_skip_runtime_asset_path(relative_path: &Path) -> bool {
         .collect();
 
     parts.iter().any(|part| part.starts_with('.'))
-        || parts.iter().any(|part| *part == "__pycache__")
+        || parts.contains(&"__pycache__")
         || normalized.ends_with(".pyc")
         || normalized.ends_with(".pyo")
 }
