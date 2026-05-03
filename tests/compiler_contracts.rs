@@ -15,7 +15,10 @@ use millrace_ai::{
         PlaneConcurrencyPolicyDefinition, RecoveryRole, RegisteredStageKindDefinition,
         ResolvedAssetRef, StageIdempotencePolicy, validate_graph_stage_kind_references,
     },
-    contracts::{CompileDiagnostics, LearningRequestAction, LoopEdgeKind, Plane, ResultClass},
+    contracts::{
+        CompileDiagnostics, LearningRequestAction, LearningStageName, LoopEdgeKind, Plane,
+        ResultClass,
+    },
 };
 
 fn parse_contract<T>(raw: &str) -> T
@@ -70,6 +73,7 @@ fn public_compiler_contract_exports_remain_importable() {
         GraphLoopCounterName::FixCycleCount.as_str(),
         "fix_cycle_count"
     );
+    assert_eq!(GraphLoopTerminalClass::NoOp.as_str(), "no_op");
     assert_eq!(CompiledPlanCurrentnessState::Unknown.as_str(), "unknown");
 }
 
@@ -104,6 +108,24 @@ fn baseline_mode_graph_and_stage_kind_assets_parse_through_contracts() {
         learning_mode.learning_trigger_rules[0].requested_action,
         LearningRequestAction::Improve
     );
+    assert_eq!(
+        learning_mode.learning_trigger_rules[0].rule_id,
+        "execution.doublechecker.success-to-analyst"
+    );
+    assert_eq!(
+        learning_mode.learning_trigger_rules[0].target_stage,
+        LearningStageName::Analyst
+    );
+    assert!(
+        learning_mode.learning_trigger_rules[0]
+            .target_skill_id
+            .is_none()
+    );
+    assert!(
+        learning_mode.learning_trigger_rules[0]
+            .preferred_output_paths
+            .is_empty()
+    );
 
     let execution_graph: GraphLoopDefinition = parse_contract(include_str!(
         "../src/assets/baseline/graphs/execution/standard.json"
@@ -123,6 +145,17 @@ fn baseline_mode_graph_and_stage_kind_assets_parse_through_contracts() {
         Some("arbiter")
     );
 
+    let learning_graph: GraphLoopDefinition = parse_contract(include_str!(
+        "../src/assets/baseline/graphs/learning/standard.json"
+    ));
+    assert!(
+        learning_graph
+            .terminal_states
+            .iter()
+            .any(|state| state.terminal_class == GraphLoopTerminalClass::NoOp
+                && state.writes_status == "ANALYST_NOOP")
+    );
+
     let builder_kind: RegisteredStageKindDefinition = parse_contract(include_str!(
         "../src/assets/baseline/registry/stage_kinds/execution/builder.json"
     ));
@@ -139,6 +172,83 @@ fn baseline_mode_graph_and_stage_kind_assets_parse_through_contracts() {
         builder_kind
             .allowed_overrides
             .contains(&"thinking_level".to_owned())
+    );
+}
+
+#[test]
+fn learning_trigger_destination_metadata_normalizes_and_serializes() {
+    let mode = ModeDefinition::from_json_value(json!({
+        "schema_version": "1.0",
+        "kind": "mode",
+        "mode_id": "targeted_learning",
+        "loop_ids_by_plane": {
+            "execution": "execution.standard",
+            "planning": "planning.standard",
+            "learning": "learning.standard"
+        },
+        "learning_trigger_rules": [
+            {
+                "rule_id": "execution.doublechecker.precise-to-curator",
+                "source_plane": "execution",
+                "source_stage": "doublechecker",
+                "on_terminal_results": ["DOUBLECHECK_PASS"],
+                "target_stage": "curator",
+                "requested_action": "improve",
+                "target_skill_id": "doublechecker-core",
+                "preferred_output_paths": [
+                    " skills/stage/execution/doublechecker-core/SKILL.md ",
+                    "skills/stage/execution/doublechecker-core/SKILL.md",
+                    "millrace-agents/runs/latest/curator_decision.md"
+                ]
+            }
+        ]
+    }))
+    .unwrap();
+
+    let rule = &mode.learning_trigger_rules[0];
+    assert_eq!(rule.target_skill_id.as_deref(), Some("doublechecker-core"));
+    assert_eq!(
+        rule.preferred_output_paths,
+        [
+            "skills/stage/execution/doublechecker-core/SKILL.md".to_owned(),
+            "millrace-agents/runs/latest/curator_decision.md".to_owned(),
+        ]
+    );
+
+    let serialized = serde_json::to_value(rule).unwrap();
+    assert_eq!(serialized["target_skill_id"], json!("doublechecker-core"));
+    assert_eq!(
+        serialized["preferred_output_paths"],
+        json!([
+            "skills/stage/execution/doublechecker-core/SKILL.md",
+            "millrace-agents/runs/latest/curator_decision.md"
+        ])
+    );
+
+    let single_path_mode = ModeDefinition::from_json_value(json!({
+        "schema_version": "1.0",
+        "kind": "mode",
+        "mode_id": "single_destination",
+        "loop_ids_by_plane": {
+            "execution": "execution.standard",
+            "planning": "planning.standard",
+            "learning": "learning.standard"
+        },
+        "learning_trigger_rules": [
+            {
+                "rule_id": "execution.doublechecker.path-to-curator",
+                "source_plane": "execution",
+                "source_stage": "doublechecker",
+                "on_terminal_results": ["DOUBLECHECK_PASS"],
+                "target_stage": "curator",
+                "preferred_output_paths": "skills/stage/execution/doublechecker-core/SKILL.md"
+            }
+        ]
+    }))
+    .unwrap();
+    assert_eq!(
+        single_path_mode.learning_trigger_rules[0].preferred_output_paths,
+        ["skills/stage/execution/doublechecker-core/SKILL.md".to_owned()]
     );
 }
 

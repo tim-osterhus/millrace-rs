@@ -37,9 +37,10 @@ contracts, preview-only live/native surfaces, and the completed validation
 command set; `tests/parity_cli.rs` rejects unknown, malformed, stale, or
 missing Rust test references in that fixture. `web_dashboard_parity_decision.json`
 records the Python v0.17.3 optional `packages/millrace-web` surface as an
-intentional unsupported Rust parity gap. It names the workspace registry,
-summary DTO, queue/run/snapshot/baseline/compiled-plan/Arbiter/
-usage-governance/event readers, static shell, CLI/server boundary, and
+intentional unsupported Rust parity gap, and now also records the Python
+v0.17.4 package version/dependency sync as evidence for that same gap. It names
+the workspace registry, summary DTO, queue/run/snapshot/baseline/compiled-plan/
+Arbiter/usage-governance/event readers, static shell, CLI/server boundary, and
 package-boundary tests, while documenting that Rust currently keeps the
 accepted inspection boundary at local read-only CLI commands over initialized
 workspaces.
@@ -51,6 +52,19 @@ parity, docs/release notes, release-readiness commands, the web-dashboard gap,
 and required Rust test references. `tests/parity_cli.rs` rejects missing,
 malformed, unknown, stale, or omitted Rust test references in that final
 fixture.
+`auto_port_v0_17_4_parity_evidence.json` records the targeted Python
+`v0.17.3..v0.17.4` parity evidence for learning no-op contracts, trigger
+destination safety, committed compiler/runtime fixtures, learning no-op
+lifecycle behavior, and read-only run inspection of `result_class: no_op`.
+`tests/parity_cli.rs` rejects a stale target pin, missing source references, and
+missing, malformed, unknown, stale, or omitted Rust test references in that
+fixture.
+`auto_port_v0_17_4_release_parity_evidence.json` records the final Rust
+`0.2.1` release evidence for version-visible CLI metadata, package include
+rules, README/changelog/roadmap/runtime docs, release-readiness commands, the
+Python v0.17.4 source docs, and the `millrace-web` version/dependency sync
+unsupported-gap evidence. `tests/parity_cli.rs` rejects missing, malformed,
+unknown, stale, or omitted Rust test references in that release fixture.
 
 The evidence is intentionally not a byte-for-byte transcript. Paths, generated
 ids, timestamps, package versions, command ids, run ids, compact run handles,

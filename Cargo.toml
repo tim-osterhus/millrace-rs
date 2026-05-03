@@ -1,6 +1,6 @@
 [package]
 name = "millrace-ai"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 rust-version = "1.85"
 description = "Experimental Rust implementation of the Millrace runtime."
@@ -16,6 +16,7 @@ include = [
     "/Cargo.toml",
     "/CHANGELOG.md",
     "/README.md",
+    "/ROADMAP.md",
     "/LICENSE",
     "/docs/**/*.md",
     "/src/assets/**/*",

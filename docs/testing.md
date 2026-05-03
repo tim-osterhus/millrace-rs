@@ -5,7 +5,7 @@ The Rust crate uses integration tests as the primary parity harness.
 Run the always-on suite:
 
 ```bash
-cargo test --all-targets
+cargo test --all
 ```
 
 Run formatting and docs checks:
@@ -18,7 +18,7 @@ RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
 Run the published-package verification path:
 
 ```bash
-cargo package --allow-dirty
+cargo publish --dry-run
 ```
 
 ## Test Surface
@@ -35,6 +35,9 @@ The test suite covers:
 - serial runtime and daemon runtime behavior
 - workspace paths, initialization, managed assets, doctor checks, queue/state
   stores, runtime control, and runtime locks
+- release fixtures for Rust `0.2.1` version metadata, docs, package include
+  rules, Python `v0.17.4` source references, and package dry-run command
+  evidence
 
 Some live smoke tests are gated because they require real local credentials,
 network access, or provider CLIs:

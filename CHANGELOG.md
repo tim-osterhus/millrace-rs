@@ -3,6 +3,34 @@
 All notable user-facing changes to the experimental Rust `millrace-ai` crate
 are documented in this file.
 
+## [0.2.1] - 2026-05-03
+
+### Added
+
+- Added Python `v0.17.3..v0.17.4` release evidence for learning no-op
+  terminal outcomes, the `no_op` result class, Analyst-first generic learning,
+  direct Curator trigger destination safety, and run-inspection/runtime JSON
+  no-op coverage.
+- Added Rust runtime docs and release evidence for the `0.2.1` parity release,
+  including package include coverage for the crate roadmap and runtime docs.
+
+### Changed
+
+- Bumped the Rust crate, lockfile package metadata, and version-visible CLI
+  output from `0.2.0` to `0.2.1`.
+- Updated README, roadmap, source-package map, outline, fixture docs, and
+  release evidence to target Python `v0.17.4` at
+  `304e537964ff772c815689b87e4c1e3b805c656c`.
+
+### Known Gaps
+
+- The optional Python `packages/millrace-web` `v0.17.4` changes are represented
+  as version/dependency sync evidence for the existing unsupported Rust
+  dashboard gap. Rust still does not ship a web server, static dashboard shell,
+  SSE stream, or separate `millrace-web` package.
+- Native filesystem watcher integration, live subscription-quota provider
+  polling, and live Codex/Pi smoke runs remain opt-in or preview-only.
+
 ## [0.2.0] - 2026-05-03
 
 ### Added

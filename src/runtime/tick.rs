@@ -2411,7 +2411,7 @@ fn enqueue_learning_requests_for_stage_result(
                 rule.rule_id
             ),
             requested_action: rule.requested_action,
-            target_skill_id: None,
+            target_skill_id: rule.target_skill_id.clone(),
             target_stage: Some(rule.target_stage),
             source_refs: vec![
                 format!("run:{}", stage_result.run_id),
@@ -2425,7 +2425,7 @@ fn enqueue_learning_requests_for_stage_result(
                 format!("stage:{}", stage_result.stage.as_str()),
                 format!("terminal:{}", stage_result.terminal_result.as_str()),
             ],
-            preferred_output_paths: Vec::new(),
+            preferred_output_paths: rule.preferred_output_paths.clone(),
             trigger_metadata: json!({
                 "rule_id": rule.rule_id,
                 "source_plane": stage_result.plane.as_str(),
@@ -2433,6 +2433,9 @@ fn enqueue_learning_requests_for_stage_result(
                 "source_node_id": stage_result.node_id,
                 "source_stage_kind_id": stage_result.stage_kind_id,
                 "terminal_result": stage_result.terminal_result.as_str(),
+                "target_stage": rule.target_stage.as_str(),
+                "target_skill_id": rule.target_skill_id,
+                "preferred_output_paths": rule.preferred_output_paths,
                 "run_id": stage_result.run_id,
                 "work_item_kind": stage_result.work_item_kind.as_str(),
                 "work_item_id": stage_result.work_item_id,
@@ -2478,6 +2481,14 @@ fn enqueue_learning_requests_for_stage_result(
                     "target_stage",
                     Value::String(rule.target_stage.as_str().to_owned()),
                 ),
+                (
+                    "target_skill_id",
+                    rule.target_skill_id
+                        .clone()
+                        .map(Value::String)
+                        .unwrap_or(Value::Null),
+                ),
+                ("preferred_output_paths", json!(rule.preferred_output_paths)),
                 ("path", Value::String(queued_path.display().to_string())),
             ]),
             &stage_result.completed_at,
@@ -5602,8 +5613,9 @@ fn policy_for_stage_plan(
     stage: StageName,
     stage_plan: &MaterializedGraphNodePlan,
 ) -> AllowedResultClassesByOutcome {
+    let default_policy = AllowedResultClassesByOutcome::for_stage(stage);
     if stage_plan.allowed_result_classes_by_outcome.is_empty() {
-        return AllowedResultClassesByOutcome::for_stage(stage);
+        return default_policy;
     }
     let mut remaining: HashMap<_, _> = stage_plan
         .allowed_result_classes_by_outcome
@@ -5613,7 +5625,11 @@ fn policy_for_stage_plan(
     let mut entries = Vec::new();
     for marker in crate::contracts::legal_terminal_markers(stage) {
         if let Some(outcome) = marker.strip_prefix("### ") {
-            if let Some(result_classes) = remaining.remove(outcome) {
+            if let Some(result_classes) = remaining.remove(outcome).or_else(|| {
+                default_policy
+                    .result_classes_for(outcome)
+                    .map(<[_]>::to_vec)
+            }) {
                 entries.push(AllowedResultClassPolicy {
                     outcome: outcome.to_owned(),
                     result_classes,

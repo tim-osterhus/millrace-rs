@@ -12,6 +12,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 import re
 import sys
 import tempfile
@@ -20,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PYTHON_ROOT = (REPO_ROOT / "../millrace-py").resolve()
+PYTHON_ROOT = Path(os.environ.get("MILLRACE_PY_ROOT", REPO_ROOT / "../millrace-py")).resolve()
 PYTHON_SRC = PYTHON_ROOT / "src"
 FIXTURE_PATH = REPO_ROOT / "tests/fixtures/compiler_parity/python_compiler_parity.json"
 FIXED_COMPILED_AT = datetime(2026, 4, 28, 15, 30, 0, tzinfo=timezone.utc)
@@ -51,18 +52,30 @@ def main() -> None:
         "source": {
             "package": "millrace-ai",
             "version": millrace_ai.__version__,
+            "previous_version": "0.17.3",
+            "target_version": millrace_ai.__version__,
+            "previous_tag": "v0.17.3",
+            "target_tag": "v0.17.4",
+            "target_commit": os.environ.get(
+                "MILLRACE_PY_TARGET_COMMIT",
+                "304e537964ff772c815689b87e4c1e3b805c656c",
+            ),
+            "diff_range": "v0.17.3..v0.17.4",
             "python_root": "../millrace-py",
             "contract_sources": [
                 "src/millrace_ai/config/models.py",
                 "src/millrace_ai/contracts/modes.py",
+                "src/millrace_ai/contracts/stage_metadata.py",
                 "src/millrace_ai/architecture/loop_graphs.py",
                 "src/millrace_ai/architecture/materialization.py",
+                "src/millrace_ai/compilation/learning_triggers.py",
                 "src/millrace_ai/compilation/node_materialization.py",
                 "src/millrace_ai/compilation/validation.py",
                 "src/millrace_ai/cli/compile_view.py",
                 "tests/config/test_config.py",
                 "tests/assets/test_modes.py",
                 "tests/assets/test_loop_graphs.py",
+                "tests/assets/test_stage_kinds.py",
                 "tests/integration/test_compiler.py",
             ],
         },

@@ -22,7 +22,7 @@ use super::{
     },
 };
 use crate::{
-    contracts::{Plane, StageName, Timestamp},
+    contracts::{LearningStageName, Plane, StageName, Timestamp},
     workspace::WorkspacePaths,
 };
 
@@ -796,6 +796,15 @@ fn validate_learning_trigger_rules(
                     "target_stage {} is outside selected loops",
                     target_stage.as_str()
                 ),
+            });
+        }
+        if rule.target_stage == LearningStageName::Curator
+            && rule.target_skill_id.is_none()
+            && rule.preferred_output_paths.is_empty()
+        {
+            return Err(CompilerMaterializationError::InvalidLearningTrigger {
+                rule_id: rule.rule_id.clone(),
+                message: "targets curator without a safe destination: direct curator triggers require target_skill_id or preferred_output_paths; route vague learning through analyst".to_owned(),
             });
         }
     }

@@ -5,10 +5,11 @@ use std::fmt::Debug;
 use serde_json::{Value, json};
 
 use millrace_ai::contracts::{
-    CompileDiagnostics, ExecutionTerminalResult, MailboxCommandEnvelope, Plane,
-    PlanningTerminalResult, RecoveryCounters, RuntimeErrorContext, RuntimeJsonContract,
-    RuntimeJsonError, RuntimeSnapshot, StageName, StageResultEnvelope, TerminalResult, TokenUsage,
-    UsageGovernanceLedgerEntry, UsageGovernanceState, UsageGovernanceSubscriptionWindow,
+    CompileDiagnostics, ExecutionTerminalResult, LearningTerminalResult, MailboxCommandEnvelope,
+    Plane, PlanningTerminalResult, RecoveryCounters, ResultClass, RuntimeErrorContext,
+    RuntimeJsonContract, RuntimeJsonError, RuntimeSnapshot, StageName, StageResultEnvelope,
+    TerminalResult, TokenUsage, UsageGovernanceLedgerEntry, UsageGovernanceState,
+    UsageGovernanceSubscriptionWindow,
 };
 
 const NOW: &str = "2026-04-15T00:00:00Z";
@@ -325,6 +326,23 @@ fn python_produced_runtime_json_fixtures_round_trip_against_rust_contracts() {
 }
 
 #[test]
+fn python_v0_17_4_stage_result_no_op_runtime_json_fixture_round_trips_as_non_success() {
+    let no_op = assert_python_stage_result_fixture_round_trips(python_model_dump_fixture(
+        include_str!("fixtures/runtime_json/stage_result_learning_noop.json"),
+    ));
+
+    assert_eq!(no_op.stage, StageName::Analyst);
+    assert_eq!(
+        no_op.terminal_result,
+        TerminalResult::Learning(LearningTerminalResult::AnalystNoop)
+    );
+    assert_eq!(no_op.result_class, ResultClass::NoOp);
+    assert!(!no_op.success);
+    assert_eq!(no_op.work_item_kind.as_str(), "learning_request");
+    assert_eq!(no_op.metadata["request_kind"], "learning_request");
+}
+
+#[test]
 fn usage_governance_contracts_round_trip_and_reject_unsafe_state() {
     let state = round_trip_contract::<UsageGovernanceState>(usage_governance_state_json());
     assert_eq!(state.active_blockers[0].rule_id, "rolling-5h-default");
@@ -489,6 +507,60 @@ fn stage_result_accepts_request_driven_terminal_identity() {
 }
 
 #[test]
+fn python_v0_17_4_stage_result_no_op_runtime_json_round_trips_as_non_success() {
+    let mut no_op = stage_result_json();
+    no_op["run_id"] = json!("run-learning-noop");
+    no_op["plane"] = json!("learning");
+    no_op["stage"] = json!("analyst");
+    no_op["node_id"] = json!("analyst");
+    no_op["stage_kind_id"] = json!("analyst");
+    no_op["work_item_kind"] = json!("learning_request");
+    no_op["work_item_id"] = json!("learn-001");
+    no_op["terminal_result"] = json!("ANALYST_NOOP");
+    no_op["result_class"] = json!("no_op");
+    no_op["summary_status_marker"] = json!("### ANALYST_NOOP");
+    no_op["success"] = json!(false);
+    no_op["detected_marker"] = json!("### ANALYST_NOOP");
+    no_op["notes"] = json!(["Python v0.17.4 learning no-op contract"]);
+
+    let decoded = round_trip_stage_result(no_op);
+
+    assert_eq!(decoded.stage, StageName::Analyst);
+    assert_eq!(
+        decoded.terminal_result,
+        TerminalResult::Learning(LearningTerminalResult::AnalystNoop)
+    );
+    assert_eq!(decoded.result_class, ResultClass::NoOp);
+    assert!(!decoded.success);
+}
+
+#[test]
+fn python_v0_17_4_request_driven_no_op_terminal_identity_round_trips() {
+    let mut request_driven = stage_result_json();
+    request_driven["plane"] = json!("learning");
+    request_driven["stage"] = json!("curator");
+    request_driven["node_id"] = json!("curator-review");
+    request_driven["stage_kind_id"] = json!("curator");
+    request_driven["work_item_kind"] = json!("learning_request");
+    request_driven["work_item_id"] = json!("learn-review");
+    request_driven["terminal_result"] = json!("CURATOR_NOOP");
+    request_driven["result_class"] = json!("no_op");
+    request_driven["summary_status_marker"] = json!("### CURATOR_NOOP");
+    request_driven["success"] = json!(false);
+    request_driven["detected_marker"] = json!("### CURATOR_NOOP");
+
+    let decoded = round_trip_stage_result(request_driven);
+
+    assert_eq!(decoded.stage, StageName::Curator);
+    assert_eq!(
+        decoded.terminal_result,
+        TerminalResult::Learning(LearningTerminalResult::CuratorNoop)
+    );
+    assert_eq!(decoded.result_class, ResultClass::NoOp);
+    assert!(!decoded.success);
+}
+
+#[test]
 fn runtime_json_contracts_reject_bad_required_enum_and_timestamp_fields() {
     let mut missing_required = snapshot_json();
     missing_required
@@ -554,6 +626,11 @@ fn invalid_stage_result_semantics_fail_with_typed_errors() {
     let mut non_success_class_with_success = stage_result_json();
     non_success_class_with_success["result_class"] = json!("blocked");
     let error = StageResultEnvelope::from_json_value(non_success_class_with_success).unwrap_err();
+    assert!(error.to_string().contains("non-success result_class"));
+
+    let mut no_op_class_with_success = stage_result_json();
+    no_op_class_with_success["result_class"] = json!("no_op");
+    let error = StageResultEnvelope::from_json_value(no_op_class_with_success).unwrap_err();
     assert!(error.to_string().contains("non-success result_class"));
 }
 

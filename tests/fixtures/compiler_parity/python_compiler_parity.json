@@ -7572,6 +7572,16 @@
                 "terminal_state_id": null
               },
               {
+                "edge_id": "analyst-noop-to-terminal-analyst-noop",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "ANALYST_NOOP",
+                "priority": 100,
+                "source_node_id": "analyst",
+                "target_node_id": null,
+                "terminal_state_id": "analyst_noop"
+              },
+              {
                 "edge_id": "professor-complete-to-curator",
                 "kind": "normal",
                 "max_attempts": null,
@@ -7582,6 +7592,16 @@
                 "terminal_state_id": null
               },
               {
+                "edge_id": "professor-noop-to-terminal-professor-noop",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "PROFESSOR_NOOP",
+                "priority": 100,
+                "source_node_id": "professor",
+                "target_node_id": null,
+                "terminal_state_id": "professor_noop"
+              },
+              {
                 "edge_id": "curator-complete-to-terminal-learning-complete",
                 "kind": "terminal",
                 "max_attempts": null,
@@ -7590,6 +7610,16 @@
                 "source_node_id": "curator",
                 "target_node_id": null,
                 "terminal_state_id": "learning_complete"
+              },
+              {
+                "edge_id": "curator-noop-to-terminal-curator-noop",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "CURATOR_NOOP",
+                "priority": 100,
+                "source_node_id": "curator",
+                "target_node_id": null,
+                "terminal_state_id": "curator_noop"
               },
               {
                 "edge_id": "analyst-blocked-to-terminal-blocked",
@@ -7636,6 +7666,9 @@
                   "ANALYST_COMPLETE": [
                     "success"
                   ],
+                  "ANALYST_NOOP": [
+                    "no_op"
+                  ],
                   "BLOCKED": [
                     "blocked",
                     "recoverable_failure"
@@ -7669,6 +7702,9 @@
                   ],
                   "PROFESSOR_COMPLETE": [
                     "success"
+                  ],
+                  "PROFESSOR_NOOP": [
+                    "no_op"
                   ]
                 },
                 "attached_skill_additions": [],
@@ -7699,6 +7735,9 @@
                   ],
                   "CURATOR_COMPLETE": [
                     "success"
+                  ],
+                  "CURATOR_NOOP": [
+                    "no_op"
                   ]
                 },
                 "attached_skill_additions": [],
@@ -7727,12 +7766,42 @@
               {
                 "emits_artifacts": [
                   "stage_result",
+                  "research_packet"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "no_op",
+                "terminal_state_id": "analyst_noop",
+                "writes_status": "ANALYST_NOOP"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
                   "skill_update"
                 ],
                 "ends_plane_run": true,
                 "terminal_class": "success",
                 "terminal_state_id": "learning_complete",
                 "writes_status": "CURATOR_COMPLETE"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
+                  "professor_notes"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "no_op",
+                "terminal_state_id": "professor_noop",
+                "writes_status": "PROFESSOR_NOOP"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
+                  "curator_decision"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "no_op",
+                "terminal_state_id": "curator_noop",
+                "writes_status": "CURATOR_NOOP"
               },
               {
                 "emits_artifacts": [
@@ -7761,6 +7830,19 @@
               },
               {
                 "description": null,
+                "edge_id": "analyst-noop-to-terminal-analyst-noop",
+                "from_node_id": "analyst",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "ANALYST_NOOP"
+                ],
+                "priority": 100,
+                "terminal_state_id": "analyst_noop",
+                "to_node_id": null
+              },
+              {
+                "description": null,
                 "edge_id": "professor-complete-to-curator",
                 "from_node_id": "professor",
                 "kind": "normal",
@@ -7774,6 +7856,19 @@
               },
               {
                 "description": null,
+                "edge_id": "professor-noop-to-terminal-professor-noop",
+                "from_node_id": "professor",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "PROFESSOR_NOOP"
+                ],
+                "priority": 100,
+                "terminal_state_id": "professor_noop",
+                "to_node_id": null
+              },
+              {
+                "description": null,
                 "edge_id": "curator-complete-to-terminal-learning-complete",
                 "from_node_id": "curator",
                 "kind": "terminal",
@@ -7783,6 +7878,19 @@
                 ],
                 "priority": 100,
                 "terminal_state_id": "learning_complete",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "curator-noop-to-terminal-curator-noop",
+                "from_node_id": "curator",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "CURATOR_NOOP"
+                ],
+                "priority": 100,
+                "terminal_state_id": "curator_noop",
                 "to_node_id": null
               },
               {
@@ -8398,6 +8506,16 @@
               "terminal_state_id": null
             },
             {
+              "edge_id": "analyst-noop-to-terminal-analyst-noop",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "ANALYST_NOOP",
+              "priority": 100,
+              "source_node_id": "analyst",
+              "target_node_id": null,
+              "terminal_state_id": "analyst_noop"
+            },
+            {
               "edge_id": "professor-complete-to-curator",
               "kind": "normal",
               "max_attempts": null,
@@ -8408,6 +8526,16 @@
               "terminal_state_id": null
             },
             {
+              "edge_id": "professor-noop-to-terminal-professor-noop",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "PROFESSOR_NOOP",
+              "priority": 100,
+              "source_node_id": "professor",
+              "target_node_id": null,
+              "terminal_state_id": "professor_noop"
+            },
+            {
               "edge_id": "curator-complete-to-terminal-learning-complete",
               "kind": "terminal",
               "max_attempts": null,
@@ -8416,6 +8544,16 @@
               "source_node_id": "curator",
               "target_node_id": null,
               "terminal_state_id": "learning_complete"
+            },
+            {
+              "edge_id": "curator-noop-to-terminal-curator-noop",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "CURATOR_NOOP",
+              "priority": 100,
+              "source_node_id": "curator",
+              "target_node_id": null,
+              "terminal_state_id": "curator_noop"
             },
             {
               "edge_id": "analyst-blocked-to-terminal-blocked",
@@ -8462,6 +8600,9 @@
                 "ANALYST_COMPLETE": [
                   "success"
                 ],
+                "ANALYST_NOOP": [
+                  "no_op"
+                ],
                 "BLOCKED": [
                   "blocked",
                   "recoverable_failure"
@@ -8495,6 +8636,9 @@
                 ],
                 "PROFESSOR_COMPLETE": [
                   "success"
+                ],
+                "PROFESSOR_NOOP": [
+                  "no_op"
                 ]
               },
               "attached_skill_additions": [],
@@ -8525,6 +8669,9 @@
                 ],
                 "CURATOR_COMPLETE": [
                   "success"
+                ],
+                "CURATOR_NOOP": [
+                  "no_op"
                 ]
               },
               "attached_skill_additions": [],
@@ -8553,12 +8700,42 @@
             {
               "emits_artifacts": [
                 "stage_result",
+                "research_packet"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "no_op",
+              "terminal_state_id": "analyst_noop",
+              "writes_status": "ANALYST_NOOP"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
                 "skill_update"
               ],
               "ends_plane_run": true,
               "terminal_class": "success",
               "terminal_state_id": "learning_complete",
               "writes_status": "CURATOR_COMPLETE"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
+                "professor_notes"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "no_op",
+              "terminal_state_id": "professor_noop",
+              "writes_status": "PROFESSOR_NOOP"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
+                "curator_decision"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "no_op",
+              "terminal_state_id": "curator_noop",
+              "writes_status": "CURATOR_NOOP"
             },
             {
               "emits_artifacts": [
@@ -8587,6 +8764,19 @@
             },
             {
               "description": null,
+              "edge_id": "analyst-noop-to-terminal-analyst-noop",
+              "from_node_id": "analyst",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "ANALYST_NOOP"
+              ],
+              "priority": 100,
+              "terminal_state_id": "analyst_noop",
+              "to_node_id": null
+            },
+            {
+              "description": null,
               "edge_id": "professor-complete-to-curator",
               "from_node_id": "professor",
               "kind": "normal",
@@ -8600,6 +8790,19 @@
             },
             {
               "description": null,
+              "edge_id": "professor-noop-to-terminal-professor-noop",
+              "from_node_id": "professor",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "PROFESSOR_NOOP"
+              ],
+              "priority": 100,
+              "terminal_state_id": "professor_noop",
+              "to_node_id": null
+            },
+            {
+              "description": null,
               "edge_id": "curator-complete-to-terminal-learning-complete",
               "from_node_id": "curator",
               "kind": "terminal",
@@ -8609,6 +8812,19 @@
               ],
               "priority": 100,
               "terminal_state_id": "learning_complete",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "curator-noop-to-terminal-curator-noop",
+              "from_node_id": "curator",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "CURATOR_NOOP"
+              ],
+              "priority": 100,
+              "terminal_state_id": "curator_noop",
               "to_node_id": null
             },
             {
@@ -8658,21 +8874,25 @@
             "on_terminal_results": [
               "DOUBLECHECK_PASS"
             ],
+            "preferred_output_paths": [],
             "requested_action": "improve",
-            "rule_id": "execution.doublechecker.success-to-curator",
+            "rule_id": "execution.doublechecker.success-to-analyst",
             "source_plane": "execution",
             "source_stage": "doublechecker",
-            "target_stage": "curator"
+            "target_skill_id": null,
+            "target_stage": "analyst"
           },
           {
             "on_terminal_results": [
               "TROUBLESHOOT_COMPLETE",
               "BLOCKED"
             ],
+            "preferred_output_paths": [],
             "requested_action": "improve",
             "rule_id": "execution.troubleshooter.recovery-to-analyst",
             "source_plane": "execution",
             "source_stage": "troubleshooter",
+            "target_skill_id": null,
             "target_stage": "analyst"
           },
           {
@@ -8681,10 +8901,12 @@
               "NEEDS_PLANNING",
               "BLOCKED"
             ],
+            "preferred_output_paths": [],
             "requested_action": "improve",
             "rule_id": "execution.consultant.recovery-to-analyst",
             "source_plane": "execution",
             "source_stage": "consultant",
+            "target_skill_id": null,
             "target_stage": "analyst"
           }
         ],
@@ -11318,6 +11540,16 @@
                 "terminal_state_id": null
               },
               {
+                "edge_id": "analyst-noop-to-terminal-analyst-noop",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "ANALYST_NOOP",
+                "priority": 100,
+                "source_node_id": "analyst",
+                "target_node_id": null,
+                "terminal_state_id": "analyst_noop"
+              },
+              {
                 "edge_id": "professor-complete-to-curator",
                 "kind": "normal",
                 "max_attempts": null,
@@ -11328,6 +11560,16 @@
                 "terminal_state_id": null
               },
               {
+                "edge_id": "professor-noop-to-terminal-professor-noop",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "PROFESSOR_NOOP",
+                "priority": 100,
+                "source_node_id": "professor",
+                "target_node_id": null,
+                "terminal_state_id": "professor_noop"
+              },
+              {
                 "edge_id": "curator-complete-to-terminal-learning-complete",
                 "kind": "terminal",
                 "max_attempts": null,
@@ -11336,6 +11578,16 @@
                 "source_node_id": "curator",
                 "target_node_id": null,
                 "terminal_state_id": "learning_complete"
+              },
+              {
+                "edge_id": "curator-noop-to-terminal-curator-noop",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "CURATOR_NOOP",
+                "priority": 100,
+                "source_node_id": "curator",
+                "target_node_id": null,
+                "terminal_state_id": "curator_noop"
               },
               {
                 "edge_id": "analyst-blocked-to-terminal-blocked",
@@ -11382,6 +11634,9 @@
                   "ANALYST_COMPLETE": [
                     "success"
                   ],
+                  "ANALYST_NOOP": [
+                    "no_op"
+                  ],
                   "BLOCKED": [
                     "blocked",
                     "recoverable_failure"
@@ -11415,6 +11670,9 @@
                   ],
                   "PROFESSOR_COMPLETE": [
                     "success"
+                  ],
+                  "PROFESSOR_NOOP": [
+                    "no_op"
                   ]
                 },
                 "attached_skill_additions": [],
@@ -11445,6 +11703,9 @@
                   ],
                   "CURATOR_COMPLETE": [
                     "success"
+                  ],
+                  "CURATOR_NOOP": [
+                    "no_op"
                   ]
                 },
                 "attached_skill_additions": [],
@@ -11473,12 +11734,42 @@
               {
                 "emits_artifacts": [
                   "stage_result",
+                  "research_packet"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "no_op",
+                "terminal_state_id": "analyst_noop",
+                "writes_status": "ANALYST_NOOP"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
                   "skill_update"
                 ],
                 "ends_plane_run": true,
                 "terminal_class": "success",
                 "terminal_state_id": "learning_complete",
                 "writes_status": "CURATOR_COMPLETE"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
+                  "professor_notes"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "no_op",
+                "terminal_state_id": "professor_noop",
+                "writes_status": "PROFESSOR_NOOP"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
+                  "curator_decision"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "no_op",
+                "terminal_state_id": "curator_noop",
+                "writes_status": "CURATOR_NOOP"
               },
               {
                 "emits_artifacts": [
@@ -11507,6 +11798,19 @@
               },
               {
                 "description": null,
+                "edge_id": "analyst-noop-to-terminal-analyst-noop",
+                "from_node_id": "analyst",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "ANALYST_NOOP"
+                ],
+                "priority": 100,
+                "terminal_state_id": "analyst_noop",
+                "to_node_id": null
+              },
+              {
+                "description": null,
                 "edge_id": "professor-complete-to-curator",
                 "from_node_id": "professor",
                 "kind": "normal",
@@ -11520,6 +11824,19 @@
               },
               {
                 "description": null,
+                "edge_id": "professor-noop-to-terminal-professor-noop",
+                "from_node_id": "professor",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "PROFESSOR_NOOP"
+                ],
+                "priority": 100,
+                "terminal_state_id": "professor_noop",
+                "to_node_id": null
+              },
+              {
+                "description": null,
                 "edge_id": "curator-complete-to-terminal-learning-complete",
                 "from_node_id": "curator",
                 "kind": "terminal",
@@ -11529,6 +11846,19 @@
                 ],
                 "priority": 100,
                 "terminal_state_id": "learning_complete",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "curator-noop-to-terminal-curator-noop",
+                "from_node_id": "curator",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "CURATOR_NOOP"
+                ],
+                "priority": 100,
+                "terminal_state_id": "curator_noop",
                 "to_node_id": null
               },
               {
@@ -12144,6 +12474,16 @@
               "terminal_state_id": null
             },
             {
+              "edge_id": "analyst-noop-to-terminal-analyst-noop",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "ANALYST_NOOP",
+              "priority": 100,
+              "source_node_id": "analyst",
+              "target_node_id": null,
+              "terminal_state_id": "analyst_noop"
+            },
+            {
               "edge_id": "professor-complete-to-curator",
               "kind": "normal",
               "max_attempts": null,
@@ -12154,6 +12494,16 @@
               "terminal_state_id": null
             },
             {
+              "edge_id": "professor-noop-to-terminal-professor-noop",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "PROFESSOR_NOOP",
+              "priority": 100,
+              "source_node_id": "professor",
+              "target_node_id": null,
+              "terminal_state_id": "professor_noop"
+            },
+            {
               "edge_id": "curator-complete-to-terminal-learning-complete",
               "kind": "terminal",
               "max_attempts": null,
@@ -12162,6 +12512,16 @@
               "source_node_id": "curator",
               "target_node_id": null,
               "terminal_state_id": "learning_complete"
+            },
+            {
+              "edge_id": "curator-noop-to-terminal-curator-noop",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "CURATOR_NOOP",
+              "priority": 100,
+              "source_node_id": "curator",
+              "target_node_id": null,
+              "terminal_state_id": "curator_noop"
             },
             {
               "edge_id": "analyst-blocked-to-terminal-blocked",
@@ -12208,6 +12568,9 @@
                 "ANALYST_COMPLETE": [
                   "success"
                 ],
+                "ANALYST_NOOP": [
+                  "no_op"
+                ],
                 "BLOCKED": [
                   "blocked",
                   "recoverable_failure"
@@ -12241,6 +12604,9 @@
                 ],
                 "PROFESSOR_COMPLETE": [
                   "success"
+                ],
+                "PROFESSOR_NOOP": [
+                  "no_op"
                 ]
               },
               "attached_skill_additions": [],
@@ -12271,6 +12637,9 @@
                 ],
                 "CURATOR_COMPLETE": [
                   "success"
+                ],
+                "CURATOR_NOOP": [
+                  "no_op"
                 ]
               },
               "attached_skill_additions": [],
@@ -12299,12 +12668,42 @@
             {
               "emits_artifacts": [
                 "stage_result",
+                "research_packet"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "no_op",
+              "terminal_state_id": "analyst_noop",
+              "writes_status": "ANALYST_NOOP"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
                 "skill_update"
               ],
               "ends_plane_run": true,
               "terminal_class": "success",
               "terminal_state_id": "learning_complete",
               "writes_status": "CURATOR_COMPLETE"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
+                "professor_notes"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "no_op",
+              "terminal_state_id": "professor_noop",
+              "writes_status": "PROFESSOR_NOOP"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
+                "curator_decision"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "no_op",
+              "terminal_state_id": "curator_noop",
+              "writes_status": "CURATOR_NOOP"
             },
             {
               "emits_artifacts": [
@@ -12333,6 +12732,19 @@
             },
             {
               "description": null,
+              "edge_id": "analyst-noop-to-terminal-analyst-noop",
+              "from_node_id": "analyst",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "ANALYST_NOOP"
+              ],
+              "priority": 100,
+              "terminal_state_id": "analyst_noop",
+              "to_node_id": null
+            },
+            {
+              "description": null,
               "edge_id": "professor-complete-to-curator",
               "from_node_id": "professor",
               "kind": "normal",
@@ -12346,6 +12758,19 @@
             },
             {
               "description": null,
+              "edge_id": "professor-noop-to-terminal-professor-noop",
+              "from_node_id": "professor",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "PROFESSOR_NOOP"
+              ],
+              "priority": 100,
+              "terminal_state_id": "professor_noop",
+              "to_node_id": null
+            },
+            {
+              "description": null,
               "edge_id": "curator-complete-to-terminal-learning-complete",
               "from_node_id": "curator",
               "kind": "terminal",
@@ -12355,6 +12780,19 @@
               ],
               "priority": 100,
               "terminal_state_id": "learning_complete",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "curator-noop-to-terminal-curator-noop",
+              "from_node_id": "curator",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "CURATOR_NOOP"
+              ],
+              "priority": 100,
+              "terminal_state_id": "curator_noop",
               "to_node_id": null
             },
             {
@@ -12404,21 +12842,25 @@
             "on_terminal_results": [
               "DOUBLECHECK_PASS"
             ],
+            "preferred_output_paths": [],
             "requested_action": "improve",
-            "rule_id": "execution.doublechecker.success-to-curator",
+            "rule_id": "execution.doublechecker.success-to-analyst",
             "source_plane": "execution",
             "source_stage": "doublechecker",
-            "target_stage": "curator"
+            "target_skill_id": null,
+            "target_stage": "analyst"
           },
           {
             "on_terminal_results": [
               "TROUBLESHOOT_COMPLETE",
               "BLOCKED"
             ],
+            "preferred_output_paths": [],
             "requested_action": "improve",
             "rule_id": "execution.troubleshooter.recovery-to-analyst",
             "source_plane": "execution",
             "source_stage": "troubleshooter",
+            "target_skill_id": null,
             "target_stage": "analyst"
           },
           {
@@ -12427,10 +12869,12 @@
               "NEEDS_PLANNING",
               "BLOCKED"
             ],
+            "preferred_output_paths": [],
             "requested_action": "improve",
             "rule_id": "execution.consultant.recovery-to-analyst",
             "source_plane": "execution",
             "source_stage": "consultant",
+            "target_skill_id": null,
             "target_stage": "analyst"
           }
         ],
@@ -16609,18 +17053,27 @@
     "contract_sources": [
       "src/millrace_ai/config/models.py",
       "src/millrace_ai/contracts/modes.py",
+      "src/millrace_ai/contracts/stage_metadata.py",
       "src/millrace_ai/architecture/loop_graphs.py",
       "src/millrace_ai/architecture/materialization.py",
+      "src/millrace_ai/compilation/learning_triggers.py",
       "src/millrace_ai/compilation/node_materialization.py",
       "src/millrace_ai/compilation/validation.py",
       "src/millrace_ai/cli/compile_view.py",
       "tests/config/test_config.py",
       "tests/assets/test_modes.py",
       "tests/assets/test_loop_graphs.py",
+      "tests/assets/test_stage_kinds.py",
       "tests/integration/test_compiler.py"
     ],
+    "diff_range": "v0.17.3..v0.17.4",
     "package": "millrace-ai",
+    "previous_tag": "v0.17.3",
+    "previous_version": "0.17.3",
     "python_root": "../millrace-py",
-    "version": "0.17.3"
+    "target_commit": "304e537964ff772c815689b87e4c1e3b805c656c",
+    "target_tag": "v0.17.4",
+    "target_version": "0.17.4",
+    "version": "0.17.4"
   }
 }

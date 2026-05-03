@@ -1,0 +1,202 @@
+{
+  "schema_version": "1.0",
+  "kind": "auto_port_v0_17_4_release_parity_evidence",
+  "summary": "Final Rust 0.2.1 release-parity evidence for the Python v0.17.3..v0.17.4 auto-port, covering version metadata, docs, package include rules, release-readiness command surfaces, learning no-op parity evidence, trigger destination safety, and the millrace-web version/dependency sync unsupported-gap evidence.",
+  "python_reference": {
+    "previous_tag": "v0.17.3",
+    "target_tag": "v0.17.4",
+    "target_commit": "304e537964ff772c815689b87e4c1e3b805c656c",
+    "diff_range": "v0.17.3..v0.17.4",
+    "changed_path_families": [
+      "learning_noop_contracts",
+      "learning_trigger_destination_safety",
+      "learning_assets_and_runtime_docs",
+      "operator_manual_docs",
+      "millrace_web_version_dependency_sync",
+      "release_metadata_docs_package"
+    ]
+  },
+  "rust_release": {
+    "crate_version": "0.2.1",
+    "package_name": "millrace-ai",
+    "binary_name": "millrace",
+    "version_command_expectation": "millrace 0.2.1",
+    "package_include_surfaces": [
+      "Cargo.lock",
+      "CHANGELOG.md",
+      "README.md",
+      "ROADMAP.md",
+      "docs/**/*.md",
+      "src/assets/**/*",
+      "src/**/*.rs",
+      "tests/**/*.rs",
+      "tests/fixtures/**/*",
+      "tests/support/**/*"
+    ]
+  },
+  "required_surfaces": [
+    "learning_noop_release_docs",
+    "trigger_safety_runtime_docs",
+    "web_dashboard_version_sync_gap",
+    "assets_docs_release_package"
+  ],
+  "surfaces": [
+    {
+      "surface": "learning_noop_release_docs",
+      "rust_status": "implemented",
+      "python_sources": [
+        "../millrace-py/CHANGELOG.md",
+        "../millrace-py/README.md",
+        "../millrace-py/ROADMAP.md",
+        "../millrace-py/docs/runtime/README.md",
+        "../millrace-py/docs/runtime/millrace-modes-and-loops.md",
+        "../millrace-py/docs/runtime/millrace-runtime-architecture.md",
+        "../millrace-py/docs/runtime/millrace-runtime-lifecycle-diagram.md",
+        "../millrace-py/docs/skills/millrace-ops-agent-manual/SKILL.md",
+        "../millrace-py/src/millrace_ai/contracts/enums.py",
+        "../millrace-py/src/millrace_ai/contracts/stage_metadata.py",
+        "../millrace-py/tests/runtime/test_contracts.py",
+        "../millrace-py/tests/runtime/test_runtime.py"
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "committed_auto_port_v0_17_4_parity_fixture_covers_noop_trigger_runtime_and_cli_surfaces"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "python_v0_17_4_learning_noop_terminal_marks_request_done_with_noop_evidence"
+        },
+        {
+          "file": "tests/contracts_runtime_json.rs",
+          "name": "python_v0_17_4_stage_result_no_op_runtime_json_fixture_round_trips_as_non_success"
+        }
+      ]
+    },
+    {
+      "surface": "trigger_safety_runtime_docs",
+      "rust_status": "implemented",
+      "python_sources": [
+        "../millrace-py/docs/runtime/millrace-compiler-and-frozen-plans.md",
+        "../millrace-py/docs/runtime/millrace-loop-authoring.md",
+        "../millrace-py/docs/runtime/millrace-modes-and-loops.md",
+        "../millrace-py/docs/runtime/millrace-runtime-architecture.md",
+        "../millrace-py/src/millrace_ai/compilation/learning_triggers.py",
+        "../millrace-py/src/millrace_ai/runtime/learning_triggers.py",
+        "../millrace-py/tests/integration/test_compiler.py",
+        "../millrace-py/tests/runtime/test_runtime.py"
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/compiler_materialization.rs",
+          "name": "direct_curator_learning_trigger_requires_safe_destination"
+        },
+        {
+          "file": "tests/compiler_materialization.rs",
+          "name": "direct_curator_learning_trigger_accepts_targeted_destination"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "python_v0_17_4_runtime_generated_learning_request_copies_trigger_destination_metadata"
+        }
+      ]
+    },
+    {
+      "surface": "web_dashboard_version_sync_gap",
+      "rust_status": "arbiter_visible_unsupported_gap",
+      "python_sources": [
+        "../millrace-py/packages/millrace-web/CHANGELOG.md",
+        "../millrace-py/packages/millrace-web/pyproject.toml",
+        "../millrace-py/packages/millrace-web/src/millrace_web/__init__.py",
+        "../millrace-py/packages/millrace-web/src/millrace_web/app.py",
+        "../millrace-py/packages/millrace-web/tests/test_packaging_boundary.py"
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "committed_web_dashboard_parity_decision_records_unsupported_gap_with_sources"
+        }
+      ]
+    },
+    {
+      "surface": "assets_docs_release_package",
+      "rust_status": "implemented",
+      "python_sources": [
+        "../millrace-py/CHANGELOG.md",
+        "../millrace-py/README.md",
+        "../millrace-py/ROADMAP.md",
+        "../millrace-py/docs/source-package-map.md",
+        "../millrace-py/docs/runtime/README.md",
+        "../millrace-py/docs/runtime/millrace-compiler-and-frozen-plans.md",
+        "../millrace-py/docs/runtime/millrace-loop-authoring.md",
+        "../millrace-py/docs/runtime/millrace-modes-and-loops.md",
+        "../millrace-py/docs/runtime/millrace-runtime-architecture.md",
+        "../millrace-py/docs/runtime/millrace-runtime-lifecycle-diagram.md",
+        "../millrace-py/docs/skills/millrace-ops-agent-manual/SKILL.md",
+        "../millrace-py/tests/assets/test_entrypoints.py",
+        "../millrace-py/tests/assets/test_loop_graphs.py",
+        "../millrace-py/tests/assets/test_modes.py",
+        "../millrace-py/tests/assets/test_stage_kinds.py"
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "rust_version_command_has_millrace_shape"
+        },
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "rust_crate_release_metadata_and_package_include_rules_are_0_2_1"
+        },
+        {
+          "file": "tests/workspace_assets_baseline.rs",
+          "name": "packaged_baseline_manifest_is_sorted_hashed_and_deterministic"
+        },
+        {
+          "file": "tests/workspace_assets_baseline.rs",
+          "name": "initialize_workspace_deploys_managed_assets_and_manifest_io"
+        },
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "committed_auto_port_v0_17_4_release_parity_evidence_covers_version_docs_package_and_web_sync"
+        }
+      ]
+    }
+  ],
+  "local_docs": [
+    "README.md",
+    "CHANGELOG.md",
+    "ROADMAP.md",
+    "docs/rust-port-roadmap.md",
+    "docs/source-package-map.md",
+    "docs/runtime/README.md",
+    "docs/runtime/millrace-compiler-and-frozen-plans.md",
+    "docs/runtime/millrace-modes-and-loops.md",
+    "docs/runtime/millrace-runtime-architecture.md",
+    "millrace-agents/outline.md",
+    "tests/fixtures/cli_parity/README.md"
+  ],
+  "explicit_gaps": [
+    {
+      "surface": "python_packages_millrace_web",
+      "status": "deferred_unsupported_gap",
+      "version_sync_only": true,
+      "evidence_fixture": "tests/fixtures/cli_parity/web_dashboard_parity_decision.json",
+      "reason": "Python v0.17.4 only syncs the optional millrace-web package version and millrace-ai dependency floor to 0.17.4; Rust has no accepted web server, static shell, SSE stream, or separate dashboard package target."
+    }
+  ],
+  "release_readiness_commands": [
+    "cargo fmt --check",
+    "cargo clippy --all-targets --all-features -- -D warnings",
+    "cargo test --all",
+    "cargo publish --dry-run",
+    "cargo publish --dry-run --allow-dirty",
+    "cargo package --allow-dirty --offline"
+  ],
+  "forbidden_release_actions": [
+    "publish",
+    "tag",
+    "push",
+    "upload",
+    "deploy"
+  ]
+}

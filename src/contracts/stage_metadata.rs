@@ -7,6 +7,7 @@ use super::{
 pub const SAFE_ID_PATTERN_DESCRIPTION: &str = "^[A-Za-z0-9][A-Za-z0-9._-]*$";
 
 const SUCCESS_CLASSES: &[ResultClass] = &[ResultClass::Success];
+const NO_OP_CLASSES: &[ResultClass] = &[ResultClass::NoOp];
 const FOLLOWUP_CLASSES: &[ResultClass] = &[ResultClass::FollowupNeeded];
 const ESCALATE_PLANNING_CLASSES: &[ResultClass] = &[ResultClass::EscalatePlanning];
 const BLOCKED_CLASSES: &[ResultClass] = &[ResultClass::Blocked, ResultClass::RecoverableFailure];
@@ -46,10 +47,16 @@ const P_BLOCKED: TerminalResult = TerminalResult::Planning(PlanningTerminalResul
 
 const L_ANALYST_COMPLETE: TerminalResult =
     TerminalResult::Learning(LearningTerminalResult::AnalystComplete);
+const L_ANALYST_NOOP: TerminalResult =
+    TerminalResult::Learning(LearningTerminalResult::AnalystNoop);
 const L_PROFESSOR_COMPLETE: TerminalResult =
     TerminalResult::Learning(LearningTerminalResult::ProfessorComplete);
+const L_PROFESSOR_NOOP: TerminalResult =
+    TerminalResult::Learning(LearningTerminalResult::ProfessorNoop);
 const L_CURATOR_COMPLETE: TerminalResult =
     TerminalResult::Learning(LearningTerminalResult::CuratorComplete);
+const L_CURATOR_NOOP: TerminalResult =
+    TerminalResult::Learning(LearningTerminalResult::CuratorNoop);
 const L_BLOCKED: TerminalResult = TerminalResult::Learning(LearningTerminalResult::Blocked);
 
 /// Legal result classes for one terminal outcome.
@@ -267,35 +274,47 @@ const ARBITER_ALLOWED: &[OutcomeResultClasses] = &[
     },
 ];
 
-const ANALYST_LEGAL: &[TerminalResult] = &[L_ANALYST_COMPLETE, L_BLOCKED];
+const ANALYST_LEGAL: &[TerminalResult] = &[L_ANALYST_COMPLETE, L_ANALYST_NOOP, L_BLOCKED];
 const ANALYST_ALLOWED: &[OutcomeResultClasses] = &[
     OutcomeResultClasses {
         terminal_result: L_ANALYST_COMPLETE,
         result_classes: SUCCESS_CLASSES,
     },
     OutcomeResultClasses {
+        terminal_result: L_ANALYST_NOOP,
+        result_classes: NO_OP_CLASSES,
+    },
+    OutcomeResultClasses {
         terminal_result: L_BLOCKED,
         result_classes: BLOCKED_CLASSES,
     },
 ];
 
-const PROFESSOR_LEGAL: &[TerminalResult] = &[L_PROFESSOR_COMPLETE, L_BLOCKED];
+const PROFESSOR_LEGAL: &[TerminalResult] = &[L_PROFESSOR_COMPLETE, L_PROFESSOR_NOOP, L_BLOCKED];
 const PROFESSOR_ALLOWED: &[OutcomeResultClasses] = &[
     OutcomeResultClasses {
         terminal_result: L_PROFESSOR_COMPLETE,
         result_classes: SUCCESS_CLASSES,
     },
     OutcomeResultClasses {
+        terminal_result: L_PROFESSOR_NOOP,
+        result_classes: NO_OP_CLASSES,
+    },
+    OutcomeResultClasses {
         terminal_result: L_BLOCKED,
         result_classes: BLOCKED_CLASSES,
     },
 ];
 
-const CURATOR_LEGAL: &[TerminalResult] = &[L_CURATOR_COMPLETE, L_BLOCKED];
+const CURATOR_LEGAL: &[TerminalResult] = &[L_CURATOR_COMPLETE, L_CURATOR_NOOP, L_BLOCKED];
 const CURATOR_ALLOWED: &[OutcomeResultClasses] = &[
     OutcomeResultClasses {
         terminal_result: L_CURATOR_COMPLETE,
         result_classes: SUCCESS_CLASSES,
+    },
+    OutcomeResultClasses {
+        terminal_result: L_CURATOR_NOOP,
+        result_classes: NO_OP_CLASSES,
     },
     OutcomeResultClasses {
         terminal_result: L_BLOCKED,

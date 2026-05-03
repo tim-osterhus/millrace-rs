@@ -75,8 +75,11 @@ fn enum_values_match_python_reference_contracts() {
         values(LearningTerminalResult::ALL, LearningTerminalResult::as_str),
         [
             "ANALYST_COMPLETE",
+            "ANALYST_NOOP",
             "PROFESSOR_COMPLETE",
+            "PROFESSOR_NOOP",
             "CURATOR_COMPLETE",
+            "CURATOR_NOOP",
             "BLOCKED",
         ]
     );
@@ -84,6 +87,7 @@ fn enum_values_match_python_reference_contracts() {
         values(ResultClass::ALL, ResultClass::as_str),
         [
             "success",
+            "no_op",
             "followup_needed",
             "recoverable_failure",
             "escalate_planning",
@@ -149,6 +153,23 @@ fn enum_values_match_python_reference_contracts() {
         values(LoopEdgeKind::ALL, LoopEdgeKind::as_str),
         ["normal", "retry", "escalation", "handoff", "terminal"]
     );
+}
+
+#[test]
+fn python_v0_17_4_learning_noop_enum_values_parse_as_first_class_contracts() {
+    assert_eq!(
+        LearningTerminalResult::from_value("ANALYST_NOOP").unwrap(),
+        LearningTerminalResult::AnalystNoop
+    );
+    assert_eq!(
+        LearningTerminalResult::from_value("PROFESSOR_NOOP").unwrap(),
+        LearningTerminalResult::ProfessorNoop
+    );
+    assert_eq!(
+        LearningTerminalResult::from_value("CURATOR_NOOP").unwrap(),
+        LearningTerminalResult::CuratorNoop
+    );
+    assert_eq!(ResultClass::from_value("no_op").unwrap(), ResultClass::NoOp);
 }
 
 #[test]
@@ -244,6 +265,10 @@ fn terminal_result_lookup_is_plane_specific() {
         TerminalResult::Learning(LearningTerminalResult::CuratorComplete)
     );
     assert_eq!(
+        terminal_result_for_plane(Plane::Learning, "ANALYST_NOOP").unwrap(),
+        TerminalResult::Learning(LearningTerminalResult::AnalystNoop)
+    );
+    assert_eq!(
         blocked_terminal_for_plane(Plane::Learning),
         TerminalResult::Learning(LearningTerminalResult::Blocked)
     );
@@ -291,6 +316,30 @@ fn invalid_stage_terminal_marker_and_result_class_fail_with_typed_errors() {
         ),
         Err(ContractError::TerminalResultNotAllowed { .. })
     ));
+    assert!(matches!(
+        validate_stage_result_class(
+            StageName::Analyst,
+            TerminalResult::Learning(LearningTerminalResult::AnalystNoop),
+            ResultClass::Success,
+        ),
+        Err(ContractError::ResultClassNotAllowed { .. })
+    ));
+    assert!(matches!(
+        validate_stage_result_class(
+            StageName::Analyst,
+            TerminalResult::Learning(LearningTerminalResult::AnalystComplete),
+            ResultClass::NoOp,
+        ),
+        Err(ContractError::ResultClassNotAllowed { .. })
+    ));
+    assert!(matches!(
+        validate_stage_result_class(
+            StageName::Analyst,
+            TerminalResult::Learning(LearningTerminalResult::ProfessorNoop),
+            ResultClass::NoOp,
+        ),
+        Err(ContractError::TerminalResultNotAllowed { .. })
+    ));
 }
 
 #[test]
@@ -326,6 +375,55 @@ fn legal_stage_result_class_combinations_validate() {
         builder_allowed[0].result_classes,
         &[ResultClass::Success][..]
     );
+}
+
+#[test]
+fn python_v0_17_4_learning_stage_metadata_allows_only_stage_specific_noop_classes() {
+    let analyst_noop = TerminalResult::Learning(LearningTerminalResult::AnalystNoop);
+    let professor_noop = TerminalResult::Learning(LearningTerminalResult::ProfessorNoop);
+    let curator_noop = TerminalResult::Learning(LearningTerminalResult::CuratorNoop);
+
+    assert_eq!(
+        legal_terminal_markers(StageName::Analyst),
+        vec![
+            "### ANALYST_COMPLETE".to_owned(),
+            "### ANALYST_NOOP".to_owned(),
+            "### BLOCKED".to_owned()
+        ]
+    );
+    assert_eq!(
+        legal_terminal_markers(StageName::Professor),
+        vec![
+            "### PROFESSOR_COMPLETE".to_owned(),
+            "### PROFESSOR_NOOP".to_owned(),
+            "### BLOCKED".to_owned()
+        ]
+    );
+    assert_eq!(
+        legal_terminal_markers(StageName::Curator),
+        vec![
+            "### CURATOR_COMPLETE".to_owned(),
+            "### CURATOR_NOOP".to_owned(),
+            "### BLOCKED".to_owned()
+        ]
+    );
+
+    validate_stage_result_class(StageName::Analyst, analyst_noop, ResultClass::NoOp).unwrap();
+    validate_stage_result_class(StageName::Professor, professor_noop, ResultClass::NoOp).unwrap();
+    validate_stage_result_class(StageName::Curator, curator_noop, ResultClass::NoOp).unwrap();
+
+    assert_eq!(
+        allowed_result_classes_by_outcome(StageName::Analyst)[1].result_classes,
+        &[ResultClass::NoOp]
+    );
+    assert!(matches!(
+        validate_stage_result_class(StageName::Analyst, professor_noop, ResultClass::NoOp),
+        Err(ContractError::TerminalResultNotAllowed { .. })
+    ));
+    assert!(matches!(
+        validate_stage_result_class(StageName::Curator, curator_noop, ResultClass::Blocked),
+        Err(ContractError::ResultClassNotAllowed { .. })
+    ));
 }
 
 #[test]

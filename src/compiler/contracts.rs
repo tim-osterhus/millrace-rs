@@ -103,6 +103,7 @@ compiler_string_enum! {
     /// Terminal classes declared by graph loop terminal states.
     pub enum GraphLoopTerminalClass {
         Success => "success",
+        NoOp => "no_op",
         FollowupNeeded => "followup_needed",
         Blocked => "blocked",
         EscalatePlanning => "escalate_planning",
@@ -259,6 +260,10 @@ pub struct LearningTriggerRuleDefinition {
     pub target_stage: LearningStageName,
     #[serde(default = "default_learning_request_action")]
     pub requested_action: LearningRequestAction,
+    #[serde(default)]
+    pub target_skill_id: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string_vec")]
+    pub preferred_output_paths: Vec<String>,
 }
 
 impl LearningTriggerRuleDefinition {
@@ -275,6 +280,10 @@ impl LearningTriggerRuleDefinition {
                 message: "learning triggers must originate outside the learning plane".to_owned(),
             });
         }
+        if let Some(target_skill_id) = &self.target_skill_id {
+            validate_safe_identifier(target_skill_id, "target_skill_id")?;
+        }
+        normalize_preferred_output_paths(&mut self.preferred_output_paths)?;
         normalize_status_values(&mut self.on_terminal_results, "on_terminal_results", false)?;
         if self.on_terminal_results.is_empty() {
             return Err(CompilerContractError::InvalidField {
@@ -295,6 +304,24 @@ impl LearningTriggerRuleDefinition {
             }
         }
         Ok(())
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum OptionalStringVecInput {
+    One(String),
+    Many(Vec<String>),
+}
+
+fn deserialize_optional_string_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match Option::<OptionalStringVecInput>::deserialize(deserializer)? {
+        Some(OptionalStringVecInput::One(value)) => Ok(vec![value]),
+        Some(OptionalStringVecInput::Many(values)) => Ok(values),
+        None => Ok(Vec::new()),
     }
 }
 
@@ -2095,6 +2122,21 @@ fn normalize_non_blank_vec(
 ) -> Result<(), CompilerContractError> {
     for value in values.iter() {
         require_non_blank(field_name, value)?;
+    }
+    dedupe(values);
+    Ok(())
+}
+
+fn normalize_preferred_output_paths(values: &mut Vec<String>) -> Result<(), CompilerContractError> {
+    for value in values.iter_mut() {
+        let normalized = value.trim().to_owned();
+        if normalized.is_empty() {
+            return Err(CompilerContractError::InvalidField {
+                field_name: "preferred_output_paths",
+                message: "entries must not be empty".to_owned(),
+            });
+        }
+        *value = normalized;
     }
     dedupe(values);
     Ok(())

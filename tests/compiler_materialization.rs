@@ -2,10 +2,11 @@ use std::{collections::HashMap, fs};
 
 use millrace_ai::{
     compiler::{
-        CompilerMaterializationError, MISSING_ASSET_TOKEN, build_compiled_plan_id,
-        compile_compiled_run_plan, materialize_graph_plane_plan, resolve_compile_assets,
+        CompilerMaterializationError, GraphLoopTerminalClass, MISSING_ASSET_TOKEN,
+        build_compiled_plan_id, compile_compiled_run_plan, materialize_graph_plane_plan,
+        resolve_compile_assets,
     },
-    contracts::{Plane, ResultClass, Timestamp},
+    contracts::{LearningStageName, Plane, ResultClass, Timestamp},
     workspace::initialize_workspace,
 };
 use tempfile::TempDir;
@@ -195,7 +196,32 @@ fn learning_modes_materialize_learning_graph_triggers_and_concurrency_policy() {
     assert_eq!(plan.learning_trigger_rules.len(), 3);
     assert_eq!(
         plan.learning_trigger_rules[0].rule_id,
-        "execution.doublechecker.success-to-curator"
+        "execution.doublechecker.success-to-analyst"
+    );
+    assert_eq!(
+        plan.learning_trigger_rules[0].target_stage,
+        LearningStageName::Analyst
+    );
+    assert!(plan.learning_trigger_rules[0].target_skill_id.is_none());
+    assert!(
+        plan.learning_trigger_rules[0]
+            .preferred_output_paths
+            .is_empty()
+    );
+    assert!(
+        learning_graph
+            .terminal_states
+            .iter()
+            .any(|state| state.terminal_state_id == "analyst_noop"
+                && state.terminal_class == GraphLoopTerminalClass::NoOp
+                && state.writes_status == "ANALYST_NOOP")
+    );
+    assert!(
+        learning_graph
+            .compiled_transitions
+            .iter()
+            .any(|transition| transition.outcome == "CURATOR_NOOP"
+                && transition.terminal_state_id.as_deref() == Some("curator_noop"))
     );
     let concurrency = plan.concurrency_policy.as_ref().unwrap();
     assert_eq!(concurrency.mutually_exclusive_planes.len(), 1);
@@ -209,6 +235,99 @@ fn learning_modes_materialize_learning_graph_triggers_and_concurrency_policy() {
             "graph_loop:planning.standard".to_owned(),
             "graph_completion_behavior:planning.standard".to_owned(),
         ]
+    );
+}
+
+#[test]
+fn direct_curator_learning_trigger_requires_safe_destination() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+    fs::write(
+        paths.runtime_root.join("modes/learning_codex.json"),
+        serde_json::to_string_pretty(&serde_json::json!({
+            "schema_version": "1.0",
+            "kind": "mode",
+            "mode_id": "learning_codex",
+            "loop_ids_by_plane": {
+                "execution": "execution.standard",
+                "planning": "planning.standard",
+                "learning": "learning.standard"
+            },
+            "stage_runner_bindings": {
+                "builder": "codex_cli",
+                "checker": "codex_cli",
+                "fixer": "codex_cli",
+                "doublechecker": "codex_cli",
+                "updater": "codex_cli",
+                "troubleshooter": "codex_cli",
+                "consultant": "codex_cli",
+                "planner": "codex_cli",
+                "manager": "codex_cli",
+                "mechanic": "codex_cli",
+                "auditor": "codex_cli",
+                "arbiter": "codex_cli",
+                "analyst": "codex_cli",
+                "professor": "codex_cli",
+                "curator": "codex_cli"
+            },
+            "learning_trigger_rules": [
+                {
+                    "rule_id": "execution.doublechecker.unsafe-to-curator",
+                    "source_plane": "execution",
+                    "source_stage": "doublechecker",
+                    "on_terminal_results": ["DOUBLECHECK_PASS"],
+                    "target_stage": "curator",
+                    "requested_action": "improve"
+                }
+            ]
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+
+    let error =
+        compile_compiled_run_plan(&paths, Some("learning_codex"), fixed_compiled_at()).unwrap_err();
+
+    assert!(matches!(
+        error,
+        CompilerMaterializationError::InvalidLearningTrigger {
+            ref rule_id,
+            ref message,
+        } if rule_id == "execution.doublechecker.unsafe-to-curator"
+            && message.contains("targets curator without a safe destination")
+    ));
+}
+
+#[test]
+fn direct_curator_learning_trigger_accepts_targeted_destination() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+    let mode_path = paths.runtime_root.join("modes/learning_codex.json");
+    let mut mode: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&mode_path).unwrap()).unwrap();
+    mode["learning_trigger_rules"] = serde_json::json!([
+        {
+            "rule_id": "execution.doublechecker.precise-to-curator",
+            "source_plane": "execution",
+            "source_stage": "doublechecker",
+            "on_terminal_results": ["DOUBLECHECK_PASS"],
+            "target_stage": "curator",
+            "requested_action": "improve",
+            "preferred_output_paths": [
+                "skills/stage/execution/doublechecker-core/SKILL.md"
+            ]
+        }
+    ]);
+    fs::write(&mode_path, serde_json::to_string_pretty(&mode).unwrap()).unwrap();
+
+    let plan =
+        compile_compiled_run_plan(&paths, Some("learning_codex"), fixed_compiled_at()).unwrap();
+    let rule = &plan.learning_trigger_rules[0];
+
+    assert_eq!(rule.target_stage, LearningStageName::Curator);
+    assert_eq!(
+        rule.preferred_output_paths,
+        ["skills/stage/execution/doublechecker-core/SKILL.md".to_owned()]
     );
 }
 

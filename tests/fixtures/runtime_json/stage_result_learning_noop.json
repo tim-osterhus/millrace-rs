@@ -1,26 +1,26 @@
 {
   "schema_version": "1.0",
   "kind": "stage_result",
-  "run_id": "run-001",
-  "plane": "execution",
-  "stage": "builder",
-  "node_id": "builder",
-  "stage_kind_id": "builder",
-  "work_item_kind": "task",
-  "work_item_id": "task-001",
-  "terminal_result": "CHECKER_PASS",
-  "result_class": "success",
-  "summary_status_marker": "### CHECKER_PASS",
-  "success": true,
+  "run_id": "run-learning-noop",
+  "plane": "learning",
+  "stage": "analyst",
+  "node_id": "analyst",
+  "stage_kind_id": "analyst",
+  "work_item_kind": "learning_request",
+  "work_item_id": "learn-001",
+  "terminal_result": "ANALYST_NOOP",
+  "result_class": "no_op",
+  "summary_status_marker": "### ANALYST_NOOP",
+  "success": false,
   "retryable": false,
   "exit_code": 0,
   "duration_seconds": 1.25,
   "prompt_artifact": "prompt.md",
-  "report_artifact": "checker_summary.md",
+  "report_artifact": "analyst_summary.md",
   "artifact_paths": [
-    "checker_summary.md"
+    "analyst_summary.md"
   ],
-  "detected_marker": "### CHECKER_PASS",
+  "detected_marker": "### ANALYST_NOOP",
   "stdout_path": "stdout.txt",
   "stderr_path": "stderr.txt",
   "runner_name": "codex_cli",
@@ -35,10 +35,11 @@
     "total_tokens": 135
   },
   "notes": [
-    "request-driven terminal identity"
+    "learning request required no changes"
   ],
   "metadata": {
-    "request_id": "request-001"
+    "request_id": "request-learning-noop",
+    "request_kind": "learning_request"
   },
   "started_at": "2026-04-15T00:00:00Z",
   "completed_at": "2026-04-15T00:00:00Z"

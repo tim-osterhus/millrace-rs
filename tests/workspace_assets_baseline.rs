@@ -9,6 +9,7 @@ use millrace_ai::workspace::{
     preview_baseline_upgrade, write_baseline_manifest,
 };
 use serde::Serialize;
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 
@@ -167,6 +168,57 @@ fn initialize_workspace_deploys_managed_assets_and_manifest_io() {
         "operator edit\n"
     );
     assert_eq!(load_baseline_manifest(&paths).unwrap(), manifest);
+}
+
+#[test]
+fn initialized_workspace_learning_assets_match_packaged_noop_trigger_baseline() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+    let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/assets/baseline");
+    let learning_assets = [
+        "graphs/learning/standard.json",
+        "loops/learning/default.json",
+        "modes/learning_codex.json",
+        "modes/learning_pi.json",
+        "registry/stage_kinds/learning/analyst.json",
+        "registry/stage_kinds/learning/professor.json",
+        "registry/stage_kinds/learning/curator.json",
+        "entrypoints/learning/analyst.md",
+        "entrypoints/learning/professor.md",
+        "entrypoints/learning/curator.md",
+        "skills/stage/learning/analyst-core/SKILL.md",
+        "skills/stage/learning/professor-core/SKILL.md",
+        "skills/stage/learning/curator-core/SKILL.md",
+    ];
+
+    for relative_path in learning_assets {
+        assert_eq!(
+            fs::read(paths.runtime_root.join(relative_path)).unwrap(),
+            fs::read(source_root.join(relative_path)).unwrap(),
+            "workspace asset drifted from packaged baseline: {relative_path}",
+        );
+    }
+
+    let learning_graph: Value = serde_json::from_slice(
+        &fs::read(paths.runtime_root.join("graphs/learning/standard.json")).unwrap(),
+    )
+    .unwrap();
+    let terminal_states = learning_graph["terminal_states"].as_array().unwrap();
+    assert!(terminal_states.iter().any(|state| {
+        state["terminal_state_id"] == "analyst_noop" && state["terminal_class"] == "no_op"
+    }));
+    assert!(terminal_states.iter().any(|state| {
+        state["terminal_state_id"] == "professor_noop" && state["terminal_class"] == "no_op"
+    }));
+    assert!(terminal_states.iter().any(|state| {
+        state["terminal_state_id"] == "curator_noop" && state["terminal_class"] == "no_op"
+    }));
+
+    for mode in ["learning_codex.json", "learning_pi.json"] {
+        let mode_text = fs::read_to_string(paths.runtime_root.join("modes").join(mode)).unwrap();
+        assert!(!mode_text.contains("success-to-curator"));
+        assert!(mode_text.contains("success-to-analyst"));
+    }
 }
 
 #[test]

@@ -250,7 +250,7 @@
       "rust_tests": [
         {
           "file": "tests/runtime_serial.rs",
-          "name": "serial_tick_learning_trigger_enqueues_targeted_curator_request"
+          "name": "serial_tick_learning_trigger_enqueues_analyst_first_request"
         },
         {
           "file": "tests/runtime_serial.rs",
@@ -304,7 +304,7 @@
         },
         {
           "file": "tests/runtime_serial.rs",
-          "name": "serial_tick_learning_trigger_enqueues_targeted_curator_request"
+          "name": "serial_tick_learning_trigger_enqueues_analyst_first_request"
         },
         {
           "file": "tests/parity_cli.rs",

@@ -1,12 +1,20 @@
 from __future__ import annotations
 
+import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+PYTHON_ROOT = Path(os.environ.get("MILLRACE_PY_ROOT", REPO_ROOT / "../millrace-py")).resolve()
+sys.path.insert(0, str(PYTHON_ROOT / "src"))
 
 from millrace_ai.contracts.compile_diagnostics import CompileDiagnostics
 from millrace_ai.contracts.enums import (
     ExecutionStageName,
     ExecutionTerminalResult,
+    LearningStageName,
+    LearningTerminalResult,
     MailboxCommand,
     Plane,
     PlanningStageName,
@@ -176,6 +184,39 @@ def build_fixtures() -> dict[str, object]:
             token_usage=token_usage,
             notes=("request-driven terminal identity",),
             metadata={"request_id": "request-001"},
+            started_at=NOW,
+            completed_at=NOW,
+        ),
+        "stage_result_learning_noop.json": StageResultEnvelope(
+            run_id="run-learning-noop",
+            plane=Plane.LEARNING,
+            stage=LearningStageName.ANALYST,
+            node_id="analyst",
+            stage_kind_id="analyst",
+            work_item_kind=WorkItemKind.LEARNING_REQUEST,
+            work_item_id="learn-001",
+            terminal_result=LearningTerminalResult.ANALYST_NOOP,
+            result_class=ResultClass.NO_OP,
+            summary_status_marker="### ANALYST_NOOP",
+            success=False,
+            retryable=False,
+            exit_code=0,
+            duration_seconds=1.25,
+            prompt_artifact="prompt.md",
+            report_artifact="analyst_summary.md",
+            artifact_paths=("analyst_summary.md",),
+            detected_marker="### ANALYST_NOOP",
+            stdout_path="stdout.txt",
+            stderr_path="stderr.txt",
+            runner_name="codex_cli",
+            model_name="gpt-5",
+            model_reasoning_effort="medium",
+            token_usage=token_usage,
+            notes=("learning request required no changes",),
+            metadata={
+                "request_id": "request-learning-noop",
+                "request_kind": "learning_request",
+            },
             started_at=NOW,
             completed_at=NOW,
         ),

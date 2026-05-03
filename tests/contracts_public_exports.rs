@@ -287,6 +287,10 @@ fn public_metadata_helpers_expose_the_stage_contract_boundary() {
         blocked_terminal_for_plane(Plane::Learning)
     );
     assert_eq!(
+        terminal_result_for_plane(Plane::Learning, "ANALYST_NOOP").unwrap(),
+        TerminalResult::Learning(LearningTerminalResult::AnalystNoop)
+    );
+    assert_eq!(
         parse_terminal_marker_for_plane(Plane::Execution, "### BLOCKED").unwrap(),
         TerminalResult::Execution(ExecutionTerminalResult::Blocked)
     );
@@ -298,6 +302,12 @@ fn public_metadata_helpers_expose_the_stage_contract_boundary() {
         StageName::Builder,
         TerminalResult::Execution(ExecutionTerminalResult::BuilderComplete),
         ResultClass::Success,
+    )
+    .unwrap();
+    validate_stage_result_class(
+        StageName::Analyst,
+        TerminalResult::Learning(LearningTerminalResult::AnalystNoop),
+        ResultClass::NoOp,
     )
     .unwrap();
     assert_eq!(

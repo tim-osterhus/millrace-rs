@@ -4,9 +4,9 @@
 governed runtime for long-running agent work.
 
 The production implementation is currently the Python package
-[`millrace-ai`](https://pypi.org/project/millrace-ai/). The Rust `0.2.0`
-release consolidates the Python `v0.16.1..v0.17.3` parity pass while the crate
-remains experimental.
+[`millrace-ai`](https://pypi.org/project/millrace-ai/). The Rust `0.2.1`
+release consolidates the Python `v0.17.3..v0.17.4` parity pass on top of the
+earlier `v0.16.1..v0.17.3` port while the crate remains experimental.
 
 ## Package Names
 
@@ -126,13 +126,17 @@ governance pause when rolling-window blockers expire. Live subscription-provider
 polling remains follow-up work.
 Learning promotion and skill-evidence parity is also implemented for the
 runtime-owned surfaces: stage-result learning triggers enqueue learning-request
-documents with trigger and artifact evidence, stage requests preserve
-skill-revision evidence in run directories, Curator `skill_update` artifacts
-create auditable learning update-candidate promotion records, deferred records
-apply only after foreground execution and planning lanes drain, rejected or
-blocked Curator decisions preserve decision evidence without promotion records,
-and source-packaged skills remain mutable only through explicit
-`millrace skills promote` operator commands with audit fields.
+documents with trigger, artifact, `target_skill_id`, and normalized
+`preferred_output_paths` evidence in queued request fields, trigger metadata,
+and `learning_request_enqueued` events. Learning no-op terminal results
+complete active learning requests into `learning/requests/done/` with
+non-success `no_op` stage-result, terminal-marker, and router-decision evidence.
+Stage requests preserve skill-revision evidence in run directories, Curator
+`skill_update` artifacts create auditable learning update-candidate promotion
+records, deferred records apply only after foreground execution and planning
+lanes drain, rejected or blocked Curator decisions preserve decision evidence
+without promotion records, and source-packaged skills remain mutable only
+through explicit `millrace skills promote` operator commands with audit fields.
 Closure-lineage runtime parity now creates or backfills closure targets from
 root-spec claims or drained root specs, refreshes closure-target readiness
 before Arbiter dispatch, blocks on queued/active/blocked same-root lineage work
@@ -147,7 +151,8 @@ and `runs tail` surfaces. Run listing keeps complete, incomplete, malformed,
 token-bearing, closure-target, governance-linked, skill-evidence-bearing, and
 runner-artifact-bearing directories visible with stable labels. Run show
 surfaces malformed stage-result paths, primary prompt/stdout/stderr/event,
-stage-request, stage-result, and runner invocation/completion thinking-level
+stage-request, stage-result evidence including learning no-op
+`result_class: no_op`, and runner invocation/completion thinking-level
 evidence, skill-revision evidence, aggregate duration and token usage,
 governance ledger links, closure-target metadata, remediation references, raw
 runner exit metadata, and runner artifact listings. Run tail
@@ -306,9 +311,21 @@ Consultant handoff incidents, planning incident re-entry, Arbiter completion,
 Arbiter remediation, and repeated-remediation blocking. Consolidated Slice 8
 parity evidence and docs are complete for the fixture-backed advanced surfaces,
 and `tests/fixtures/cli_parity/auto_port_v0_17_3_release_parity_evidence.json`
-records the final Rust `0.2.0` auto-port evidence for version metadata,
+records the historical Rust `0.2.0` auto-port evidence for version metadata,
 managed assets, docs, package include rules, release-readiness commands, and
 the Python `v0.16.1..v0.17.3` source/test references;
+`tests/fixtures/cli_parity/auto_port_v0_17_4_parity_evidence.json` records the
+targeted Python `v0.17.3..v0.17.4` parity evidence for learning no-op
+contracts, trigger destination safety, compiler/runtime fixture coverage,
+learning no-op lifecycle behavior, read-only run inspection of
+`result_class: no_op`, source references, no-live guarantees, and Rust
+test-reference guardrails; and
+`tests/fixtures/runtime_json/stage_result_learning_noop.json` pins the Python
+v0.17.4 `ANALYST_NOOP` stage-result shape for learning-request work items;
+`tests/fixtures/cli_parity/auto_port_v0_17_4_release_parity_evidence.json`
+records the final Rust `0.2.1` release evidence for version metadata,
+package include rules, docs/runtime docs, release-readiness commands, and the
+Python `v0.17.4` `millrace-web` version/dependency sync gap;
 the optional Python `millrace-web` dashboard remains an explicit unsupported
 Rust parity gap with source references and non-goal wording; native filesystem
 watcher integration and live subscription quota integration remain
@@ -318,10 +335,12 @@ beyond the already implemented runtime dispatch boundary.
 
 The compiler layer currently covers serde-backed mode definitions including
 `stage_thinking_bindings`, graph loop definitions including node-level
-`thinking_level`, stage-kind registry entries, learning triggers, plane
-concurrency policy definitions, compiled graph and compiled run plan shapes,
-resolved asset references, compile outcome data, persisted compiled-plan
-authority, and compiled-plan currentness data. It also resolves authoritative
+`thinking_level` and `no_op` terminal classes, stage-kind registry entries,
+learning triggers with `target_skill_id` and normalized
+`preferred_output_paths`, plane concurrency policy definitions, compiled graph
+and compiled run plan shapes, resolved asset references, compile outcome data,
+persisted compiled-plan authority, and compiled-plan currentness data. It also
+resolves authoritative
 compile assets from initialized workspace `modes/`,
 `graphs/`, `registry/stage_kinds/`, `entrypoints/`, and `skills/` paths,
 canonicalizes `standard_plain` to `default_codex`, fingerprints compile-relevant
@@ -329,12 +348,13 @@ config and resolved asset content while excluding adapter-only runner settings,
 accepts `stages.<stage>.thinking_level` while preserving legacy
 `model_reasoning_effort` as a matching Codex alias, and ignores compatibility
 `loops/` plus unreferenced assets. It now materializes deterministic frozen
-compiled run
-plans for default Codex, Pi, learning, and `standard_plain` alias modes,
-including graph node bindings, transitions, policies, planning completion
-behavior, learning triggers, and supported config, skill, entrypoint, runner,
-model, thinking-level, Codex legacy reasoning-effort, and timeout overrides. It
-persists compiler-authoritative
+compiled run plans for default Codex, Pi, learning, and the `standard_plain`
+alias mode. The plans include graph node bindings, transitions, policies,
+planning completion
+behavior, learning triggers, learning no-op terminal states, direct Curator
+trigger safe-destination validation, and supported config, skill, entrypoint,
+runner, model, thinking-level, Codex legacy reasoning-effort, and timeout
+overrides. It persists compiler-authoritative
 `compiled_plan.json` and `compile_diagnostics.json`, reports
 missing/current/stale/unknown currentness from compile-input fingerprints,
 preserves last-known-good plans on compile failure, and refuses stale
@@ -344,8 +364,9 @@ initialized workspace, accept the built-in Codex/Pi/learning modes and
 `standard_plain` alias, persist compiler artifacts, and render diagnostics plus
 inspectable compiled-plan fields including effective `thinking_level` without
 invoking runtime execution behavior. The committed compiler parity fixture is
-pinned to Python `0.17.3` and covers `default_codex`, `default_pi`,
-`learning_codex`, `learning_pi`, and `standard_plain`.
+pinned to Python `0.17.4` and covers `default_codex`, `default_pi`,
+`learning_codex`, `learning_pi`, and `standard_plain`, including learning
+no-op terminal classes and success-to-Analyst trigger behavior.
 
 The workspace layer currently covers canonical `<workspace>/millrace-agents/`
 path resolution and idempotent initialization defaults for the directory tree,
@@ -444,6 +465,8 @@ Python runtime.
 
 - [Architecture](docs/architecture.md)
 - [Testing](docs/testing.md)
+- [Runtime docs](docs/runtime/README.md)
+- [Release roadmap](ROADMAP.md)
 - [Rust port roadmap](docs/rust-port-roadmap.md)
 - [Rust source package map](docs/source-package-map.md)
 - [Provenance and autonomous-build evidence](docs/provenance.md)
@@ -452,8 +475,8 @@ Python runtime.
 The historical public proof package for the v0.1.0 autonomous port campaign
 lives in
 [`tim-osterhus/millrace-rs-port-docs`](https://github.com/tim-osterhus/millrace-rs-port-docs).
-The crate-local `0.2.0` release evidence lives in `CHANGELOG.md` and
-`tests/fixtures/cli_parity/auto_port_v0_17_3_release_parity_evidence.json`.
+The crate-local `0.2.1` release evidence lives in `CHANGELOG.md` and
+`tests/fixtures/cli_parity/auto_port_v0_17_4_release_parity_evidence.json`.
 
 ## License
 

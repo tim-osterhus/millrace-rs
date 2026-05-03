@@ -236,8 +236,11 @@ string_enum! {
     /// Learning-plane terminal results.
     pub enum LearningTerminalResult {
         AnalystComplete => "ANALYST_COMPLETE",
+        AnalystNoop => "ANALYST_NOOP",
         ProfessorComplete => "PROFESSOR_COMPLETE",
+        ProfessorNoop => "PROFESSOR_NOOP",
         CuratorComplete => "CURATOR_COMPLETE",
+        CuratorNoop => "CURATOR_NOOP",
         Blocked => "BLOCKED",
     }
 }
@@ -336,6 +339,7 @@ string_enum! {
     /// Stage result classes.
     pub enum ResultClass {
         Success => "success",
+        NoOp => "no_op",
         FollowupNeeded => "followup_needed",
         RecoverableFailure => "recoverable_failure",
         EscalatePlanning => "escalate_planning",

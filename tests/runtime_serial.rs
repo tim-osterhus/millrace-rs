@@ -9,8 +9,8 @@ use tempfile::TempDir;
 use millrace_ai::contracts::{
     ActiveRunRequestKind, ActiveRunState, ClosureTargetState, ExecutionTerminalResult,
     IncidentDecision, IncidentDocument, IncidentSeverity, LearningRequestAction,
-    LearningRequestDocument, Plane, PlanningTerminalResult, ResultClass, RuntimeErrorContext,
-    RuntimeMode, SpecDocument, SpecSourceType, StageName, StageResultEnvelope,
+    LearningRequestDocument, LearningTerminalResult, Plane, PlanningTerminalResult, ResultClass,
+    RuntimeErrorContext, RuntimeMode, SpecDocument, SpecSourceType, StageName, StageResultEnvelope,
     SubscriptionQuotaWindowReading, TaskDocument, TerminalResult, Timestamp, TokenUsage,
     UsageGovernanceDegradedPolicy, UsageGovernanceRuntimeTokenMetric,
     UsageGovernanceRuntimeTokenWindow, UsageGovernanceSubscriptionWindow, WorkItemKind,
@@ -92,6 +92,31 @@ fn sample_request(run_dir: &Path) -> StageRunRequest {
         model_reasoning_effort: Some("medium".to_owned()),
         timeout_seconds: 3600,
     };
+    request.validate().unwrap();
+    request
+}
+
+fn sample_learning_request(run_dir: &Path, stage: StageName) -> StageRunRequest {
+    let mut request = sample_request(run_dir);
+    request.plane = Plane::Learning;
+    request.stage = stage;
+    request.request_kind = RequestKind::LearningRequest;
+    request.node_id = stage.as_str().to_owned();
+    request.stage_kind_id = stage.as_str().to_owned();
+    request.running_status_marker = format!("{}_RUNNING", stage.as_str().to_ascii_uppercase());
+    request.legal_terminal_markers = Vec::new();
+    request.allowed_result_classes_by_outcome = Default::default();
+    request.entrypoint_path = format!("millrace-agents/entrypoints/learning/{}.md", stage.as_str());
+    request.entrypoint_contract_id = Some(format!("{}.contract.v1", stage.as_str()));
+    request.required_skill_paths = vec![format!(
+        "millrace-agents/skills/stage/learning/{}-core/SKILL.md",
+        stage.as_str()
+    )];
+    request.active_work_item_kind = Some(WorkItemKind::LearningRequest);
+    request.active_work_item_id = Some("learn-001".to_owned());
+    request.active_work_item_path =
+        Some("millrace-agents/learning/requests/active/learn-001.md".to_owned());
+    request.summary_status_path = "millrace-agents/state/learning_status.md".to_owned();
     request.validate().unwrap();
     request
 }
@@ -1403,6 +1428,39 @@ fn stage_run_request_serializes_python_compatible_context_fields() {
 }
 
 #[test]
+fn python_v0_17_4_stage_run_request_preserves_learning_no_op_allowed_policy() {
+    let temp = TempDir::new().unwrap();
+    let request = sample_learning_request(temp.path(), StageName::Analyst);
+
+    let serialized = serde_json::to_value(&request).unwrap();
+    assert_eq!(serialized["plane"], "learning");
+    assert_eq!(serialized["stage"], "analyst");
+    assert_eq!(serialized["legal_terminal_markers"][1], "### ANALYST_NOOP");
+    assert_eq!(
+        serialized["allowed_result_classes_by_outcome"]["ANALYST_NOOP"],
+        json!(["no_op"])
+    );
+    assert_eq!(
+        serialized["allowed_result_classes_by_outcome"]["ANALYST_COMPLETE"],
+        json!(["success"])
+    );
+    assert_eq!(
+        serialized["allowed_result_classes_by_outcome"]["BLOCKED"],
+        json!(["blocked", "recoverable_failure"])
+    );
+
+    let decoded = StageRunRequest::from_json_value(serialized).unwrap();
+    assert_eq!(
+        decoded
+            .allowed_result_classes_by_outcome
+            .result_classes_for("ANALYST_NOOP"),
+        Some(&[ResultClass::NoOp][..])
+    );
+    let context_lines = render_stage_request_context_lines(&decoded);
+    assert!(context_lines.contains(&"- ANALYST_NOOP: no_op".to_owned()));
+}
+
+#[test]
 fn shared_prompt_renderer_persists_stage_request_context() {
     let temp = TempDir::new().unwrap();
     let mut request = sample_request(temp.path());
@@ -1677,6 +1735,67 @@ fn fake_runner_success_normalizes_to_stage_result_envelope() {
         "stdout_terminal_token"
     );
     assert_eq!(failure_class(&Value::Object(envelope.metadata)), None);
+}
+
+#[test]
+fn python_v0_17_4_learning_noop_terminal_normalizes_to_non_success_noop_result() {
+    let temp = TempDir::new().unwrap();
+    let request = sample_learning_request(temp.path(), StageName::Analyst);
+    let runner =
+        FakeRunner::with_default(FakeRunnerResult::terminal_marker("### ANALYST_NOOP")).unwrap();
+
+    let raw_result = runner.run(&request).unwrap();
+    let envelope = normalize_stage_result(&request, &raw_result).unwrap();
+
+    assert_eq!(
+        envelope.terminal_result,
+        TerminalResult::Learning(LearningTerminalResult::AnalystNoop)
+    );
+    assert_eq!(envelope.result_class, ResultClass::NoOp);
+    assert!(!envelope.success);
+    assert!(!envelope.retryable);
+    assert_eq!(envelope.work_item_kind, WorkItemKind::LearningRequest);
+    assert_eq!(envelope.work_item_id, "learn-001");
+}
+
+#[test]
+fn python_v0_17_4_learning_noop_rejects_mismatched_terminal_result_class_pairs() {
+    let temp = TempDir::new().unwrap();
+    let request = sample_learning_request(temp.path(), StageName::Analyst);
+
+    let noop_as_success = FakeRunner::with_default(FakeRunnerResult::structured_terminal_result(
+        "ANALYST_NOOP",
+        Some(ResultClass::Success),
+    ))
+    .unwrap();
+    let raw_result = noop_as_success.run(&request).unwrap();
+    let envelope = normalize_stage_result(&request, &raw_result).unwrap();
+    assert_eq!(envelope.result_class, ResultClass::RecoverableFailure);
+    assert_eq!(
+        envelope.terminal_result,
+        TerminalResult::Learning(LearningTerminalResult::Blocked)
+    );
+    assert_eq!(
+        envelope.metadata["failure_class"],
+        "illegal_terminal_result"
+    );
+
+    let complete_as_noop = FakeRunner::with_default(FakeRunnerResult::structured_terminal_result(
+        "ANALYST_COMPLETE",
+        Some(ResultClass::NoOp),
+    ))
+    .unwrap();
+    let raw_result = complete_as_noop.run(&request).unwrap();
+    let envelope = normalize_stage_result(&request, &raw_result).unwrap();
+    assert_eq!(envelope.result_class, ResultClass::RecoverableFailure);
+    assert_eq!(
+        envelope.terminal_result,
+        TerminalResult::Learning(LearningTerminalResult::Blocked)
+    );
+    assert_eq!(
+        envelope.metadata["failure_class"],
+        "illegal_terminal_result"
+    );
 }
 
 #[test]
@@ -2640,7 +2759,7 @@ fn serial_tick_learning_idle_preserves_active_execution_lane() {
 }
 
 #[test]
-fn serial_tick_learning_trigger_enqueues_targeted_curator_request() {
+fn serial_tick_learning_trigger_enqueues_analyst_first_request() {
     let temp = TempDir::new().unwrap();
     let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
     QueueStore::from_paths(paths.clone())
@@ -2707,9 +2826,10 @@ fn serial_tick_learning_trigger_enqueues_targeted_curator_request() {
     let document = parse_learning_request_document(&raw).unwrap();
     assert_eq!(document.requested_action, LearningRequestAction::Improve);
     assert_eq!(document.target_skill_id, None);
+    assert!(document.preferred_output_paths.is_empty());
     assert_eq!(
         document.target_stage.map(StageName::from),
-        Some(StageName::Curator)
+        Some(StageName::Analyst)
     );
     assert_eq!(
         document.originating_run_ids,
@@ -2717,12 +2837,18 @@ fn serial_tick_learning_trigger_enqueues_targeted_curator_request() {
     );
     assert_eq!(
         document.trigger_metadata["rule_id"],
-        "execution.doublechecker.success-to-curator"
+        "execution.doublechecker.success-to-analyst"
     );
     assert_eq!(document.trigger_metadata["source_stage"], "doublechecker");
     assert_eq!(
         document.trigger_metadata["terminal_result"],
         "DOUBLECHECK_PASS"
+    );
+    assert_eq!(document.trigger_metadata["target_stage"], "analyst");
+    assert_eq!(document.trigger_metadata["target_skill_id"], Value::Null);
+    assert_eq!(
+        document.trigger_metadata["preferred_output_paths"],
+        json!([])
     );
     assert!(
         document
@@ -2735,6 +2861,179 @@ fn serial_tick_learning_trigger_enqueues_targeted_curator_request() {
             .iter()
             .any(|event| event["event_type"] == "learning_request_enqueued")
     );
+
+    session.finish().unwrap();
+}
+
+#[test]
+fn python_v0_17_4_runtime_generated_learning_request_copies_trigger_destination_metadata() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    QueueStore::from_paths(paths.clone())
+        .enqueue_task(&task_document("task-learning-targeted-trigger"))
+        .unwrap();
+
+    let mode_path = paths.modes_dir.join("learning_codex.json");
+    let mut mode: Value = serde_json::from_str(&fs::read_to_string(&mode_path).unwrap()).unwrap();
+    mode["learning_trigger_rules"] = json!([
+        {
+            "rule_id": "execution.doublechecker.precise-to-curator",
+            "source_plane": "execution",
+            "source_stage": "doublechecker",
+            "on_terminal_results": ["DOUBLECHECK_PASS"],
+            "target_stage": "curator",
+            "requested_action": "improve",
+            "target_skill_id": "doublechecker-core",
+            "preferred_output_paths": [
+                "millrace-agents/skills/stage/execution/doublechecker-core/SKILL.md"
+            ]
+        }
+    ]);
+    fs::write(
+        &mode_path,
+        serde_json::to_string_pretty(&mode).unwrap() + "\n",
+    )
+    .unwrap();
+
+    let mut options = startup_options("tick-learning-targeted-trigger");
+    options.requested_mode_id = Some("learning_codex".to_owned());
+    let mut session = startup_runtime_once_for_paths(&paths, options).unwrap();
+    let runner = FakeRunner::new(
+        FakeRunnerConfig::new(FakeRunnerResult::missing_terminal_output())
+            .unwrap()
+            .with_stage_result(
+                StageName::Builder,
+                FakeRunnerResult::terminal_marker("### BUILDER_COMPLETE"),
+            )
+            .with_stage_result(
+                StageName::Checker,
+                FakeRunnerResult::terminal_marker("### FIX_NEEDED"),
+            )
+            .with_stage_result(
+                StageName::Fixer,
+                FakeRunnerResult::terminal_marker("### FIXER_COMPLETE"),
+            )
+            .with_stage_result(
+                StageName::Doublechecker,
+                FakeRunnerResult::terminal_marker("### DOUBLECHECK_PASS"),
+            ),
+    );
+
+    for (run_id, request_id) in [
+        ("run-targeted-trigger", "request-targeted-builder"),
+        ("ignored-run", "request-targeted-checker"),
+        ("ignored-run", "request-targeted-fixer"),
+        ("ignored-run", "request-targeted-doublechecker"),
+    ] {
+        run_serial_runtime_tick_with_runner(
+            &mut session,
+            tick_options(run_id, request_id),
+            &runner,
+        )
+        .unwrap();
+    }
+
+    let queued_learning = fs::read_dir(&paths.learning_requests_queue_dir)
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(queued_learning.len(), 1);
+    let raw = fs::read_to_string(queued_learning[0].path()).unwrap();
+    let document = parse_learning_request_document(&raw).unwrap();
+    let expected_path = "millrace-agents/skills/stage/execution/doublechecker-core/SKILL.md";
+
+    assert_eq!(
+        document.target_stage.map(StageName::from),
+        Some(StageName::Curator)
+    );
+    assert_eq!(
+        document.target_skill_id.as_deref(),
+        Some("doublechecker-core")
+    );
+    assert_eq!(
+        document.preferred_output_paths,
+        vec![expected_path.to_owned()]
+    );
+    assert_eq!(
+        document.trigger_metadata["rule_id"],
+        "execution.doublechecker.precise-to-curator"
+    );
+    assert_eq!(document.trigger_metadata["target_stage"], "curator");
+    assert_eq!(
+        document.trigger_metadata["target_skill_id"],
+        "doublechecker-core"
+    );
+    assert_eq!(
+        document.trigger_metadata["preferred_output_paths"],
+        json!([expected_path])
+    );
+
+    let event = runtime_events(&paths)
+        .into_iter()
+        .find(|event| event["event_type"] == "learning_request_enqueued")
+        .unwrap();
+    assert_eq!(event["data"]["target_skill_id"], "doublechecker-core");
+    assert_eq!(
+        event["data"]["preferred_output_paths"],
+        json!([expected_path])
+    );
+
+    session.finish().unwrap();
+}
+
+#[test]
+fn python_v0_17_4_learning_noop_terminal_marks_request_done_with_noop_evidence() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    QueueStore::from_paths(paths.clone())
+        .enqueue_learning_request(&learning_request_document("learn-noop"))
+        .unwrap();
+
+    let mut options = startup_options("tick-learning-noop");
+    options.requested_mode_id = Some("learning_codex".to_owned());
+    let mut session = startup_runtime_once_for_paths(&paths, options).unwrap();
+    let runner =
+        FakeRunner::with_default(FakeRunnerResult::terminal_marker("### ANALYST_NOOP")).unwrap();
+
+    let outcome = run_serial_runtime_tick_with_runner(
+        &mut session,
+        tick_options("run-learning-noop", "request-learning-noop"),
+        &runner,
+    )
+    .unwrap();
+
+    let stage_result = outcome.stage_result.as_ref().unwrap();
+    assert_eq!(stage_result.stage, StageName::Analyst);
+    assert_eq!(
+        stage_result.terminal_result,
+        TerminalResult::Learning(LearningTerminalResult::AnalystNoop)
+    );
+    assert_eq!(stage_result.result_class, ResultClass::NoOp);
+    assert!(!stage_result.success);
+    assert_eq!(
+        outcome.router_decision.as_ref().unwrap().action,
+        RouterAction::Idle
+    );
+    assert_eq!(
+        outcome.router_decision.as_ref().unwrap().reason,
+        "analyst:ANALYST_NOOP"
+    );
+    assert!(outcome.stage_result_path.as_ref().unwrap().is_file());
+    assert!(outcome.terminal_marker_path.as_ref().unwrap().is_file());
+    assert!(outcome.router_decision_path.as_ref().unwrap().is_file());
+    assert!(
+        paths
+            .learning_requests_done_dir
+            .join("learn-noop.md")
+            .is_file()
+    );
+    assert!(
+        !paths
+            .learning_requests_blocked_dir
+            .join("learn-noop.md")
+            .exists()
+    );
+    assert_eq!(load_learning_status(&paths).unwrap(), "### IDLE");
 
     session.finish().unwrap();
 }

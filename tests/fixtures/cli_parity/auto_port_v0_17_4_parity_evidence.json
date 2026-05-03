@@ -1,0 +1,271 @@
+{
+  "schema_version": "1.0",
+  "kind": "auto_port_v0_17_4_parity_evidence",
+  "summary": "Targeted Rust parity fixture evidence for Python v0.17.3..v0.17.4 learning no-op contracts, trigger destination safety, runtime learning lifecycle, run inspection, and source-reference guardrails.",
+  "python_reference": {
+    "previous_tag": "v0.17.3",
+    "target_tag": "v0.17.4",
+    "target_commit": "304e537964ff772c815689b87e4c1e3b805c656c",
+    "diff_range": "v0.17.3..v0.17.4",
+    "changed_behavior_sources": [
+      "../millrace-py/src/millrace_ai/contracts/enums.py",
+      "../millrace-py/src/millrace_ai/contracts/modes.py",
+      "../millrace-py/src/millrace_ai/contracts/stage_metadata.py",
+      "../millrace-py/src/millrace_ai/architecture/loop_graphs.py",
+      "../millrace-py/src/millrace_ai/assets/graphs/learning/standard.json",
+      "../millrace-py/src/millrace_ai/assets/loops/learning/default.json",
+      "../millrace-py/src/millrace_ai/assets/modes/learning_codex.json",
+      "../millrace-py/src/millrace_ai/assets/modes/learning_pi.json",
+      "../millrace-py/src/millrace_ai/assets/entrypoints/learning/analyst.md",
+      "../millrace-py/src/millrace_ai/assets/entrypoints/learning/professor.md",
+      "../millrace-py/src/millrace_ai/assets/entrypoints/learning/curator.md",
+      "../millrace-py/src/millrace_ai/assets/registry/stage_kinds/learning/analyst.json",
+      "../millrace-py/src/millrace_ai/assets/registry/stage_kinds/learning/professor.json",
+      "../millrace-py/src/millrace_ai/assets/registry/stage_kinds/learning/curator.json",
+      "../millrace-py/src/millrace_ai/assets/skills/stage/learning/analyst-core/SKILL.md",
+      "../millrace-py/src/millrace_ai/assets/skills/stage/learning/professor-core/SKILL.md",
+      "../millrace-py/src/millrace_ai/assets/skills/stage/learning/curator-core/SKILL.md",
+      "../millrace-py/src/millrace_ai/compilation/learning_triggers.py",
+      "../millrace-py/src/millrace_ai/runtime/learning_triggers.py",
+      "../millrace-py/src/millrace_ai/workspace/state_reconciliation.py",
+      "../millrace-py/tests/assets/test_entrypoints.py",
+      "../millrace-py/tests/assets/test_loop_graphs.py",
+      "../millrace-py/tests/assets/test_modes.py",
+      "../millrace-py/tests/assets/test_stage_kinds.py",
+      "../millrace-py/tests/integration/test_compiler.py",
+      "../millrace-py/tests/runtime/test_contracts.py",
+      "../millrace-py/tests/runtime/test_runtime.py"
+    ]
+  },
+  "required_surfaces": [
+    "noop_contracts_stage_metadata",
+    "learning_assets_compiler_triggers",
+    "runtime_learning_noop_lifecycle",
+    "cli_runtime_json_inspection",
+    "source_reference_guardrails"
+  ],
+  "required_coverage_axes": [
+    "python_target_pin",
+    "changed_python_sources",
+    "noop_terminal_contracts",
+    "result_class_noop",
+    "stage_metadata_noop_policy",
+    "learning_assets_noop_terminals",
+    "success_to_analyst_trigger",
+    "direct_curator_destination_validation",
+    "trigger_destination_serialization",
+    "runtime_generated_learning_request_metadata",
+    "learning_noop_done_lifecycle",
+    "cli_runs_show_noop",
+    "runtime_json_noop_fixture",
+    "fixture_regeneration",
+    "no_live_external_dependencies"
+  ],
+  "surfaces": [
+    {
+      "surface": "noop_contracts_stage_metadata",
+      "coverage": [
+        "python_target_pin",
+        "noop_terminal_contracts",
+        "result_class_noop",
+        "stage_metadata_noop_policy"
+      ],
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/contracts/enums.py",
+        "../millrace-py/src/millrace_ai/contracts/stage_metadata.py",
+        "../millrace-py/tests/runtime/test_contracts.py",
+        "../millrace-py/tests/assets/test_stage_kinds.py"
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/compiler_contracts.rs",
+          "name": "baseline_mode_graph_and_stage_kind_assets_parse_through_contracts"
+        },
+        {
+          "file": "tests/contracts_runtime_json.rs",
+          "name": "python_v0_17_4_stage_result_no_op_runtime_json_round_trips_as_non_success"
+        },
+        {
+          "file": "tests/contracts_runtime_json.rs",
+          "name": "python_v0_17_4_request_driven_no_op_terminal_identity_round_trips"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "python_v0_17_4_stage_run_request_preserves_learning_no_op_allowed_policy"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "python_v0_17_4_learning_noop_terminal_normalizes_to_non_success_noop_result"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "python_v0_17_4_learning_noop_rejects_mismatched_terminal_result_class_pairs"
+        }
+      ]
+    },
+    {
+      "surface": "learning_assets_compiler_triggers",
+      "coverage": [
+        "changed_python_sources",
+        "learning_assets_noop_terminals",
+        "success_to_analyst_trigger",
+        "direct_curator_destination_validation",
+        "trigger_destination_serialization",
+        "fixture_regeneration"
+      ],
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/contracts/modes.py",
+        "../millrace-py/src/millrace_ai/architecture/loop_graphs.py",
+        "../millrace-py/src/millrace_ai/assets/graphs/learning/standard.json",
+        "../millrace-py/src/millrace_ai/assets/loops/learning/default.json",
+        "../millrace-py/src/millrace_ai/assets/modes/learning_codex.json",
+        "../millrace-py/src/millrace_ai/assets/modes/learning_pi.json",
+        "../millrace-py/src/millrace_ai/assets/entrypoints/learning/analyst.md",
+        "../millrace-py/src/millrace_ai/assets/entrypoints/learning/professor.md",
+        "../millrace-py/src/millrace_ai/assets/entrypoints/learning/curator.md",
+        "../millrace-py/src/millrace_ai/assets/registry/stage_kinds/learning/analyst.json",
+        "../millrace-py/src/millrace_ai/assets/registry/stage_kinds/learning/professor.json",
+        "../millrace-py/src/millrace_ai/assets/registry/stage_kinds/learning/curator.json",
+        "../millrace-py/src/millrace_ai/assets/skills/stage/learning/analyst-core/SKILL.md",
+        "../millrace-py/src/millrace_ai/assets/skills/stage/learning/professor-core/SKILL.md",
+        "../millrace-py/src/millrace_ai/assets/skills/stage/learning/curator-core/SKILL.md",
+        "../millrace-py/src/millrace_ai/compilation/learning_triggers.py",
+        "../millrace-py/tests/assets/test_entrypoints.py",
+        "../millrace-py/tests/assets/test_loop_graphs.py",
+        "../millrace-py/tests/assets/test_modes.py",
+        "../millrace-py/tests/assets/test_stage_kinds.py",
+        "../millrace-py/tests/integration/test_compiler.py"
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/compiler_contracts.rs",
+          "name": "learning_trigger_destination_metadata_normalizes_and_serializes"
+        },
+        {
+          "file": "tests/compiler_materialization.rs",
+          "name": "learning_modes_materialize_learning_graph_triggers_and_concurrency_policy"
+        },
+        {
+          "file": "tests/compiler_materialization.rs",
+          "name": "direct_curator_learning_trigger_requires_safe_destination"
+        },
+        {
+          "file": "tests/compiler_materialization.rs",
+          "name": "direct_curator_learning_trigger_accepts_targeted_destination"
+        },
+        {
+          "file": "tests/compiler_parity.rs",
+          "name": "rust_compiler_matches_python_normalized_plan_and_cli_fixtures"
+        },
+        {
+          "file": "tests/compiler_parity.rs",
+          "name": "compiler_parity_fixture_documents_regeneration_surface"
+        },
+        {
+          "file": "tests/workspace_assets_baseline.rs",
+          "name": "initialized_workspace_learning_assets_match_packaged_noop_trigger_baseline"
+        }
+      ]
+    },
+    {
+      "surface": "runtime_learning_noop_lifecycle",
+      "coverage": [
+        "runtime_generated_learning_request_metadata",
+        "learning_noop_done_lifecycle",
+        "success_to_analyst_trigger",
+        "direct_curator_destination_validation"
+      ],
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/runtime/learning_triggers.py",
+        "../millrace-py/src/millrace_ai/workspace/state_reconciliation.py",
+        "../millrace-py/tests/runtime/test_runtime.py"
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "serial_tick_learning_trigger_enqueues_analyst_first_request"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "python_v0_17_4_runtime_generated_learning_request_copies_trigger_destination_metadata"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "python_v0_17_4_learning_noop_terminal_marks_request_done_with_noop_evidence"
+        },
+        {
+          "file": "tests/runtime_daemon.rs",
+          "name": "daemon_supervisor_learning_mode_dispatches_learning_beside_execution"
+        },
+        {
+          "file": "tests/runtime_daemon.rs",
+          "name": "daemon_supervisor_learning_mode_keeps_planning_and_execution_mutually_exclusive"
+        }
+      ]
+    },
+    {
+      "surface": "cli_runtime_json_inspection",
+      "coverage": [
+        "cli_runs_show_noop",
+        "runtime_json_noop_fixture",
+        "no_live_external_dependencies"
+      ],
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/contracts/enums.py",
+        "../millrace-py/tests/runtime/test_runtime.py",
+        "../millrace-py/tests/runtime/test_contracts.py"
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/contracts_runtime_json.rs",
+          "name": "python_v0_17_4_stage_result_no_op_runtime_json_fixture_round_trips_as_non_success"
+        },
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "rust_runs_show_displays_learning_noop_result_class_without_mutation"
+        }
+      ]
+    },
+    {
+      "surface": "source_reference_guardrails",
+      "coverage": [
+        "python_target_pin",
+        "changed_python_sources",
+        "fixture_regeneration",
+        "runtime_json_noop_fixture",
+        "no_live_external_dependencies"
+      ],
+      "python_sources": [
+        "../millrace-py/tests/assets/test_entrypoints.py",
+        "../millrace-py/tests/assets/test_loop_graphs.py",
+        "../millrace-py/tests/assets/test_modes.py",
+        "../millrace-py/tests/assets/test_stage_kinds.py",
+        "../millrace-py/tests/integration/test_compiler.py",
+        "../millrace-py/tests/runtime/test_contracts.py",
+        "../millrace-py/tests/runtime/test_runtime.py"
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "committed_auto_port_v0_17_4_parity_fixture_covers_noop_trigger_runtime_and_cli_surfaces"
+        },
+        {
+          "file": "tests/compiler_parity.rs",
+          "name": "compiler_parity_fixture_documents_regeneration_surface"
+        },
+        {
+          "file": "tests/contracts_runtime_json.rs",
+          "name": "python_v0_17_4_stage_result_no_op_runtime_json_fixture_round_trips_as_non_success"
+        }
+      ]
+    }
+  ],
+  "non_live_guarantees": [
+    "no live Codex runner",
+    "no live Pi runner",
+    "no network",
+    "no credentials",
+    "no web server",
+    "no release upload"
+  ]
+}

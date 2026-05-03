@@ -93,14 +93,32 @@ fn compiler_parity_fixture_documents_regeneration_surface() {
             .expect("read compiler parity fixture"),
     )
     .expect("parse compiler parity fixture");
-    assert_eq!(fixture["source"]["version"], "0.17.3");
+    assert_eq!(fixture["source"]["previous_version"], "0.17.3");
+    assert_eq!(fixture["source"]["target_version"], "0.17.4");
+    assert_eq!(fixture["source"]["version"], "0.17.4");
+    assert_eq!(fixture["source"]["previous_tag"], "v0.17.3");
+    assert_eq!(fixture["source"]["target_tag"], "v0.17.4");
+    assert_eq!(
+        fixture["source"]["target_commit"],
+        "304e537964ff772c815689b87e4c1e3b805c656c"
+    );
+    assert_eq!(fixture["source"]["diff_range"], "v0.17.3..v0.17.4");
+    assert_ne!(
+        fixture["source"]["target_version"], fixture["source"]["previous_version"],
+        "compiler parity fixture is still pinned to the previous Python baseline",
+    );
     for source_path in [
         "src/millrace_ai/config/models.py",
         "src/millrace_ai/contracts/modes.py",
+        "src/millrace_ai/contracts/stage_metadata.py",
+        "src/millrace_ai/architecture/loop_graphs.py",
+        "src/millrace_ai/compilation/learning_triggers.py",
         "src/millrace_ai/compilation/node_materialization.py",
         "src/millrace_ai/cli/compile_view.py",
         "tests/config/test_config.py",
+        "tests/assets/test_loop_graphs.py",
         "tests/assets/test_modes.py",
+        "tests/assets/test_stage_kinds.py",
         "tests/integration/test_compiler.py",
     ] {
         assert!(
