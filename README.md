@@ -394,9 +394,15 @@ Do not depend on production runtime behavior from this crate yet. Public APIs
 may change while the Rust implementation is brought toward parity with the
 Python runtime.
 
-## Rust Port Roadmap
+## Documentation
 
-The behavioral parity plan lives in [docs/rust-port-roadmap.md](docs/rust-port-roadmap.md).
+- [Architecture](docs/architecture.md)
+- [Testing](docs/testing.md)
+- [Rust port roadmap](docs/rust-port-roadmap.md)
+- [Provenance and autonomous-build evidence](docs/provenance.md)
+
+The full public proof package for the v0.1.0 autonomous port campaign lives in
+[`tim-osterhus/millrace-rs-port-docs`](https://github.com/tim-osterhus/millrace-rs-port-docs).
 
 ## License
 
