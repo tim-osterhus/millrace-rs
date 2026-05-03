@@ -10,7 +10,7 @@ use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 use crate::contracts::{Timestamp, stage_metadata_for_value};
 
-const IDLE_HEARTBEAT_SECONDS: f64 = 120.0;
+const IDLE_HEARTBEAT_SECONDS: f64 = 21_600.0;
 const RUN_HANDLE_LENGTHS: [usize; 3] = [8, 12, 16];
 
 /// Structured live event emitted through the runtime monitor seam.

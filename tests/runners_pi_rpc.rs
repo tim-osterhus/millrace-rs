@@ -185,6 +185,7 @@ fn sample_request(root: &Path) -> StageRunRequest {
         ),
         runner_name: Some("pi_rpc".to_owned()),
         model_name: Some("openai/gpt-5.4".to_owned()),
+        thinking_level: None,
         model_reasoning_effort: None,
         timeout_seconds: 120,
     };
@@ -291,6 +292,46 @@ fn pi_adapter_writes_prompt_artifacts_stdout_tokens_and_default_command() {
     assert_eq!(invocation["runner_name"], "pi_rpc");
     assert_eq!(completion["runner_name"], "pi_rpc");
     assert_eq!(completion["token_usage"]["total_tokens"], 134);
+}
+
+#[test]
+fn pi_adapter_prefers_request_thinking_level_over_global_default() {
+    let temp = TempDir::new().unwrap();
+    let mut request = sample_request(temp.path());
+    request.thinking_level = Some("high".to_owned());
+    request.validate().unwrap();
+    let factory = MockClientFactory::new(vec![Ok(completed_session_result(Vec::new()))]);
+    let adapter = PiRpcRunnerAdapter::with_client_factory(
+        PiRpcConfig {
+            thinking: Some("medium".to_owned()),
+            ..PiRpcConfig::default()
+        },
+        temp.path(),
+        factory.clone(),
+    );
+
+    let result = adapter.run(&request).unwrap();
+
+    assert_eq!(result.thinking_level.as_deref(), Some("high"));
+    let create_requests = factory.create_requests.lock().unwrap();
+    let thinking_index = create_requests[0]
+        .command
+        .iter()
+        .position(|value| value == "--thinking")
+        .unwrap();
+    assert_eq!(create_requests[0].command[thinking_index + 1], "high");
+
+    let run_dir = Path::new(&request.run_dir);
+    let invocation: Value = serde_json::from_str(
+        &fs::read_to_string(run_dir.join("runner_invocation.req-001.json")).unwrap(),
+    )
+    .unwrap();
+    let completion: Value = serde_json::from_str(
+        &fs::read_to_string(run_dir.join("runner_completion.req-001.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(invocation["thinking_level"], "high");
+    assert_eq!(completion["thinking_level"], "high");
 }
 
 #[test]
@@ -599,8 +640,10 @@ fn pi_jsonl_client_detects_provider_failure_invalid_json_timeout_abort_and_hard_
     let error = client.run_prompt("prompt text", 120).unwrap_err();
     assert!(matches!(error, PiRpcClientError::InvalidJson { .. }));
 
-    let mut timeout_transport = ScriptedTransport::default();
-    timeout_transport.exit_code = None;
+    let timeout_transport = ScriptedTransport {
+        exit_code: None,
+        ..Default::default()
+    };
     let mut client = PiRpcJsonlClient::with_abort_grace_seconds(timeout_transport, 0.0);
     let timeout = client.run_prompt("prompt text", 1).unwrap();
     let transport = client.into_transport();

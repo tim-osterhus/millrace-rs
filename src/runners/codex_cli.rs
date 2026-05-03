@@ -19,8 +19,8 @@ use super::{
     ProcessExecutionResult, ProcessExitKind, RunnerEnvironmentDelta, RunnerError, RunnerExitKind,
     RunnerRawResult, RunnerResult, StageRunnerAdapter,
     artifacts::{
-        completion_artifact_from_raw_result, invocation_artifact_from_request,
-        write_runner_completion, write_runner_invocation,
+        RunnerCompletionArtifactContext, completion_artifact_from_raw_result,
+        invocation_artifact_from_request, write_runner_completion, write_runner_invocation,
     },
     codex_cli_artifacts::{
         codex_cli_artifact_paths, materialize_stdout_artifact, persist_event_log,
@@ -267,7 +267,8 @@ impl StageRunnerAdapter for CodexCliRunnerAdapter {
                     stage: request.stage,
                     runner_name: self.name().to_owned(),
                     model_name: request.model_name.clone(),
-                    model_reasoning_effort: request.model_reasoning_effort.clone(),
+                    thinking_level: request.thinking_level.clone(),
+                    model_reasoning_effort: codex_model_reasoning_effort(request),
                     exit_kind: RunnerExitKind::RunnerError,
                     exit_code: Some(127),
                     observed_exit_kind: None,
@@ -298,15 +299,14 @@ impl StageRunnerAdapter for CodexCliRunnerAdapter {
             Err(CodexProcessError::Transport { message }) => {
                 let started_at = now_timestamp("started_at")?;
                 let ended_at = now_timestamp("ended_at")?;
-                let result = process_result(
+                process_result(
                     &process_request,
                     ProcessExitKind::TransportError,
                     Some(1),
                     started_at,
                     ended_at,
                     Some(message),
-                )?;
-                result
+                )?
             }
         };
 
@@ -340,7 +340,8 @@ impl StageRunnerAdapter for CodexCliRunnerAdapter {
             stage: request.stage,
             runner_name: self.name().to_owned(),
             model_name: request.model_name.clone(),
-            model_reasoning_effort: request.model_reasoning_effort.clone(),
+            thinking_level: request.thinking_level.clone(),
+            model_reasoning_effort: codex_model_reasoning_effort(request),
             exit_kind,
             exit_code,
             observed_exit_kind,
@@ -400,15 +401,16 @@ pub fn build_codex_cli_command(
     }
     command.extend(
         permission_flags(resolve_permission_level(config, request))
-            .into_iter()
+            .iter()
             .map(|value| (*value).to_owned()),
     );
     for item in &config.extra_config {
         command.extend(["-c".to_owned(), item.clone()]);
     }
     let model_reasoning_effort = request
-        .model_reasoning_effort
+        .thinking_level
         .as_ref()
+        .or(request.model_reasoning_effort.as_ref())
         .or(config.model_reasoning_effort.as_ref());
     if let Some(model_reasoning_effort) = model_reasoning_effort {
         command.extend([
@@ -424,6 +426,13 @@ pub fn build_codex_cli_command(
     ]);
     command.push(prompt.to_owned());
     command
+}
+
+fn codex_model_reasoning_effort(request: &StageRunRequest) -> Option<String> {
+    request
+        .thinking_level
+        .clone()
+        .or_else(|| request.model_reasoning_effort.clone())
 }
 
 /// Resolves Codex permission level using stage, then model, then default precedence.
@@ -463,9 +472,8 @@ fn runner_exit_kind_for_process(result: &ProcessExecutionResult) -> RunnerExitKi
         RunnerExitKind::Timeout
     } else if result.transport_error.is_some()
         || result.exit_kind == ProcessExitKind::TransportError
+        || result.exit_code.is_some_and(|code| code != 0)
     {
-        RunnerExitKind::RunnerError
-    } else if result.exit_code.is_some_and(|code| code != 0) {
         RunnerExitKind::RunnerError
     } else {
         RunnerExitKind::Completed
@@ -520,18 +528,17 @@ fn write_completion(
     notes: Vec<String>,
 ) -> RunnerResult<()> {
     let emitted_at = now_timestamp("emitted_at")?;
-    let artifact = completion_artifact_from_raw_result(
-        request,
+    let context = RunnerCompletionArtifactContext::new(
         runner_name,
-        raw_result,
         command,
         cwd.display().to_string(),
         environment_delta,
         prompt_path,
         emitted_at,
-        failure_class,
-        notes,
-    )?;
+    )
+    .with_failure_class(failure_class)
+    .with_notes(notes);
+    let artifact = completion_artifact_from_raw_result(request, raw_result, context)?;
     write_runner_completion(completion_path, &artifact)
 }
 

@@ -219,7 +219,7 @@ pub enum RuntimeOwnershipLockError {
     /// Exclusive acquisition failed because a lock file already exists.
     AlreadyHeld {
         /// Status observed after the failed exclusive create.
-        status: RuntimeOwnershipLockStatus,
+        status: Box<RuntimeOwnershipLockStatus>,
     },
 }
 
@@ -235,7 +235,7 @@ impl RuntimeOwnershipLockError {
     #[must_use]
     pub fn status(&self) -> Option<&RuntimeOwnershipLockStatus> {
         match self {
-            Self::AlreadyHeld { status } => Some(status),
+            Self::AlreadyHeld { status } => Some(status.as_ref()),
             Self::Io { .. } | Self::JsonRender { .. } | Self::InvalidRecord { .. } => None,
         }
     }
@@ -388,7 +388,7 @@ pub fn acquire_runtime_ownership_lock_with_options(
         Ok(file) => file,
         Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
             return Err(RuntimeOwnershipLockError::AlreadyHeld {
-                status: inspect_runtime_ownership_lock(paths),
+                status: Box::new(inspect_runtime_ownership_lock(paths)),
             });
         }
         Err(error) => return Err(RuntimeOwnershipLockError::io(lock_path, error)),

@@ -340,7 +340,7 @@ pub fn should_skip_runtime_asset_path(relative_path: impl AsRef<Path>) -> bool {
         .collect();
 
     parts.iter().any(|part| part.starts_with('.'))
-        || parts.iter().any(|part| *part == "__pycache__")
+        || parts.contains(&"__pycache__")
         || normalized.ends_with(".pyc")
         || normalized.ends_with(".pyo")
 }
@@ -486,10 +486,11 @@ fn preview_baseline_upgrade_with_candidate(
             }
         } else if current_sha256.is_none() {
             UpgradeDisposition::Missing
-        } else {
-            let original_sha256 = &original_entry.expect("checked above").original_sha256;
-            let candidate_sha256 = &candidate_entry.expect("checked above").original_sha256;
-            let current_sha256 = current_sha256.as_ref().expect("checked above");
+        } else if let (Some(original_entry), Some(candidate_entry), Some(current_sha256)) =
+            (original_entry, candidate_entry, current_sha256.as_ref())
+        {
+            let original_sha256 = &original_entry.original_sha256;
+            let candidate_sha256 = &candidate_entry.original_sha256;
             if current_sha256 == original_sha256 && original_sha256 == candidate_sha256 {
                 UpgradeDisposition::Unchanged
             } else if current_sha256 == original_sha256 && candidate_sha256 != original_sha256 {
@@ -501,6 +502,8 @@ fn preview_baseline_upgrade_with_candidate(
             } else {
                 UpgradeDisposition::Conflict
             }
+        } else {
+            unreachable!("covered by previous upgrade disposition branches")
         };
 
         let asset_family = candidate_entry
@@ -562,10 +565,10 @@ fn validate_manifest_entry_path(entry: &BaselineManifestEntry) -> WorkspaceResul
             "manifest asset path must be normalized",
         ));
     }
-    if !entry
+    if entry
         .relative_path
         .split_once('/')
-        .is_some_and(|(family, _)| family == entry.asset_family)
+        .is_none_or(|(family, _)| family != entry.asset_family)
     {
         return Err(invalid_path(
             &entry.relative_path,

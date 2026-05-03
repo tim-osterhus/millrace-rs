@@ -32,22 +32,32 @@ use millrace_ai::{
     PiEventLogPolicy, PiRpcArtifactPaths, PiRpcClientCreateRequest, PiRpcClientError,
     PiRpcClientFactory, PiRpcConfig, PiRpcJsonlClient, PiRpcPromptClient, PiRpcRunnerAdapter,
     PiRpcSessionResult, PiRpcStreamEvent, PiRpcTransport, ProcessExecutionResult, ProcessExitKind,
-    RequestKind, RunnerCompletionArtifact, RunnerEnvironmentDelta, RunnerError, RunnerExitKind,
-    RunnerInvocationArtifact, RunnerRawResult, RunnerRegistry, RunnerResult, RuntimeStartupSession,
-    StageRunRequest, StageRunRequestError, StageRunnerAdapter, StageRunnerDispatcher,
-    SubprocessCodexExecutor, SubprocessPiRpcClientFactory, SubprocessPiRpcTransport,
-    WorkspaceError, WorkspacePaths, WorkspaceResult, build_codex_cli_command, build_pi_rpc_command,
-    build_runtime_runner_dispatcher, build_stage_prompt, codex_cli_artifact_paths,
-    completion_artifact_from_raw_result, extract_token_usage, invocation_artifact_from_request,
-    materialize_stdout_artifact, normalize_stage_result, permission_flags, persist_event_log,
-    persistable_event_lines, pi_rpc_artifact_paths, reconciled_timeout_terminal_marker,
-    render_stage_request_context_lines, resolve_permission_level, runner_prompt_path,
-    should_persist_event_log, token_usage_from_line, token_usage_from_payload,
-    token_usage_from_stats_payload, workspace_paths, write_runner_completion,
-    write_runner_invocation, write_stage_prompt_artifact,
+    RequestKind, RunnerCompletionArtifact, RunnerCompletionArtifactContext, RunnerEnvironmentDelta,
+    RunnerError, RunnerExitKind, RunnerInvocationArtifact, RunnerRawResult, RunnerRegistry,
+    RunnerResult, RuntimeStartupSession, StageRunRequest, StageRunRequestError, StageRunnerAdapter,
+    StageRunnerDispatcher, SubprocessCodexExecutor, SubprocessPiRpcClientFactory,
+    SubprocessPiRpcTransport, WorkspaceError, WorkspacePaths, WorkspaceResult,
+    build_codex_cli_command, build_pi_rpc_command, build_runtime_runner_dispatcher,
+    build_stage_prompt, codex_cli_artifact_paths, completion_artifact_from_raw_result,
+    extract_token_usage, invocation_artifact_from_request, materialize_stdout_artifact,
+    normalize_stage_result, permission_flags, persist_event_log, persistable_event_lines,
+    pi_rpc_artifact_paths, reconciled_timeout_terminal_marker, render_stage_request_context_lines,
+    resolve_permission_level, runner_prompt_path, should_persist_event_log, token_usage_from_line,
+    token_usage_from_payload, token_usage_from_stats_payload, workspace_paths,
+    write_runner_completion, write_runner_invocation, write_stage_prompt_artifact,
 };
 
 const NOW: &str = "2026-04-15T00:00:00Z";
+
+type InvocationArtifactBuilder = fn(
+    &StageRunRequest,
+    String,
+    Vec<String>,
+    String,
+    RunnerEnvironmentDelta,
+    String,
+    Timestamp,
+) -> RunnerResult<RunnerInvocationArtifact>;
 
 fn assert_runtime_contract<T: RuntimeJsonContract>() {}
 
@@ -170,26 +180,11 @@ fn public_contract_exports_remain_importable() {
         write_stage_prompt_artifact;
     let _normalizer: fn(&StageRunRequest, &RunnerRawResult) -> RunnerResult<StageResultEnvelope> =
         normalize_stage_result;
-    let _invocation_builder: fn(
-        &StageRunRequest,
-        String,
-        Vec<String>,
-        String,
-        RunnerEnvironmentDelta,
-        String,
-        Timestamp,
-    ) -> RunnerResult<RunnerInvocationArtifact> = invocation_artifact_from_request;
+    let _invocation_builder: InvocationArtifactBuilder = invocation_artifact_from_request;
     let _completion_builder: fn(
         &StageRunRequest,
-        String,
         &RunnerRawResult,
-        Vec<String>,
-        String,
-        RunnerEnvironmentDelta,
-        Option<String>,
-        Timestamp,
-        Option<String>,
-        Vec<String>,
+        RunnerCompletionArtifactContext,
     ) -> RunnerResult<RunnerCompletionArtifact> = completion_artifact_from_raw_result;
     let _invocation_writer: fn(&std::path::Path, &RunnerInvocationArtifact) -> RunnerResult<()> =
         write_runner_invocation;

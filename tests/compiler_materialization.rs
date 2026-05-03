@@ -96,6 +96,7 @@ fn default_codex_materializes_execution_and_planning_graphs() {
     assert!(builder.attached_skill_additions.is_empty());
     assert_eq!(builder.runner_name.as_deref(), Some("codex_cli"));
     assert_eq!(builder.model_name, None);
+    assert_eq!(builder.thinking_level, None);
     assert_eq!(builder.model_reasoning_effort, None);
     assert_eq!(builder.timeout_seconds, 3600);
 
@@ -269,12 +270,14 @@ timeout_seconds = 123
     );
     assert_eq!(builder.runner_name.as_deref(), Some("stage-runner"));
     assert_eq!(builder.model_name.as_deref(), Some("stage-model"));
-    assert_eq!(builder.model_reasoning_effort.as_deref(), Some("xhigh"));
+    assert_eq!(builder.thinking_level.as_deref(), Some("xhigh"));
+    assert_eq!(builder.model_reasoning_effort, None);
     assert_eq!(builder.timeout_seconds, 123);
 
     let checker = node(&plan.execution_graph, "checker");
     assert_eq!(checker.runner_name, None);
-    assert_eq!(checker.model_reasoning_effort.as_deref(), Some("medium"));
+    assert_eq!(checker.thinking_level, None);
+    assert_eq!(checker.model_reasoning_effort, None);
     assert_eq!(
         threshold(&plan.execution_graph, "execution.fix-needed.exhaustion").threshold,
         5
@@ -297,6 +300,109 @@ timeout_seconds = 123
         })
         .unwrap();
     assert_ne!(attached_skill.content_sha256, MISSING_ASSET_TOKEN);
+}
+
+#[test]
+fn thinking_level_precedence_matches_python_materialization_contract() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+    let execution_graph_path = paths.runtime_root.join("graphs/execution/standard.json");
+    let mut execution_graph: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&execution_graph_path).unwrap()).unwrap();
+    for node in execution_graph["nodes"].as_array_mut().unwrap() {
+        if node["node_id"] == "builder" {
+            node["thinking_level"] = serde_json::json!("low");
+        }
+    }
+    fs::write(
+        &execution_graph_path,
+        serde_json::to_string_pretty(&execution_graph).unwrap(),
+    )
+    .unwrap();
+
+    let mode_path = paths.runtime_root.join("modes/default_pi.json");
+    let mut mode: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&mode_path).unwrap()).unwrap();
+    mode["stage_thinking_bindings"] = serde_json::json!({
+        "builder": "high",
+        "checker": null
+    });
+    fs::write(&mode_path, serde_json::to_string_pretty(&mode).unwrap()).unwrap();
+    fs::write(
+        &paths.runtime_config_file,
+        r#"[stages.builder]
+thinking_level = "medium"
+
+[stages.checker]
+thinking_level = "xhigh"
+
+[stages.fixer]
+model_reasoning_effort = "high"
+"#,
+    )
+    .unwrap();
+
+    let plan = compile_compiled_run_plan(&paths, Some("default_pi"), fixed_compiled_at()).unwrap();
+    let builder = node(&plan.execution_graph, "builder");
+    assert_eq!(builder.runner_name.as_deref(), Some("pi_rpc"));
+    assert_eq!(builder.thinking_level.as_deref(), Some("high"));
+    assert_eq!(builder.model_reasoning_effort, None);
+
+    let checker = node(&plan.execution_graph, "checker");
+    assert_eq!(checker.thinking_level, None);
+    assert_eq!(checker.model_reasoning_effort, None);
+
+    let fixer = node(&plan.execution_graph, "fixer");
+    assert_eq!(fixer.thinking_level.as_deref(), Some("high"));
+    assert_eq!(fixer.model_reasoning_effort, None);
+}
+
+#[test]
+fn codex_model_reasoning_effort_is_derived_from_effective_thinking_level() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+    let execution_graph_path = paths.runtime_root.join("graphs/execution/standard.json");
+    let mut execution_graph: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&execution_graph_path).unwrap()).unwrap();
+    for node in execution_graph["nodes"].as_array_mut().unwrap() {
+        if node["node_id"] == "builder" {
+            node["thinking_level"] = serde_json::json!("high");
+        }
+    }
+    fs::write(
+        &execution_graph_path,
+        serde_json::to_string_pretty(&execution_graph).unwrap(),
+    )
+    .unwrap();
+
+    let plan =
+        compile_compiled_run_plan(&paths, Some("default_codex"), fixed_compiled_at()).unwrap();
+    let builder = node(&plan.execution_graph, "builder");
+    assert_eq!(builder.thinking_level.as_deref(), Some("high"));
+    assert_eq!(builder.model_reasoning_effort.as_deref(), Some("high"));
+}
+
+#[test]
+fn conflicting_stage_thinking_aliases_are_rejected() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+    fs::write(
+        &paths.runtime_config_file,
+        r#"[stages.builder]
+thinking_level = "medium"
+model_reasoning_effort = "high"
+"#,
+    )
+    .unwrap();
+
+    let error =
+        compile_compiled_run_plan(&paths, Some("default_codex"), fixed_compiled_at()).unwrap_err();
+
+    assert!(
+        error
+            .to_string()
+            .contains("thinking_level and model_reasoning_effort must match when both are set")
+    );
 }
 
 #[test]

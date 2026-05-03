@@ -229,7 +229,7 @@ impl fmt::Display for CompilerAssetError {
 impl std::error::Error for CompilerAssetError {}
 
 /// Compile-relevant runtime config subset that affects mode selection or frozen authority.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct EffectiveCompileConfig {
     pub runtime: EffectiveRuntimeCompileConfig,
@@ -237,17 +237,6 @@ pub struct EffectiveCompileConfig {
     pub recovery: EffectiveRecoveryCompileConfig,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub stages: BTreeMap<String, EffectiveStageCompileConfig>,
-}
-
-impl Default for EffectiveCompileConfig {
-    fn default() -> Self {
-        Self {
-            runtime: EffectiveRuntimeCompileConfig::default(),
-            runners: EffectiveRunnersCompileConfig::default(),
-            recovery: EffectiveRecoveryCompileConfig::default(),
-            stages: BTreeMap::new(),
-        }
-    }
 }
 
 /// Compile-relevant fields from `[runtime]`.
@@ -314,6 +303,7 @@ impl Default for EffectiveRecoveryCompileConfig {
 pub struct EffectiveStageCompileConfig {
     pub runner: Option<String>,
     pub model: Option<String>,
+    pub thinking_level: Option<String>,
     pub model_reasoning_effort: Option<String>,
     pub timeout_seconds: Option<u64>,
 }
@@ -462,6 +452,22 @@ pub fn load_effective_compile_config_from_path(
                 ));
             };
             reject_unknown_stage_config_keys(stage_name, stage_table, config_path)?;
+            let model_reasoning_effort =
+                optional_string(stage_table, "model_reasoning_effort", config_path)?
+                    .map(|value| {
+                        validate_reasoning_effort(
+                            &value,
+                            format!("stages.{stage_name}.model_reasoning_effort"),
+                            config_path,
+                        )
+                    })
+                    .transpose()?;
+            let thinking_level = normalize_stage_thinking_aliases(
+                optional_string(stage_table, "thinking_level", config_path)?,
+                model_reasoning_effort.as_deref(),
+                stage_name,
+                config_path,
+            )?;
             let stage_config = EffectiveStageCompileConfig {
                 runner: optional_string(stage_table, "runner", config_path)?
                     .map(|value| {
@@ -474,19 +480,8 @@ pub fn load_effective_compile_config_from_path(
                     .transpose()?,
                 model: optional_string(stage_table, "model", config_path)?
                     .map(|value| value.trim().to_owned()),
-                model_reasoning_effort: optional_string(
-                    stage_table,
-                    "model_reasoning_effort",
-                    config_path,
-                )?
-                .map(|value| {
-                    validate_reasoning_effort(
-                        &value,
-                        format!("stages.{stage_name}.model_reasoning_effort"),
-                        config_path,
-                    )
-                })
-                .transpose()?,
+                thinking_level,
+                model_reasoning_effort,
                 timeout_seconds: optional_positive_u64(
                     stage_table,
                     "timeout_seconds",
@@ -1058,6 +1053,13 @@ fn validate_mode_stage_maps(
                 .copied()
                 .collect::<Vec<_>>(),
         ),
+        (
+            "stage_thinking_bindings",
+            mode.stage_thinking_bindings
+                .keys()
+                .copied()
+                .collect::<Vec<_>>(),
+        ),
     ] {
         for stage in stages {
             if !selected_stages.contains(&stage) {
@@ -1227,6 +1229,44 @@ fn validate_reasoning_effort(
     }
 }
 
+fn validate_thinking_level(
+    value: &str,
+    field: impl Into<String>,
+    path: &Path,
+) -> CompilerAssetResult<String> {
+    let value = value.trim();
+    if value.is_empty() {
+        return Err(invalid_config(Some(path), field, "must not be empty"));
+    }
+    Ok(value.to_owned())
+}
+
+fn normalize_stage_thinking_aliases(
+    thinking_level: Option<String>,
+    model_reasoning_effort: Option<&str>,
+    stage_name: &str,
+    path: &Path,
+) -> CompilerAssetResult<Option<String>> {
+    let thinking_level = thinking_level
+        .map(|value| {
+            validate_thinking_level(&value, format!("stages.{stage_name}.thinking_level"), path)
+        })
+        .transpose()?;
+    if let Some(thinking_level) = &thinking_level {
+        if let Some(model_reasoning_effort) = model_reasoning_effort {
+            if thinking_level != model_reasoning_effort {
+                return Err(invalid_config(
+                    Some(path),
+                    format!("stages.{stage_name}.thinking_level"),
+                    "thinking_level and model_reasoning_effort must match when both are set",
+                ));
+            }
+        }
+        return Ok(Some(thinking_level.clone()));
+    }
+    Ok(model_reasoning_effort.map(ToOwned::to_owned))
+}
+
 fn reject_unknown_stage_config_keys(
     stage_name: &str,
     table: &toml::map::Map<String, toml::Value>,
@@ -1235,7 +1275,7 @@ fn reject_unknown_stage_config_keys(
     for key in table.keys() {
         if matches!(
             key.as_str(),
-            "runner" | "model" | "model_reasoning_effort" | "timeout_seconds"
+            "runner" | "model" | "thinking_level" | "model_reasoning_effort" | "timeout_seconds"
         ) {
             continue;
         }

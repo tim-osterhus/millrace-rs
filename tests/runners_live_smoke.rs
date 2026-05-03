@@ -208,6 +208,7 @@ fn live_smoke_request(
         skill_revision_evidence_path: None,
         runner_name: Some(runner_name.to_owned()),
         model_name,
+        thinking_level: model_reasoning_effort.clone(),
         model_reasoning_effort,
         timeout_seconds,
     };

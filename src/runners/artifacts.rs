@@ -28,6 +28,7 @@ pub struct RunnerInvocationArtifact {
     pub closure_target_root_spec_id: Option<String>,
     pub runner_name: String,
     pub model_name: Option<String>,
+    pub thinking_level: Option<String>,
     pub model_reasoning_effort: Option<String>,
     pub command: Vec<String>,
     pub cwd: String,
@@ -76,6 +77,7 @@ pub struct RunnerCompletionArtifact {
     pub closure_target_root_spec_id: Option<String>,
     pub runner_name: String,
     pub model_name: Option<String>,
+    pub thinking_level: Option<String>,
     pub model_reasoning_effort: Option<String>,
     pub command: Vec<String>,
     pub cwd: String,
@@ -148,6 +150,57 @@ impl RunnerCompletionArtifact {
     }
 }
 
+/// Input values that are owned by the runner boundary when building completion artifacts.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RunnerCompletionArtifactContext {
+    pub runner_name: String,
+    pub command: Vec<String>,
+    pub cwd: String,
+    pub environment_delta: RunnerEnvironmentDelta,
+    pub prompt_path: Option<String>,
+    pub emitted_at: Timestamp,
+    pub failure_class: Option<String>,
+    pub notes: Vec<String>,
+}
+
+impl RunnerCompletionArtifactContext {
+    /// Build a completion artifact context with no failure class or notes.
+    #[must_use]
+    pub fn new(
+        runner_name: impl Into<String>,
+        command: Vec<String>,
+        cwd: impl Into<String>,
+        environment_delta: RunnerEnvironmentDelta,
+        prompt_path: Option<String>,
+        emitted_at: Timestamp,
+    ) -> Self {
+        Self {
+            runner_name: runner_name.into(),
+            command,
+            cwd: cwd.into(),
+            environment_delta,
+            prompt_path,
+            emitted_at,
+            failure_class: None,
+            notes: Vec::new(),
+        }
+    }
+
+    /// Attach the failure class recorded by the runner boundary.
+    #[must_use]
+    pub fn with_failure_class(mut self, failure_class: Option<String>) -> Self {
+        self.failure_class = failure_class;
+        self
+    }
+
+    /// Attach free-form runner notes.
+    #[must_use]
+    pub fn with_notes(mut self, notes: Vec<String>) -> Self {
+        self.notes = notes;
+        self
+    }
+}
+
 /// Builds a runner invocation artifact from a stage request.
 pub fn invocation_artifact_from_request(
     request: &StageRunRequest,
@@ -169,6 +222,7 @@ pub fn invocation_artifact_from_request(
         closure_target_root_spec_id: request.closure_target_root_spec_id.clone(),
         runner_name: runner_name.into(),
         model_name: request.model_name.clone(),
+        thinking_level: request.thinking_level.clone(),
         model_reasoning_effort: request.model_reasoning_effort.clone(),
         command,
         cwd: cwd.into(),
@@ -187,16 +241,19 @@ pub fn invocation_artifact_from_request(
 /// Builds a runner completion artifact from a raw runner result.
 pub fn completion_artifact_from_raw_result(
     request: &StageRunRequest,
-    runner_name: impl Into<String>,
     raw_result: &RunnerRawResult,
-    command: Vec<String>,
-    cwd: impl Into<String>,
-    environment_delta: RunnerEnvironmentDelta,
-    prompt_path: Option<String>,
-    emitted_at: Timestamp,
-    failure_class: Option<String>,
-    notes: Vec<String>,
+    context: RunnerCompletionArtifactContext,
 ) -> RunnerResult<RunnerCompletionArtifact> {
+    let RunnerCompletionArtifactContext {
+        runner_name,
+        command,
+        cwd,
+        environment_delta,
+        prompt_path,
+        emitted_at,
+        failure_class,
+        notes,
+    } = context;
     let duration_seconds = raw_result.duration_seconds()?;
     let mut artifact = RunnerCompletionArtifact {
         schema_version: "1.0".to_owned(),
@@ -207,11 +264,12 @@ pub fn completion_artifact_from_raw_result(
         request_kind: request.request_kind,
         active_work_item_id: request.active_work_item_id.clone(),
         closure_target_root_spec_id: request.closure_target_root_spec_id.clone(),
-        runner_name: runner_name.into(),
+        runner_name,
         model_name: raw_result.model_name.clone(),
+        thinking_level: raw_result.thinking_level.clone(),
         model_reasoning_effort: raw_result.model_reasoning_effort.clone(),
         command,
-        cwd: cwd.into(),
+        cwd,
         environment_delta,
         prompt_path,
         exit_kind: raw_result.exit_kind,

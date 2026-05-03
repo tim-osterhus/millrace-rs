@@ -12,6 +12,7 @@ python tests/support/generate_python_compiler_parity_fixtures.py
 
 The fixture normalizes timestamps, generated compiled-plan ids, baseline
 manifest identity, compile-input fingerprints whose inputs differ between the
-Python and Rust harnesses, and platform path separators. It preserves the
-serialized compiled-plan schema, mode alias semantics, graph and node authority,
-stage bindings, and resolved asset content hashes.
+Python and Rust harnesses, resolved asset content hashes, and platform path
+separators. It preserves the serialized compiled-plan schema, mode alias
+semantics, graph and node authority, stage bindings including `thinking_level`,
+and resolved asset identity/path coverage.

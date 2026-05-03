@@ -1,0 +1,193 @@
+{
+  "schema_version": "1.0",
+  "kind": "web_dashboard_parity_decision",
+  "release_surface": "python_packages_millrace_web",
+  "summary": "Python v0.17.3 added the optional millrace-web read-only dashboard package. Rust records this release surface as an intentional unsupported parity gap because the accepted Rust boundary is the CLI plus local millrace-agents workspace artifacts, not a web server, static shell, or separate dashboard package.",
+  "rust_decision": {
+    "status": "deferred_unsupported_gap",
+    "arbiter_visible": true,
+    "reason": "No Rust-owned web/server/static-dashboard package target is accepted in this repository; implementing FastAPI-equivalent routes, an SSE stream, and a static shell would broaden the crate beyond the current CLI/workspace parity contract.",
+    "existing_shadow_surface": "Existing Rust read-only CLI commands inspect the same local workspace families without acquiring runtime ownership or exposing network routes.",
+    "task_id": "auto-port-0-17-3-06-web-dashboard-parity-decision"
+  },
+  "required_python_surfaces": [
+    "workspace_registry",
+    "summary_dtos",
+    "queue_reader",
+    "run_reader",
+    "snapshot_reader",
+    "baseline_reader",
+    "compiled_plan_reader",
+    "arbiter_reader",
+    "usage_governance_reader",
+    "event_stream",
+    "static_shell",
+    "cli_server_boundary",
+    "package_boundary_tests"
+  ],
+  "python_surfaces": [
+    {
+      "surface": "workspace_registry",
+      "rust_status": "deferred_no_web_registry",
+      "python_sources": [
+        "../millrace-py/packages/millrace-web/src/millrace_web/services/workspace_registry.py",
+        "../millrace-py/packages/millrace-web/tests/test_workspace_registry.py"
+      ]
+    },
+    {
+      "surface": "summary_dtos",
+      "rust_status": "deferred_no_web_dto_contract",
+      "python_sources": [
+        "../millrace-py/packages/millrace-web/src/millrace_web/models.py",
+        "../millrace-py/packages/millrace-web/tests/test_summary_services.py"
+      ]
+    },
+    {
+      "surface": "queue_reader",
+      "rust_status": "existing_read_only_cli_shadow_only",
+      "rust_shadow_commands": [
+        "millrace queue ls",
+        "millrace queue show"
+      ],
+      "python_sources": [
+        "../millrace-py/packages/millrace-web/src/millrace_web/services/queue_reader.py",
+        "../millrace-py/packages/millrace-web/tests/test_summary_services.py"
+      ]
+    },
+    {
+      "surface": "run_reader",
+      "rust_status": "existing_read_only_cli_shadow_only",
+      "rust_shadow_commands": [
+        "millrace runs ls",
+        "millrace runs show",
+        "millrace runs tail"
+      ],
+      "python_sources": [
+        "../millrace-py/packages/millrace-web/src/millrace_web/services/run_reader.py"
+      ]
+    },
+    {
+      "surface": "snapshot_reader",
+      "rust_status": "existing_read_only_cli_shadow_only",
+      "rust_shadow_commands": [
+        "millrace status",
+        "millrace status show",
+        "millrace status watch"
+      ],
+      "python_sources": [
+        "../millrace-py/packages/millrace-web/src/millrace_web/services/snapshot_reader.py",
+        "../millrace-py/packages/millrace-web/tests/test_summary_services.py"
+      ]
+    },
+    {
+      "surface": "baseline_reader",
+      "rust_status": "existing_read_only_cli_shadow_only",
+      "rust_shadow_commands": [
+        "millrace status",
+        "millrace status show"
+      ],
+      "python_sources": [
+        "../millrace-py/packages/millrace-web/src/millrace_web/services/baseline_reader.py",
+        "../millrace-py/packages/millrace-web/tests/test_summary_services.py"
+      ]
+    },
+    {
+      "surface": "compiled_plan_reader",
+      "rust_status": "existing_read_only_cli_shadow_only",
+      "rust_shadow_commands": [
+        "millrace compile show",
+        "millrace status"
+      ],
+      "python_sources": [
+        "../millrace-py/packages/millrace-web/src/millrace_web/services/compiled_plan_reader.py"
+      ]
+    },
+    {
+      "surface": "arbiter_reader",
+      "rust_status": "existing_read_only_cli_shadow_only",
+      "rust_shadow_commands": [
+        "millrace status"
+      ],
+      "python_sources": [
+        "../millrace-py/packages/millrace-web/src/millrace_web/services/arbiter_reader.py"
+      ]
+    },
+    {
+      "surface": "usage_governance_reader",
+      "rust_status": "existing_read_only_cli_shadow_only",
+      "rust_shadow_commands": [
+        "millrace status",
+        "millrace config show"
+      ],
+      "python_sources": [
+        "../millrace-py/packages/millrace-web/src/millrace_web/services/usage_governance_reader.py"
+      ]
+    },
+    {
+      "surface": "event_stream",
+      "rust_status": "deferred_no_sse_or_polling_web_stream",
+      "python_sources": [
+        "../millrace-py/packages/millrace-web/src/millrace_web/services/event_stream.py"
+      ]
+    },
+    {
+      "surface": "static_shell",
+      "rust_status": "deferred_no_static_dashboard_assets",
+      "python_sources": [
+        "../millrace-py/packages/millrace-web/src/millrace_web/static/index.html",
+        "../millrace-py/packages/millrace-web/src/millrace_web/static/assets/app.js",
+        "../millrace-py/packages/millrace-web/src/millrace_web/static/assets/styles.css",
+        "../millrace-py/packages/millrace-web/tests/test_app.py"
+      ]
+    },
+    {
+      "surface": "cli_server_boundary",
+      "rust_status": "deferred_no_web_server_cli",
+      "python_sources": [
+        "../millrace-py/packages/millrace-web/src/millrace_web/app.py",
+        "../millrace-py/packages/millrace-web/src/millrace_web/cli.py",
+        "../millrace-py/packages/millrace-web/src/millrace_web/server.py",
+        "../millrace-py/packages/millrace-web/README.md",
+        "../millrace-py/packages/millrace-web/docs/README.md"
+      ]
+    },
+    {
+      "surface": "package_boundary_tests",
+      "rust_status": "deferred_no_separate_dashboard_package_boundary",
+      "python_sources": [
+        "../millrace-py/packages/millrace-web/pyproject.toml",
+        "../millrace-py/packages/millrace-web/tests/test_packaging_boundary.py",
+        "../millrace-py/packages/millrace-web/tests/test_app.py",
+        "../millrace-py/packages/millrace-web/tests/test_summary_services.py",
+        "../millrace-py/packages/millrace-web/tests/test_workspace_registry.py"
+      ]
+    }
+  ],
+  "existing_non_mutating_rust_surfaces": [
+    "queue ls/show",
+    "status/status show/status watch",
+    "runs ls/show/tail",
+    "modes list/show",
+    "config show",
+    "compile show"
+  ],
+  "safety_guarantees": [
+    "existing_read_only_cli_commands_remain_non_mutating",
+    "existing_read_only_cli_commands_do_not_acquire_runtime_ownership_lock",
+    "no_control_or_queue_mutation_routes_are_added",
+    "future_web_surface_must_be_local_workspace_only_if_implemented"
+  ],
+  "clear_non_goals": [
+    "Rust does not ship a millrace-web package in this parity slice.",
+    "Rust does not expose dashboard HTTP API routes in this parity slice.",
+    "Rust does not ship a static dashboard shell in this parity slice.",
+    "Rust does not expose an SSE event stream in this parity slice.",
+    "Rust does not add authenticated or unauthenticated web control routes in this parity slice."
+  ],
+  "validation": [
+    "cargo fmt --check",
+    "cargo test --test parity_cli",
+    "cargo test --test workspace_queue_state_stores",
+    "cargo test --test runtime_serial"
+  ]
+}

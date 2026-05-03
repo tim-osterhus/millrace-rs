@@ -338,7 +338,7 @@ pub fn reconcile_usage_ledger_from_stage_results(
 }
 
 /// Builds one ledger entry from a token-bearing stage result.
-#[must_use]
+#[must_use = "ledger entries must be appended or inspected"]
 pub fn ledger_entry_from_stage_result(
     paths: &WorkspacePaths,
     stage_result: &StageResultEnvelope,

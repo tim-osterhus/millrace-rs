@@ -16,14 +16,15 @@ use crate::{
         inspect_workspace_plan_currentness_for_paths,
     },
     contracts::{
-        PauseSource, Plane, RuntimeSnapshot, StageResultEnvelope, SubscriptionQuotaTelemetryState,
-        TokenUsage, UsageGovernanceBlockerSource, WorkItemKind, validate_safe_identifier,
+        ClosureTargetState, PauseSource, Plane, RuntimeSnapshot, StageResultEnvelope,
+        SubscriptionQuotaTelemetryState, TokenUsage, UsageGovernanceBlockerSource, WorkItemKind,
+        validate_safe_identifier,
     },
-    runtime::load_runtime_startup_config,
+    runtime::{StageRunRequest, load_runtime_startup_config},
     workspace::{
         QueueInspectionEntry, QueueStore, WorkspacePaths, inspect_runtime_ownership_lock,
-        load_baseline_manifest, load_snapshot, load_usage_governance_ledger,
-        load_usage_governance_state,
+        list_deferred_root_spec_ids, load_baseline_manifest, load_snapshot,
+        load_usage_governance_ledger, load_usage_governance_state,
     },
 };
 
@@ -57,6 +58,22 @@ struct InspectedRunnerArtifact {
     kind: String,
     path: String,
     request_id: Option<String>,
+    thinking_level: Option<String>,
+    model_reasoning_effort: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct InspectedStageRequest {
+    stage_request_path: String,
+    request_id: String,
+    stage: String,
+    node_id: String,
+    stage_kind_id: String,
+    runner_name: Option<String>,
+    model_name: Option<String>,
+    thinking_level: Option<String>,
+    model_reasoning_effort: Option<String>,
+    timeout_seconds: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -79,6 +96,7 @@ struct InspectedRunSummary {
     primary_runner_invocation_path: Option<String>,
     primary_runner_completion_path: Option<String>,
     primary_skill_revision_evidence_path: Option<String>,
+    stage_requests: Vec<InspectedStageRequest>,
     stage_results: Vec<InspectedStageResult>,
     malformed_stage_result_paths: Vec<String>,
     runner_artifacts: Vec<InspectedRunnerArtifact>,
@@ -568,7 +586,7 @@ fn render_status_lines(paths: &WorkspacePaths) -> Result<Vec<String>, String> {
     lines.extend(render_baseline_manifest_lines(baseline_manifest.as_ref()));
     lines.extend(render_compile_currentness_lines(currentness.as_ref()));
     lines.extend(render_usage_governance_lines(paths, &snapshot)?);
-    lines.extend(render_closure_target_default_lines());
+    lines.extend(render_closure_target_lines(paths)?);
     if let Some(failure_class) = &snapshot.current_failure_class {
         lines.push(format!("current_failure_class: {failure_class}"));
         for (label, count) in [
@@ -776,6 +794,84 @@ fn render_closure_target_default_lines() -> Vec<String> {
     ]
 }
 
+fn render_closure_target_invalid_lines() -> Vec<String> {
+    vec![
+        "closure_target_root_spec_id: invalid_multiple_actionable_open_targets".to_owned(),
+        "closure_target_open: invalid".to_owned(),
+        "closure_target_blocked_by_lineage_work: invalid".to_owned(),
+        "planning_root_specs_deferred_by_closure_target: invalid".to_owned(),
+        "closure_target_latest_verdict_path: none".to_owned(),
+        "closure_target_latest_report_path: none".to_owned(),
+    ]
+}
+
+fn render_closure_target_lines(paths: &WorkspacePaths) -> Result<Vec<String>, String> {
+    let open_targets = list_open_closure_targets(paths)?;
+    let actionable_targets: Vec<&ClosureTargetState> = open_targets
+        .iter()
+        .filter(|target| !target.closure_blocked_by_lineage_work)
+        .collect();
+    if actionable_targets.len() > 1 {
+        return Ok(render_closure_target_invalid_lines());
+    }
+    if open_targets.is_empty() {
+        return Ok(render_closure_target_default_lines());
+    }
+
+    let target = actionable_targets
+        .first()
+        .copied()
+        .unwrap_or_else(|| &open_targets[0]);
+    let deferred_root_spec_ids = list_deferred_root_spec_ids(paths, &target.root_spec_id)
+        .map_err(|error| error.to_string())?;
+    Ok(vec![
+        format!("closure_target_root_spec_id: {}", target.root_spec_id),
+        format!("closure_target_open: {}", bool_text(target.closure_open)),
+        format!(
+            "closure_target_blocked_by_lineage_work: {}",
+            bool_text(target.closure_blocked_by_lineage_work)
+        ),
+        format!(
+            "planning_root_specs_deferred_by_closure_target: {}",
+            deferred_root_spec_ids.len()
+        ),
+        format!(
+            "closure_target_latest_verdict_path: {}",
+            option_str(target.latest_verdict_path.as_deref())
+        ),
+        format!(
+            "closure_target_latest_report_path: {}",
+            option_str(target.latest_report_path.as_deref())
+        ),
+    ])
+}
+
+fn list_open_closure_targets(paths: &WorkspacePaths) -> Result<Vec<ClosureTargetState>, String> {
+    let mut targets = Vec::new();
+    if !paths.arbiter_targets_dir.exists() {
+        return Ok(targets);
+    }
+    for path in json_files(&paths.arbiter_targets_dir)? {
+        let raw = fs::read_to_string(&path).map_err(|error| {
+            format!("failed to read closure target {}: {error}", path.display())
+        })?;
+        let target: ClosureTargetState = serde_json::from_str(&raw).map_err(|error| {
+            format!(
+                "failed to decode closure target {}: {error}",
+                path.display()
+            )
+        })?;
+        target
+            .validate()
+            .map_err(|error| format!("invalid closure target {}: {error}", path.display()))?;
+        if target.closure_open {
+            targets.push(target);
+        }
+    }
+    targets.sort_by(|left, right| left.root_spec_id.cmp(&right.root_spec_id));
+    Ok(targets)
+}
+
 fn compiled_plan_currentness_value(
     currentness: Result<&CompiledPlanCurrentness, &crate::compiler::CompilerPersistenceError>,
 ) -> String {
@@ -932,6 +1028,7 @@ fn inspect_run(paths: &WorkspacePaths, run_dir: &Path) -> Result<InspectedRunSum
         notes.push("no stage result artifacts found".to_owned());
     }
 
+    let stage_requests = inspect_stage_requests(&run_dir, &mut notes)?;
     let runner_artifacts = inspect_runner_artifacts(&run_dir)?;
     let governance_ledger_stage_result_paths =
         governance_ledger_stage_result_paths(paths, &run_id, &mut notes);
@@ -973,6 +1070,7 @@ fn inspect_run(paths: &WorkspacePaths, run_dir: &Path) -> Result<InspectedRunSum
         primary_skill_revision_evidence_path: latest
             .and_then(|stage| stage.skill_revision_evidence_path.clone())
             .or_else(|| runner_artifact_path(&runner_artifacts, "skill_revision_evidence")),
+        stage_requests,
         started_at: first.map(|stage| stage.envelope.started_at.as_str().to_owned()),
         completed_at: latest.map(|stage| stage.envelope.completed_at.as_str().to_owned()),
         duration_seconds: run_duration_seconds(first, latest),
@@ -997,6 +1095,7 @@ fn incomplete_run_summary(
 ) -> Result<InspectedRunSummary, String> {
     let mut notes = vec![note.to_owned()];
     let runner_artifacts = inspect_runner_artifacts(&run_dir)?;
+    let stage_requests = inspect_stage_requests(&run_dir, &mut notes)?;
     let governance_ledger_stage_result_paths =
         governance_ledger_stage_result_paths(paths, &run_id, &mut notes);
     Ok(InspectedRunSummary {
@@ -1027,6 +1126,7 @@ fn incomplete_run_summary(
             &runner_artifacts,
             "skill_revision_evidence",
         ),
+        stage_requests,
         stage_results: Vec::new(),
         malformed_stage_result_paths: Vec::new(),
         runner_artifacts,
@@ -1117,6 +1217,7 @@ fn render_run_show_lines(summary: &InspectedRunSummary) -> Vec<String> {
             "governance_ledger_stage_result_count: {}",
             summary.governance_ledger_stage_result_paths.len()
         ),
+        format!("stage_request_count: {}", summary.stage_requests.len()),
     ];
     lines.extend(render_token_usage_lines(summary.token_usage.as_ref()));
     for path in &summary.malformed_stage_result_paths {
@@ -1127,14 +1228,42 @@ fn render_run_show_lines(summary: &InspectedRunSummary) -> Vec<String> {
     }
     for artifact in &summary.runner_artifacts {
         lines.push(format!(
-            "runner_artifact: kind={} request_id={} path={}",
+            "runner_artifact: kind={} request_id={} path={} thinking_level={} model_reasoning_effort={}",
             artifact.kind,
             option_str(artifact.request_id.as_deref()),
-            artifact.path
+            artifact.path,
+            option_str(artifact.thinking_level.as_deref()),
+            option_str(artifact.model_reasoning_effort.as_deref())
         ));
     }
     for note in &summary.notes {
         lines.push(format!("note: {note}"));
+    }
+    for request in &summary.stage_requests {
+        lines.extend([
+            format!("stage_request_path: {}", request.stage_request_path),
+            format!("stage_request_id: {}", request.request_id),
+            format!("stage_request_stage: {}", request.stage),
+            format!("stage_request_node_id: {}", request.node_id),
+            format!("stage_request_stage_kind_id: {}", request.stage_kind_id),
+            format!(
+                "stage_request_runner_name: {}",
+                option_str(request.runner_name.as_deref())
+            ),
+            format!(
+                "stage_request_model_name: {}",
+                option_str(request.model_name.as_deref())
+            ),
+            format!(
+                "stage_request_thinking_level: {}",
+                option_str(request.thinking_level.as_deref())
+            ),
+            format!(
+                "stage_request_model_reasoning_effort: {}",
+                option_str(request.model_reasoning_effort.as_deref())
+            ),
+            format!("stage_request_timeout_seconds: {}", request.timeout_seconds),
+        ]);
     }
     for stage in &summary.stage_results {
         lines.extend([
@@ -1196,6 +1325,10 @@ fn render_run_show_lines(summary: &InspectedRunSummary) -> Vec<String> {
             format!(
                 "model_name: {}",
                 option_str(stage.envelope.model_name.as_deref())
+            ),
+            format!(
+                "thinking_level: {}",
+                option_str(stage.envelope.thinking_level.as_deref())
             ),
             format!(
                 "model_reasoning_effort: {}",
@@ -1297,16 +1430,101 @@ fn inspect_runner_artifacts(run_dir: &Path) -> Result<Vec<InspectedRunnerArtifac
         let Some(kind) = runner_artifact_kind(file_name) else {
             continue;
         };
+        let (thinking_level, model_reasoning_effort) =
+            runner_artifact_thinking_fields(kind, &path).unwrap_or((None, None));
         artifacts.push(InspectedRunnerArtifact {
             kind: kind.to_owned(),
             path: normalize_run_relative_path(run_dir, &path),
             request_id: runner_artifact_request_id(kind, file_name),
+            thinking_level,
+            model_reasoning_effort,
         });
     }
     artifacts.sort_by(|left, right| {
         (left.kind.as_str(), left.path.as_str()).cmp(&(right.kind.as_str(), right.path.as_str()))
     });
     Ok(artifacts)
+}
+
+fn inspect_stage_requests(
+    run_dir: &Path,
+    notes: &mut Vec<String>,
+) -> Result<Vec<InspectedStageRequest>, String> {
+    let stage_requests_dir = run_dir.join("stage_requests");
+    if !stage_requests_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut paths = Vec::new();
+    for entry in fs::read_dir(&stage_requests_dir).map_err(|error| error.to_string())? {
+        let entry = entry.map_err(|error| error.to_string())?;
+        let path = entry.path();
+        if path.is_file() && path.extension().and_then(|value| value.to_str()) == Some("json") {
+            paths.push(path);
+        }
+    }
+    paths.sort();
+
+    let mut requests = Vec::new();
+    for path in paths {
+        let raw = match fs::read_to_string(&path) {
+            Ok(raw) => raw,
+            Err(error) => {
+                notes.push(format!(
+                    "{}: invalid stage request JSON: {error}",
+                    path.file_name()
+                        .and_then(|value| value.to_str())
+                        .unwrap_or_default()
+                ));
+                continue;
+            }
+        };
+        let request = match StageRunRequest::from_json_str(&raw) {
+            Ok(request) => request,
+            Err(error) => {
+                notes.push(format!(
+                    "{}: invalid stage request payload: {error}",
+                    path.file_name()
+                        .and_then(|value| value.to_str())
+                        .unwrap_or_default()
+                ));
+                continue;
+            }
+        };
+        requests.push(InspectedStageRequest {
+            stage_request_path: normalize_run_relative_path(run_dir, &path),
+            request_id: request.request_id,
+            stage: request.stage.as_str().to_owned(),
+            node_id: request.node_id,
+            stage_kind_id: request.stage_kind_id,
+            runner_name: request.runner_name,
+            model_name: request.model_name,
+            thinking_level: request.thinking_level,
+            model_reasoning_effort: request.model_reasoning_effort,
+            timeout_seconds: request.timeout_seconds,
+        });
+    }
+    Ok(requests)
+}
+
+fn runner_artifact_thinking_fields(
+    kind: &str,
+    path: &Path,
+) -> Result<(Option<String>, Option<String>), String> {
+    if !matches!(kind, "runner_invocation" | "runner_completion") {
+        return Ok((None, None));
+    }
+    let raw = fs::read_to_string(path).map_err(|error| error.to_string())?;
+    let payload: Value = serde_json::from_str(&raw).map_err(|error| error.to_string())?;
+    Ok((
+        payload
+            .get("thinking_level")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        payload
+            .get("model_reasoning_effort")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+    ))
 }
 
 fn runner_artifact_path(artifacts: &[InspectedRunnerArtifact], kind: &str) -> Option<String> {
@@ -1447,6 +1665,21 @@ fn count_markdown_files(directory: &Path) -> Result<usize, String> {
         }
     }
     Ok(count)
+}
+
+fn json_files(directory: &Path) -> Result<Vec<PathBuf>, String> {
+    if !directory.exists() {
+        return Ok(Vec::new());
+    }
+    let mut paths = Vec::new();
+    for entry in fs::read_dir(directory).map_err(|error| error.to_string())? {
+        let path = entry.map_err(|error| error.to_string())?.path();
+        if path.is_file() && path.extension().and_then(|value| value.to_str()) == Some("json") {
+            paths.push(path);
+        }
+    }
+    paths.sort();
+    Ok(paths)
 }
 
 fn parse_positive_usize(name: &str, value: &str) -> Result<usize, String> {

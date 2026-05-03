@@ -34,7 +34,7 @@ const DISPATCH_ORDER: [Plane; 3] = [Plane::Planning, Plane::Execution, Plane::Le
 #[derive(Debug, Clone, PartialEq)]
 pub enum StageWorkerResult {
     /// Runner returned its normal raw result payload.
-    RawResult(RunnerRawResult),
+    RawResult(Box<RunnerRawResult>),
     /// Runner failed before returning a raw result.
     Exception {
         /// Stable exception type label.
@@ -233,7 +233,7 @@ impl fmt::Display for RuntimeDaemonLoopExitReason {
 }
 
 /// Caller controls for a bounded daemon loop.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct RuntimeDaemonLoopOptions {
     /// Stop after this many completed supervisor cycles.
     pub max_ticks: Option<u64>,
@@ -243,17 +243,6 @@ pub struct RuntimeDaemonLoopOptions {
     pub idle_sleep_seconds: Option<f64>,
     /// Deterministic tick options passed into each supervisor cycle.
     pub tick_options: RuntimeTickOptions,
-}
-
-impl Default for RuntimeDaemonLoopOptions {
-    fn default() -> Self {
-        Self {
-            max_ticks: None,
-            exit_on_idle: false,
-            idle_sleep_seconds: None,
-            tick_options: RuntimeTickOptions::default(),
-        }
-    }
 }
 
 impl RuntimeDaemonLoopOptions {
@@ -922,7 +911,7 @@ pub fn run_stage_worker(
 ) -> RuntimeTickResult<StageWorkerOutcome> {
     let started_at = worker_timestamp("started_at")?;
     let result = match runner.run(&request) {
-        Ok(raw_result) => StageWorkerResult::RawResult(raw_result),
+        Ok(raw_result) => StageWorkerResult::RawResult(Box::new(raw_result)),
         Err(error) => StageWorkerResult::Exception {
             exception_type: "RunnerError".to_owned(),
             exception_message: error.to_string(),
@@ -956,7 +945,7 @@ pub fn apply_stage_worker_outcome(
     }
 
     let raw_result = match outcome.result {
-        StageWorkerResult::RawResult(raw_result) => raw_result,
+        StageWorkerResult::RawResult(raw_result) => *raw_result,
         StageWorkerResult::Exception {
             exception_type,
             exception_message,

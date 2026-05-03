@@ -161,6 +161,8 @@ pub struct RuntimeStageConfig {
     pub runner: Option<String>,
     /// Optional model override.
     pub model: Option<String>,
+    /// Optional runner-neutral thinking level override.
+    pub thinking_level: Option<String>,
     /// Optional Codex reasoning effort override.
     pub model_reasoning_effort: Option<String>,
     /// Stage timeout in seconds.
@@ -172,6 +174,7 @@ impl Default for RuntimeStageConfig {
         Self {
             runner: None,
             model: None,
+            thinking_level: None,
             model_reasoning_effort: None,
             timeout_seconds: 3600,
         }
@@ -893,10 +896,10 @@ fn watch_path_key(path: &Path) -> String {
 
 /// Return the materialized node authority for a work item entry key.
 #[must_use]
-pub fn compiled_entry_node_for_work_item<'a>(
-    plan: &'a CompiledRunPlan,
+pub fn compiled_entry_node_for_work_item(
+    plan: &CompiledRunPlan,
     work_item_kind: WorkItemKind,
-) -> Option<&'a MaterializedGraphNodePlan> {
+) -> Option<&MaterializedGraphNodePlan> {
     let (plane, entry_key) = match work_item_kind {
         WorkItemKind::Task => (Plane::Execution, GraphLoopEntryKey::Task),
         WorkItemKind::Spec => (Plane::Planning, GraphLoopEntryKey::Spec),
@@ -1269,11 +1272,11 @@ fn stage_identity(plan: &CompiledRunPlan, plane: Plane, stage: StageName) -> (St
         })
 }
 
-fn stage_plan_for<'a>(
-    plan: &'a CompiledRunPlan,
+fn stage_plan_for(
+    plan: &CompiledRunPlan,
     plane: Plane,
     stage: StageName,
-) -> Option<&'a MaterializedGraphNodePlan> {
+) -> Option<&MaterializedGraphNodePlan> {
     graph_for_plane(plan, plane)?.nodes.iter().find(|node| {
         node.node_id == stage.as_str()
             || StageName::from_value(&node.stage_kind_id)
@@ -2041,6 +2044,17 @@ fn load_stage_configs(
             )?),
             None => None,
         };
+        let thinking_level = normalize_stage_thinking_aliases(
+            optional_string_at(
+                stage_table,
+                "thinking_level",
+                &format!("{field_prefix}.thinking_level"),
+                path,
+            )?,
+            model_reasoning_effort.as_deref(),
+            &field_prefix,
+            path,
+        )?;
         let timeout_seconds = optional_positive_u64(
             stage_table,
             "timeout_seconds",
@@ -2054,6 +2068,7 @@ fn load_stage_configs(
             RuntimeStageConfig {
                 runner,
                 model,
+                thinking_level,
                 model_reasoning_effort,
                 timeout_seconds,
             },
@@ -2070,7 +2085,7 @@ fn reject_unknown_stage_config_keys(
     for key in table.keys() {
         if matches!(
             key.as_str(),
-            "runner" | "model" | "model_reasoning_effort" | "timeout_seconds"
+            "runner" | "model" | "thinking_level" | "model_reasoning_effort" | "timeout_seconds"
         ) {
             continue;
         }
@@ -2081,6 +2096,34 @@ fn reject_unknown_stage_config_keys(
         ));
     }
     Ok(())
+}
+
+fn normalize_stage_thinking_aliases(
+    thinking_level: Option<String>,
+    model_reasoning_effort: Option<&str>,
+    field_prefix: &str,
+    path: &Path,
+) -> RuntimeStartupResult<Option<String>> {
+    if let Some(thinking_level) = thinking_level {
+        if thinking_level.trim().is_empty() {
+            return Err(config_error(
+                path,
+                format!("{field_prefix}.thinking_level"),
+                "must not be empty",
+            ));
+        }
+        if let Some(model_reasoning_effort) = model_reasoning_effort {
+            if thinking_level != model_reasoning_effort {
+                return Err(config_error(
+                    path,
+                    format!("{field_prefix}.thinking_level"),
+                    "thinking_level and model_reasoning_effort must match when both are set",
+                ));
+            }
+        }
+        return Ok(Some(thinking_level));
+    }
+    Ok(model_reasoning_effort.map(ToOwned::to_owned))
 }
 
 fn parse_permission_value(

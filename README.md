@@ -4,10 +4,9 @@
 governed runtime for long-running agent work.
 
 The production implementation is currently the Python package
-[`millrace-ai`](https://pypi.org/project/millrace-ai/). The initial Rust
-`0.1.x` releases establish the first broad Rust parity surface while
-contract-parity, workspace-substrate, compiler, operator-CLI, runtime, daemon,
-and runner work progress.
+[`millrace-ai`](https://pypi.org/project/millrace-ai/). The Rust `0.2.0`
+release consolidates the Python `v0.16.1..v0.17.3` parity pass while the crate
+remains experimental.
 
 ## Package Names
 
@@ -67,7 +66,8 @@ prompt/artifact/process/registry/dispatcher plus Codex CLI, Pi RPC, runtime
 config, and runtime-dispatch integration boundaries are exposed through
 `millrace_ai::runtime` and
 `millrace_ai::runners`. They include typed
-`StageRunRequest` models, a
+`StageRunRequest` models with runner-neutral `thinking_level` and legacy
+Codex reasoning-effort compatibility fields, a
 once-mode startup session that validates initialized workspaces, acquires
 runtime ownership before compiler/state mutation, loads persisted compiled-plan
 authority, projects snapshot state, and detects stale active state; a daemon
@@ -97,12 +97,15 @@ preserves the previous plan on recoverable reload diagnostics. The deterministic
 tick activation path drains applicable mailbox commands, refreshes queue depths,
 returns typed
 no-work/paused/stopped/blocked outcomes, claims at most one
-compiled-plan-authorized work item or closure target, builds `StageRunRequest`
-payloads, writes running markers, projects active-run snapshot state, and emits
-runtime events. Runner dispatch persists stage request, raw runner result,
-normalized stage result, terminal marker, and router decision artifacts, routes
-through compiled graph policy, persists recoverable runtime error context/report
-evidence, updates last-terminal/result snapshot fields, applies router
+compiled-plan-authorized work item or actionable closure target, builds
+`StageRunRequest` payloads from materialized runner/model/thinking fields,
+writes running markers, projects active-run snapshot state, and emits runtime
+events. Runner dispatch persists stage request, raw runner result, normalized
+stage result,
+terminal marker, and router decision artifacts with thinking-level evidence
+across success and recoverable failure paths, routes through compiled graph
+policy, persists recoverable runtime error context/report evidence, updates
+last-terminal/result snapshot fields, applies router
 decisions through typed queue/state helpers for stage advancement, completion,
 blocked, and handoff outcomes, mutates recovery counters, creates typed handoff
 incidents, schedules post-stage application-failure recovery with runtime-error
@@ -133,17 +136,21 @@ and source-packaged skills remain mutable only through explicit
 Closure-lineage runtime parity now creates or backfills closure targets from
 root-spec claims or drained root specs, refreshes closure-target readiness
 before Arbiter dispatch, blocks on queued/active/blocked same-root lineage work
-and lineage drift diagnostics with concrete blocking ids, emits completion
-backfill and drift events, and preserves Arbiter close, remediation incident,
-repeated-remediation, and `queue repair-lineage` behavior.
+and lineage drift diagnostics with concrete blocking ids, treats only unblocked
+open targets as actionable so blocked same-root closure targets do not globally
+defer unrelated root specs, emits completion backfill and drift events, and
+preserves Arbiter close, remediation incident, repeated-remediation, and
+`queue repair-lineage` behavior. Status output prefers actionable closure
+targets while still reporting blocked targets and deferred root counts.
 Run inspection depth is implemented for the read-only `runs ls`, `runs show`,
 and `runs tail` surfaces. Run listing keeps complete, incomplete, malformed,
 token-bearing, closure-target, governance-linked, skill-evidence-bearing, and
 runner-artifact-bearing directories visible with stable labels. Run show
 surfaces malformed stage-result paths, primary prompt/stdout/stderr/event,
-runner invocation/completion, skill-revision evidence, aggregate duration and
-token usage, governance ledger links, closure-target metadata, remediation
-references, raw runner exit metadata, and runner artifact listings. Run tail
+stage-request, stage-result, and runner invocation/completion thinking-level
+evidence, skill-revision evidence, aggregate duration and token usage,
+governance ledger links, closure-target metadata, remediation references, raw
+runner exit metadata, and runner artifact listings. Run tail
 selects report, runner stdout, runner stderr, runner event log, or parsed
 stage-result payloads in order and reports missing selected artifacts without
 repairing, normalizing, deleting, or archiving inspected runtime files.
@@ -155,12 +162,12 @@ documents through `QueueStore`, preserves root lineage and references, skips
 duplicate idea-derived specs, and records watcher event/failure/duplicate-skip
 evidence without corrupting runtime artifacts. Basic monitor rendering emits
 concise key lines for daemon startup, resumed active runs, stage start and
-completion, run aggregates, router decisions, status changes, idle suppression,
-pause, stop, reload, watcher, and governance pause/block/degraded/reconciled
-or resume events; the CLI fans those lines out to stdout for `--monitor basic`
-or appends them to a requested `--monitor-log` path, creating missing parent
-directories, while keeping default daemon stdout quiet except final summary
-lines. The runner
+completion, run aggregates, router decisions, status changes, six-hour repeated
+no-work idle suppression with activity/reason resets, pause, stop, reload,
+watcher, and governance pause/block/degraded/reconciled or resume events; the
+CLI fans those lines out to stdout for `--monitor basic` or appends them to a
+requested `--monitor-log` path, creating missing parent directories, while
+keeping default daemon stdout quiet except final summary lines. The runner
 layer provides
 the Python-owned `StageRunRequest -> RunnerRawResult -> StageResultEnvelope`
 contract, canonical stage prompt rendering with
@@ -172,17 +179,22 @@ optional `runner_events.<request_id>.jsonl`, and
 process-result and environment-delta models, duplicate-aware registry
 registration, dispatcher selection by request runner, caller default, then
 `codex_cli`, `RunnerRawResult`, `StageRunnerAdapter`, deterministic in-process
-`FakeRunner` support, Codex CLI adapter command construction, permission
-precedence, prompt/invocation/stdout/stderr/event/completion artifacts, JSONL
-token extraction, timeout/failure evidence, mocked process execution, a real
-subprocess executor, Pi RPC adapter command construction, JSONL prompt
-lifecycle, filtered event-log policy, final assistant text and session stats
-queries, timeout abort/terminate/hard-kill evidence, mocked client/transport
-coverage, runtime-configured dispatcher construction for operator once/daemon
-paths, and normalization into the existing `StageResultEnvelope` contract.
+`FakeRunner` support, runner-neutral `thinking_level` propagation through raw
+results, invocation/completion artifacts, and normalized stage results, Codex
+CLI adapter command construction that maps request thinking to legacy
+`model_reasoning_effort`, permission precedence,
+prompt/invocation/stdout/stderr/event/completion artifacts, JSONL token
+extraction, timeout/failure evidence, mocked process execution, a real
+subprocess executor, Pi RPC adapter command construction that maps request
+thinking to `--thinking`, JSONL prompt lifecycle, filtered event-log policy,
+final assistant text and session stats queries, timeout abort/terminate/hard-kill
+evidence, mocked client/transport coverage, runtime-configured dispatcher
+construction for operator once/daemon paths, and normalization into the existing
+`StageResultEnvelope` contract.
 Runtime startup/config loading exposes `[runners]`, `[runners.codex]`,
 `[runners.pi]`, `[usage_governance]`, and `[stages.<stage>]` settings for
-adapter construction, validates malformed runner names, permissions, reasoning,
+adapter construction and stage overrides, validates malformed runner names,
+permissions, runner-neutral thinking levels, Codex legacy reasoning aliases,
 environment maps, Pi event-log policies and reserved flags, timeouts, stage
 override keys, token-window rules, and subscription-quota percent thresholds,
 keeps adapter-only command, permission, environment, and event-log fields out of
@@ -207,7 +219,10 @@ CLI/runtime parity suite now includes a committed Slice 4 CLI evidence matrix,
 a committed Slice 5 serial runtime evidence matrix, a committed Slice 6 daemon
 runtime evidence matrix, a committed Slice 7 runner adapter evidence matrix,
 a committed Slice 8 E2E handoff evidence matrix, and a consolidated Slice 8
-advanced parity evidence matrix. The Slice 5 evidence maps
+advanced parity evidence matrix, plus a Python `millrace-web` dashboard parity
+decision fixture that records the optional web package as an Arbiter-visible
+unsupported gap rather than a silently omitted Rust surface. The Slice 5
+evidence maps
 Rust fake-runner startup, tick, routing,
 result-application, recovery, closure, and `run once` scenarios back to the
 Python runtime tests, the Slice 6 evidence maps daemon startup, bounded loop,
@@ -226,7 +241,14 @@ usage governance, subscription quota telemetry, learning promotion, skill
 revision evidence, closure transitions, run inspection depth, and E2E handoff
 coverage to the corresponding Python modules and tests while checking that
 referenced Rust tests are known, well-formed, present in source, and complete
-for the fixture. The fixtures normalize request ids, run ids,
+for the fixture. The web-dashboard decision fixture names the Python
+workspace-registry, DTO, queue, run, snapshot, baseline, compiled-plan,
+Arbiter, usage-governance, event-stream, static-shell, CLI/server, and
+package-boundary test surfaces from `packages/millrace-web/`; Rust does not
+implement that server/static package in this parity slice because the accepted
+Rust boundary remains local read-only CLI inspection over initialized
+workspaces. The fixtures
+normalize request ids, run ids,
 timestamps, absolute paths, process ids, generated command ids, compact run
 handles, compiled plan ids, config versions, runner artifact paths, timeout
 durations, token usage, and incident ids. Focused `run once`
@@ -244,12 +266,14 @@ preservation, retry/clear-stale handling, reload deferral/application/failure,
 startup idea normalization before claims, config/task/spec queue observation,
 debounce suppression, missing/deleted path safety, bad idea failure
 persistence, duplicate idea protection, quiet default daemon stdout, basic
-stdout monitor output, nested monitor-log fanout, daemon summary tick key
-lines, shared runner prompt/artifact/process/registry/dispatcher behavior,
-runtime runner config loading/validation, `config show` runner rendering,
-runtime-configured once/daemon dispatcher selection, unknown-runner recovery,
-mocked Codex CLI runtime dispatch, Pi RPC mocked-client/transport adapter
-behavior, usage-governance inert defaults, ledger reconciliation, token/quota
+stdout monitor output, six-hour idle throttle/reset coverage, nested
+monitor-log fanout, daemon summary tick key lines, shared runner
+prompt/artifact/process/registry/dispatcher behavior,
+runtime runner config loading/validation, stage-request and runner-artifact
+thinking-level propagation, `config show` runner rendering, runtime-configured
+once/daemon dispatcher selection, unknown-runner recovery, mocked Codex CLI
+runtime dispatch, Pi RPC mocked-client/transport adapter behavior,
+usage-governance inert defaults, ledger reconciliation, token/quota
 rule evaluation, governance dispatch pause/auto-resume, manual resume refusal
 under active governance blockers, quota degraded fail-open/fail-closed behavior,
 governance monitor lines, daemon completion-drain ordering before new claims,
@@ -257,11 +281,15 @@ configured status/config rendering without mutation, public runner exports,
 learning trigger enqueueing, Curator promotion deferral/application,
 rejected/blocked Curator decision evidence without source mutation,
 operator-controlled source-promotion audit fields, claim-created and backfilled
-closure targets, queued/active/blocked lineage suppression, closure-lineage
-drift diagnostics, Arbiter close/remediation/repeated-remediation behavior,
-advanced read-only run inspection for malformed stage results, runner
-artifacts, governance ledger links, closure metadata, skill evidence, tail
-fallbacks, and no-mutation guarantees, advanced E2E handoff queue/status,
+closure targets, actionable closure-target selection, unrelated-root activation
+while same-root closure work is blocked, queued/active/blocked lineage
+suppression, closure-lineage drift diagnostics, Arbiter close/remediation and
+repeated-remediation behavior, advanced read-only run
+inspection for malformed stage results, runner artifacts, stage-request and
+runner-artifact thinking evidence, governance ledger links, closure metadata,
+closure-target actionability/deferred root status, skill evidence, tail
+fallbacks, and no-mutation guarantees, duplicate task lifecycle doctor output
+and same-root blocked-predecessor retirement, advanced E2E handoff queue/status,
 runtime-error, Consultant handoff incident, planning re-entry, closure, and
 remediation transitions, stale/malformed Slice 7 fixture detection, Slice 8
 fixture area/source/axis/stale-or-unknown-test checks, and the no-live gate
@@ -276,27 +304,37 @@ scripted serial runtime tests for direct task success, repair-loop
 fix-contract evidence, malformed and illegal terminal recovery through
 Consultant handoff incidents, planning incident re-entry, Arbiter completion,
 Arbiter remediation, and repeated-remediation blocking. Consolidated Slice 8
-parity evidence and docs are complete for the fixture-backed advanced surfaces;
-native filesystem watcher integration and live subscription quota integration
-remain preview-only/deferred work. The runner adapter docs
+parity evidence and docs are complete for the fixture-backed advanced surfaces,
+and `tests/fixtures/cli_parity/auto_port_v0_17_3_release_parity_evidence.json`
+records the final Rust `0.2.0` auto-port evidence for version metadata,
+managed assets, docs, package include rules, release-readiness commands, and
+the Python `v0.16.1..v0.17.3` source/test references;
+the optional Python `millrace-web` dashboard remains an explicit unsupported
+Rust parity gap with source references and non-goal wording; native filesystem
+watcher integration and live subscription quota integration remain
+preview-only/deferred work. The runner adapter docs
 do not claim broader compiled-plan, queue-state, or stage-machine changes
 beyond the already implemented runtime dispatch boundary.
 
-The compiler layer currently covers serde-backed mode definitions, graph loop
-definitions, stage-kind registry entries, learning triggers, plane concurrency
-policy definitions, compiled graph and compiled run plan shapes, resolved asset
-references, compile outcome data, persisted compiled-plan authority, and
-compiled-plan currentness data. It also resolves authoritative compile assets
-from initialized workspace `modes/`,
+The compiler layer currently covers serde-backed mode definitions including
+`stage_thinking_bindings`, graph loop definitions including node-level
+`thinking_level`, stage-kind registry entries, learning triggers, plane
+concurrency policy definitions, compiled graph and compiled run plan shapes,
+resolved asset references, compile outcome data, persisted compiled-plan
+authority, and compiled-plan currentness data. It also resolves authoritative
+compile assets from initialized workspace `modes/`,
 `graphs/`, `registry/stage_kinds/`, `entrypoints/`, and `skills/` paths,
 canonicalizes `standard_plain` to `default_codex`, fingerprints compile-relevant
 config and resolved asset content while excluding adapter-only runner settings,
-and ignores compatibility `loops/` plus unreferenced assets. It now materializes
-deterministic frozen compiled run
+accepts `stages.<stage>.thinking_level` while preserving legacy
+`model_reasoning_effort` as a matching Codex alias, and ignores compatibility
+`loops/` plus unreferenced assets. It now materializes deterministic frozen
+compiled run
 plans for default Codex, Pi, learning, and `standard_plain` alias modes,
 including graph node bindings, transitions, policies, planning completion
 behavior, learning triggers, and supported config, skill, entrypoint, runner,
-model, reasoning, and timeout overrides. It persists compiler-authoritative
+model, thinking-level, Codex legacy reasoning-effort, and timeout overrides. It
+persists compiler-authoritative
 `compiled_plan.json` and `compile_diagnostics.json`, reports
 missing/current/stale/unknown currentness from compile-input fingerprints,
 preserves last-known-good plans on compile failure, and refuses stale
@@ -304,9 +342,10 @@ last-known-good plans when compile inputs drift and recompilation fails. The
 `millrace compile validate` and `millrace compile show` commands require an
 initialized workspace, accept the built-in Codex/Pi/learning modes and
 `standard_plain` alias, persist compiler artifacts, and render diagnostics plus
-inspectable compiled-plan fields without invoking runtime execution behavior.
-The committed compiler parity fixture covers `default_codex`,
-`default_pi`, `learning_codex`, `learning_pi`, and `standard_plain`.
+inspectable compiled-plan fields including effective `thinking_level` without
+invoking runtime execution behavior. The committed compiler parity fixture is
+pinned to Python `0.17.3` and covers `default_codex`, `default_pi`,
+`learning_codex`, `learning_pi`, and `standard_plain`.
 
 The workspace layer currently covers canonical `<workspace>/millrace-agents/`
 path resolution and idempotent initialization defaults for the directory tree,
@@ -316,7 +355,12 @@ IO plus managed baseline upgrade preview/apply helpers. It now also includes
 filesystem queue stores for canonical task, spec, incident, and learning-request
 headed markdown documents, plus state stores for runtime snapshot, recovery
 counter, status-file, usage-governance state, and usage-governance ledger
-persistence. Offline
+persistence. Task lifecycle integrity helpers detect duplicate task ids across
+`tasks/queue`, `tasks/active`, `tasks/done`, and `tasks/blocked` using parsed
+`Task-ID` values with filename fallback for unparseable artifacts, and task
+completion retires same-root blocked predecessors under
+`tasks/blocked/superseded/` with machine-readable `retirements.jsonl` audit
+evidence. Offline
 runtime ownership lock helpers can inspect, acquire, release, force-release, and
 clear stale or invalid `runtime_daemon.lock.json` files without starting a
 daemon. `RuntimeControl` uses those lock, state, and queue boundaries to apply
@@ -327,7 +371,8 @@ command envelopes when an active daemon lock owns it. The Rust
 `millrace init --workspace <path>` command routes through the workspace
 initialization helper, and first workspace doctor checks validate the
 initialized layout, status/state parseability, baseline manifest and managed
-assets, queue artifacts, and runtime ownership lock health. Read-only operator
+assets, queue artifacts, duplicate task lifecycle state with workspace-relative
+paths, and runtime ownership lock health. Read-only operator
 CLI commands inspect queue, status, run, mode, and config artifacts without
 creating or mutating workspaces. Queue intake CLI commands import task/spec
 markdown or JSON through typed work-document APIs, stage idea markdown, and use
@@ -380,7 +425,8 @@ runner adapter parity evidence is committed and covered by always-on fixture
 assertions; usage-governance dispatch enforcement, governance-owned pause
 mutation, auto-resume, monitor evidence, and runtime-owned learning promotion
 and skill evidence are implemented; closure-lineage runtime readiness, backfill,
-drift, blocking-id, Arbiter close/remediation, and repair-lineage regression
+drift, blocking-id, actionable-target selection, unrelated-root activation,
+Arbiter close/remediation, status actionability, and repair-lineage regression
 coverage is implemented; read-only run inspection depth for malformed,
 incomplete, runner-artifact, governance-linked, closure-target, and
 skill-evidence-bearing runs is implemented; advanced E2E handoff parity is
@@ -399,10 +445,15 @@ Python runtime.
 - [Architecture](docs/architecture.md)
 - [Testing](docs/testing.md)
 - [Rust port roadmap](docs/rust-port-roadmap.md)
+- [Rust source package map](docs/source-package-map.md)
 - [Provenance and autonomous-build evidence](docs/provenance.md)
+- [Changelog](CHANGELOG.md)
 
-The full public proof package for the v0.1.0 autonomous port campaign lives in
+The historical public proof package for the v0.1.0 autonomous port campaign
+lives in
 [`tim-osterhus/millrace-rs-port-docs`](https://github.com/tim-osterhus/millrace-rs-port-docs).
+The crate-local `0.2.0` release evidence lives in `CHANGELOG.md` and
+`tests/fixtures/cli_parity/auto_port_v0_17_3_release_parity_evidence.json`.
 
 ## License
 

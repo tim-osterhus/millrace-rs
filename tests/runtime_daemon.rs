@@ -569,18 +569,40 @@ fn basic_monitor_suppresses_repeated_idle_and_resets_after_activity() {
         monitor_event("runtime_tick_idle", "2026-04-29T02:14:03Z", json!({})),
         monitor_event("runtime_tick_idle", "2026-04-29T02:14:04Z", json!({})),
         monitor_event("runtime_tick_idle", "2026-04-29T02:16:02Z", json!({})),
-        monitor_event("runtime_tick_idle", "2026-04-29T02:16:03Z", json!({})),
-        monitor_event("runtime_tick_paused", "2026-04-29T02:16:04Z", json!({})),
-        monitor_event("runtime_tick_idle", "2026-04-29T02:16:05Z", json!({})),
+        monitor_event("runtime_tick_idle", "2026-04-29T08:14:02Z", json!({})),
+        monitor_event("runtime_tick_idle", "2026-04-29T08:14:03Z", json!({})),
+        monitor_event(
+            "stage_started",
+            "2026-04-29T08:14:04Z",
+            json!({
+                "plane": "execution",
+                "stage": "builder",
+                "node_id": "builder",
+                "stage_kind_id": "builder",
+                "run_id": "run-activity",
+                "work_item_kind": "task",
+                "work_item_id": "task-activity",
+                "status_marker": "### BUILDER_RUNNING"
+            }),
+        ),
+        monitor_event("runtime_tick_idle", "2026-04-29T08:14:05Z", json!({})),
+        monitor_event(
+            "runtime_tick_idle",
+            "2026-04-29T08:14:06Z",
+            json!({"reason": "mailbox_empty"}),
+        ),
+        monitor_event("runtime_tick_idle", "2026-04-29T08:14:07Z", json!({})),
     ]);
 
     assert_eq!(
         output.lines().collect::<Vec<_>>(),
         vec![
             "[02:14:03] idle reason=no_work",
-            "[02:16:03] idle reason=no_work",
-            "[02:16:04] paused reason=paused",
-            "[02:16:05] idle reason=no_work",
+            "[08:14:03] idle reason=no_work",
+            "[08:14:04] stage start execution/builder run=run-activity work=task:task-activity",
+            "[08:14:05] idle reason=no_work",
+            "[08:14:06] idle reason=mailbox_empty",
+            "[08:14:07] idle reason=no_work",
         ]
     );
 }
@@ -951,6 +973,7 @@ fn runtime_config_loading_exposes_real_runner_adapter_settings() {
     let builder = &config.stages["builder"];
     assert_eq!(builder.runner.as_deref(), Some("pi_rpc"));
     assert_eq!(builder.model.as_deref(), Some("openai/gpt-5.4"));
+    assert_eq!(builder.thinking_level.as_deref(), Some("xhigh"));
     assert_eq!(builder.model_reasoning_effort.as_deref(), Some("xhigh"));
     assert_eq!(builder.timeout_seconds, 45);
 
@@ -993,6 +1016,16 @@ fn runtime_config_loading_rejects_real_runner_config_failures_with_paths() {
             "bad-timeout.toml",
             "[stages.builder]\ntimeout_seconds = 0\n",
             "stages.builder.timeout_seconds",
+        ),
+        (
+            "bad-empty-thinking.toml",
+            "[stages.builder]\nthinking_level = \" \"\n",
+            "stages.builder.thinking_level",
+        ),
+        (
+            "bad-thinking-alias-conflict.toml",
+            "[stages.builder]\nthinking_level = \"medium\"\nmodel_reasoning_effort = \"high\"\n",
+            "stages.builder.thinking_level",
         ),
         (
             "bad-stage-key.toml",
@@ -1460,6 +1493,9 @@ fn daemon_mailbox_reload_defers_while_active_and_applies_after_planes_drain() {
             "",
             "[runners.codex]",
             "model_reasoning_effort = \"high\"",
+            "",
+            "[stages.builder]",
+            "timeout_seconds = 45",
             "",
         ]
         .join("\n"),
@@ -2232,8 +2268,10 @@ fn daemon_loop_monitor_streams_pause_and_stop_lines() {
     let mut stopped_supervisor = RuntimeDaemonSupervisor::new(supervisor_runner());
     let mut stopped_sleeper = RecordingSleeper::default();
     let mut stopped_monitor = BasicTerminalMonitor::new(Vec::new());
-    let mut stopped_options = RuntimeDaemonLoopOptions::default();
-    stopped_options.tick_options = runtime_tick_options();
+    let stopped_options = RuntimeDaemonLoopOptions {
+        tick_options: runtime_tick_options(),
+        ..Default::default()
+    };
 
     let stopped_outcome = run_runtime_daemon_supervisor_loop_with_sleeper_and_monitor(
         &mut stopped_session,
@@ -2419,8 +2457,10 @@ fn daemon_loop_stop_drains_workers_resets_state_and_releases_matching_lock() {
     save_snapshot(&paths, &session.snapshot).unwrap();
 
     let mut sleeper = RecordingSleeper::default();
-    let mut options = RuntimeDaemonLoopOptions::default();
-    options.tick_options = runtime_tick_options();
+    let options = RuntimeDaemonLoopOptions {
+        tick_options: runtime_tick_options(),
+        ..Default::default()
+    };
     let outcome = run_runtime_daemon_supervisor_loop_with_sleeper(
         &mut session,
         &mut supervisor,

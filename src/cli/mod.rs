@@ -1867,6 +1867,10 @@ fn render_stage_lines(stage_plan: &MaterializedGraphNodePlan) -> Vec<String> {
             option_text(stage_plan.model_name.as_deref())
         ),
         format!(
+            "thinking_level: {}",
+            option_text(stage_plan.thinking_level.as_deref())
+        ),
+        format!(
             "model_reasoning_effort: {}",
             option_text(stage_plan.model_reasoning_effort.as_deref())
         ),

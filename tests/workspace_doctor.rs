@@ -150,6 +150,42 @@ fn doctor_flags_unparseable_queue_artifacts_and_filename_id_mismatches() {
 }
 
 #[test]
+fn doctor_flags_duplicate_task_lifecycle_state_with_workspace_relative_paths() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+    let document = task_document("task-duplicate");
+    fs::write(
+        paths.tasks_done_dir.join("task-duplicate.md"),
+        render_task_document(&document),
+    )
+    .unwrap();
+    let mut blocked = document.clone();
+    blocked.summary = "stale blocked predecessor".to_owned();
+    fs::write(
+        paths.tasks_blocked_dir.join("task-duplicate.md"),
+        render_task_document(&blocked),
+    )
+    .unwrap();
+
+    let report = run_workspace_doctor_for_paths(&paths);
+
+    assert!(!report.ok);
+    let duplicate = report
+        .errors
+        .iter()
+        .find(|issue| issue.code == "duplicate_task_lifecycle_state")
+        .expect("duplicate task lifecycle diagnostic");
+    assert_eq!(
+        duplicate.message,
+        "task task-duplicate appears in multiple lifecycle states: done:millrace-agents/tasks/done/task-duplicate.md, blocked:millrace-agents/tasks/blocked/task-duplicate.md"
+    );
+    assert_eq!(
+        duplicate.path.as_ref(),
+        Some(&paths.tasks_done_dir.join("task-duplicate.md"))
+    );
+}
+
+#[test]
 fn doctor_reports_runtime_ownership_lock_health() {
     let temp_dir = TempDir::new().unwrap();
     let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();

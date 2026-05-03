@@ -13,6 +13,10 @@ https://github.com/tim-osterhus/millrace-rs-port-docs
 
 ## Current Parity Target
 
+The Rust `0.2.0` release target is Python `v0.17.3` at commit
+`a0d6b1bd5b71284eab7e9a5dcc9f76cee6580aaf`, ported from the previous Rust
+parity baseline of Python `v0.16.1`.
+
 The stable surface for parity is operator-visible behavior:
 
 - CLI command names, output shape, and exit behavior
@@ -38,6 +42,29 @@ is the CLI plus the on-disk workspace format.
 - `runners`: fake runner, Codex CLI, Pi RPC, dispatcher, artifacts
 - `cli`: parser, rendering, read-only commands, intake/control/skills surfaces
 
+## Release Evidence
+
+- `CHANGELOG.md` records the Rust `0.2.0` release-facing summary.
+- `docs/source-package-map.md` records source ownership, package include rules,
+  and the intentional absence of a Rust web-dashboard package.
+- `tests/fixtures/cli_parity/auto_port_v0_17_3_release_parity_evidence.json`
+  ties the Python `v0.16.1..v0.17.3` source/test changes to Rust tests, docs,
+  package metadata, managed assets, and release-readiness commands.
+- `tests/parity_cli.rs` rejects missing, malformed, unknown, stale, or omitted
+  Rust test references in the final auto-port fixture.
+
+## Explicit Parity Gaps
+
+- Python v0.17.3 added the optional `packages/millrace-web` read-only
+  dashboard. The Rust crate does not currently implement a web server, static
+  dashboard shell, SSE event stream, or separate dashboard package. Its
+  deferred reader evidence names the workspace registry, summary DTO, queue,
+  run, snapshot, baseline, compiled-plan, Arbiter, and usage-governance
+  readers. The accepted Rust inspection target remains local read-only CLI
+  commands over initialized workspaces, so the dashboard is recorded as an
+  intentional Arbiter-visible unsupported gap in
+  `tests/fixtures/cli_parity/web_dashboard_parity_decision.json`.
+
 ## Deferred Or Preview Areas
 
 - The Rust crate does not currently claim to self-host the original port
@@ -47,5 +74,6 @@ is the CLI plus the on-disk workspace format.
 - Live Pi RPC smoke coverage requires an operator environment with a configured
   Pi RPC CLI.
 
-For proof of the v0.1.0 autonomous port campaign, see
-`tim-osterhus/millrace-rs-port-docs`.
+For proof of the historical v0.1.0 autonomous port campaign, see
+`tim-osterhus/millrace-rs-port-docs`. For the crate-local `0.2.0` release
+parity pass, use the fixture and changelog paths listed above.

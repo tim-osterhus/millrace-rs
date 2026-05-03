@@ -111,6 +111,7 @@ pub fn normalize_stage_result(
         stderr_path: raw_result.stderr_path.clone(),
         runner_name: Some(raw_result.runner_name.clone()),
         model_name: raw_result.model_name.clone(),
+        thinking_level: resolved_thinking_level(request, raw_result),
         model_reasoning_effort: raw_result
             .model_reasoning_effort
             .clone()
@@ -494,6 +495,7 @@ fn failure_envelope(
         stderr_path: raw_result.stderr_path.clone(),
         runner_name: Some(raw_result.runner_name.clone()),
         model_name: raw_result.model_name.clone(),
+        thinking_level: resolved_thinking_level(request, raw_result),
         model_reasoning_effort: raw_result
             .model_reasoning_effort
             .clone()
@@ -649,6 +651,18 @@ fn transport_reconciliation_notes(raw_result: &RunnerRawResult) -> Vec<String> {
     }
 }
 
+fn resolved_thinking_level(
+    request: &StageRunRequest,
+    raw_result: &RunnerRawResult,
+) -> Option<String> {
+    raw_result
+        .thinking_level
+        .clone()
+        .or_else(|| request.thinking_level.clone())
+        .or_else(|| raw_result.model_reasoning_effort.clone())
+        .or_else(|| request.model_reasoning_effort.clone())
+}
+
 fn request_metadata(
     request: &StageRunRequest,
     normalization_source: &str,
@@ -691,6 +705,7 @@ fn request_metadata(
         "skill_revision_evidence_path".to_owned(),
         json!(request.skill_revision_evidence_path),
     );
+    metadata.insert("thinking_level".to_owned(), json!(request.thinking_level));
     metadata.insert(
         "model_reasoning_effort".to_owned(),
         json!(request.model_reasoning_effort),

@@ -757,7 +757,7 @@ fn parse_remote_skill_index(index_text: &str) -> Vec<RemoteSkillEntry> {
 fn source_directory_for_remote_entry(entry: &RemoteSkillEntry) -> Result<PathBuf, String> {
     let path = Path::new(&entry.path);
     reject_unsafe_relative_path(path, "remote skill path")?;
-    if !path.file_name().is_some_and(|name| name == "SKILL.md") {
+    if path.file_name().is_none_or(|name| name != "SKILL.md") {
         return Err(format!(
             "remote skill path must point to SKILL.md: {}",
             entry.path

@@ -331,6 +331,8 @@ pub struct ModeDefinition {
     pub stage_model_bindings: HashMap<StageName, String>,
     #[serde(default)]
     pub stage_runner_bindings: HashMap<StageName, String>,
+    #[serde(default)]
+    pub stage_thinking_bindings: HashMap<StageName, Option<String>>,
     pub concurrency_policy: Option<PlaneConcurrencyPolicyDefinition>,
     #[serde(default)]
     pub learning_trigger_rules: Vec<LearningTriggerRuleDefinition>,
@@ -387,6 +389,7 @@ impl ModeDefinition {
         normalize_stage_vec_map(&mut self.stage_skill_additions)?;
         normalize_stage_string_map(&mut self.stage_model_bindings)?;
         normalize_stage_string_map(&mut self.stage_runner_bindings)?;
+        normalize_stage_optional_string_map(&mut self.stage_thinking_bindings)?;
         if let Some(policy) = &self.concurrency_policy {
             policy.validate()?;
         }
@@ -424,6 +427,8 @@ struct ModeDefinitionRaw {
     stage_model_bindings: HashMap<StageName, String>,
     #[serde(default)]
     stage_runner_bindings: HashMap<StageName, String>,
+    #[serde(default)]
+    stage_thinking_bindings: HashMap<StageName, Option<String>>,
     concurrency_policy: Option<PlaneConcurrencyPolicyDefinition>,
     #[serde(default)]
     learning_trigger_rules: Vec<LearningTriggerRuleDefinition>,
@@ -447,6 +452,7 @@ impl ModeDefinitionRaw {
             stage_skill_additions: self.stage_skill_additions,
             stage_model_bindings: self.stage_model_bindings,
             stage_runner_bindings: self.stage_runner_bindings,
+            stage_thinking_bindings: self.stage_thinking_bindings,
             concurrency_policy: self.concurrency_policy,
             learning_trigger_rules: self.learning_trigger_rules,
         };
@@ -466,6 +472,8 @@ pub struct GraphLoopNodeDefinition {
     pub attached_skill_additions: Vec<String>,
     pub runner_name: Option<String>,
     pub model_name: Option<String>,
+    #[serde(default)]
+    pub thinking_level: Option<String>,
     pub timeout_seconds: Option<u64>,
 }
 
@@ -486,6 +494,7 @@ impl GraphLoopNodeDefinition {
         )?;
         require_optional_non_blank("runner_name", &self.runner_name)?;
         require_optional_non_blank("model_name", &self.model_name)?;
+        require_optional_non_blank("thinking_level", &self.thinking_level)?;
         if self.timeout_seconds == Some(0) {
             return Err(CompilerContractError::InvalidField {
                 field_name: "timeout_seconds",
@@ -1378,6 +1387,7 @@ pub struct MaterializedGraphNodePlan {
     pub attached_skill_additions: Vec<String>,
     pub runner_name: Option<String>,
     pub model_name: Option<String>,
+    pub thinking_level: Option<String>,
     pub model_reasoning_effort: Option<String>,
     #[serde(default)]
     pub timeout_seconds: u64,
@@ -1408,6 +1418,7 @@ impl MaterializedGraphNodePlan {
         )?;
         require_optional_non_blank("runner_name", &self.runner_name)?;
         require_optional_non_blank("model_name", &self.model_name)?;
+        require_optional_non_blank("thinking_level", &self.thinking_level)?;
         require_optional_non_blank("model_reasoning_effort", &self.model_reasoning_effort)
     }
 }
@@ -2053,6 +2064,15 @@ fn normalize_stage_string_map(
 ) -> Result<(), CompilerContractError> {
     for value in mapping.values() {
         require_non_blank("stage binding", value)?;
+    }
+    Ok(())
+}
+
+fn normalize_stage_optional_string_map(
+    mapping: &mut HashMap<StageName, Option<String>>,
+) -> Result<(), CompilerContractError> {
+    for value in mapping.values() {
+        require_optional_non_blank("stage binding", value)?;
     }
     Ok(())
 }

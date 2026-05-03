@@ -15,8 +15,8 @@ use super::{
     RunnerEnvironmentDelta, RunnerError, RunnerExitKind, RunnerRawResult, RunnerResult,
     StageRunnerAdapter,
     artifacts::{
-        completion_artifact_from_raw_result, invocation_artifact_from_request,
-        write_runner_completion, write_runner_invocation,
+        RunnerCompletionArtifactContext, completion_artifact_from_raw_result,
+        invocation_artifact_from_request, write_runner_completion, write_runner_invocation,
     },
     pi_rpc_client::{
         PiRpcClientCreateRequest, PiRpcClientError, PiRpcClientFactory, PiRpcSessionResult,
@@ -291,6 +291,7 @@ impl PiRpcRunnerAdapter {
             stage: request.stage,
             runner_name: self.name().to_owned(),
             model_name: request.model_name.clone(),
+            thinking_level: request.thinking_level.clone(),
             model_reasoning_effort: request.model_reasoning_effort.clone(),
             exit_kind: RunnerExitKind::RunnerError,
             exit_code,
@@ -357,6 +358,7 @@ impl PiRpcRunnerAdapter {
             stage: request.stage,
             runner_name: self.name().to_owned(),
             model_name: request.model_name.clone(),
+            thinking_level: request.thinking_level.clone(),
             model_reasoning_effort: request.model_reasoning_effort.clone(),
             exit_kind: session_result.exit_kind,
             exit_code: session_result.exit_code,
@@ -404,7 +406,8 @@ pub fn build_pi_rpc_command(
     if let Some(model_name) = request.model_name.as_ref() {
         command.extend(["--model".to_owned(), model_name.clone()]);
     }
-    if let Some(thinking) = config.thinking.as_ref() {
+    let thinking = request.thinking_level.as_ref().or(config.thinking.as_ref());
+    if let Some(thinking) = thinking {
         command.extend(["--thinking".to_owned(), thinking.clone()]);
     }
     if config.disable_context_files {
@@ -477,18 +480,17 @@ fn write_completion(
     notes: Vec<String>,
 ) -> RunnerResult<()> {
     let emitted_at = now_timestamp("emitted_at")?;
-    let artifact = completion_artifact_from_raw_result(
-        request,
+    let context = RunnerCompletionArtifactContext::new(
         runner_name,
-        raw_result,
         command,
         cwd.display().to_string(),
         environment_delta,
         prompt_path,
         emitted_at,
-        failure_class,
-        notes,
-    )?;
+    )
+    .with_failure_class(failure_class)
+    .with_notes(notes);
+    let artifact = completion_artifact_from_raw_result(request, raw_result, context)?;
     write_runner_completion(completion_path, &artifact)
 }
 

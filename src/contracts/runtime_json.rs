@@ -1171,6 +1171,7 @@ pub struct StageResultEnvelope {
     pub stderr_path: Option<String>,
     pub runner_name: Option<String>,
     pub model_name: Option<String>,
+    pub thinking_level: Option<String>,
     pub model_reasoning_effort: Option<String>,
     pub token_usage: Option<TokenUsage>,
     pub notes: Vec<String>,
@@ -1300,6 +1301,7 @@ struct StageResultEnvelopeRaw {
     stderr_path: Option<String>,
     runner_name: Option<String>,
     model_name: Option<String>,
+    thinking_level: Option<String>,
     model_reasoning_effort: Option<String>,
     token_usage: Option<TokenUsage>,
     #[serde(default)]
@@ -1338,6 +1340,7 @@ impl StageResultEnvelopeRaw {
             stderr_path: self.stderr_path,
             runner_name: self.runner_name,
             model_name: self.model_name,
+            thinking_level: self.thinking_level,
             model_reasoning_effort: self.model_reasoning_effort,
             token_usage: self.token_usage,
             notes: self.notes,
@@ -1542,7 +1545,7 @@ fn require_finite_non_negative(
 }
 
 fn require_percent(field_name: &'static str, value: f64) -> Result<(), RuntimeJsonError> {
-    if value.is_finite() && value >= 0.0 && value <= 100.0 {
+    if value.is_finite() && (0.0..=100.0).contains(&value) {
         Ok(())
     } else {
         Err(RuntimeJsonError::InvalidField {

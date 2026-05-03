@@ -35,7 +35,22 @@ learning promotion, skill revision evidence, closure transitions, run
 inspection depth, and E2E handoffs. It also names preserved Python-owned
 contracts, preview-only live/native surfaces, and the completed validation
 command set; `tests/parity_cli.rs` rejects unknown, malformed, stale, or
-missing Rust test references in that fixture.
+missing Rust test references in that fixture. `web_dashboard_parity_decision.json`
+records the Python v0.17.3 optional `packages/millrace-web` surface as an
+intentional unsupported Rust parity gap. It names the workspace registry,
+summary DTO, queue/run/snapshot/baseline/compiled-plan/Arbiter/
+usage-governance/event readers, static shell, CLI/server boundary, and
+package-boundary tests, while documenting that Rust currently keeps the
+accepted inspection boundary at local read-only CLI commands over initialized
+workspaces.
+
+`auto_port_v0_17_3_release_parity_evidence.json` records the final Rust
+`0.2.0` auto-port consolidation evidence for Python `v0.16.1..v0.17.3`,
+including version-visible CLI metadata, package include rules, managed asset
+parity, docs/release notes, release-readiness commands, the web-dashboard gap,
+and required Rust test references. `tests/parity_cli.rs` rejects missing,
+malformed, unknown, stale, or omitted Rust test references in that final
+fixture.
 
 The evidence is intentionally not a byte-for-byte transcript. Paths, generated
 ids, timestamps, package versions, command ids, run ids, compact run handles,
@@ -50,5 +65,5 @@ run-inspection visibility, handoff queue/status transitions, runtime-error and
 handoff incident evidence, daemon key-line or structural event parity, and
 runner request/result artifact shape. Live Codex and Pi smoke coverage, live
 subscription quota provider polling, and native filesystem watcher integration
-remain explicitly opt-in or preview-only and are not required by these
-always-on fixtures.
+remain explicitly opt-in or preview-only, and the optional Rust web dashboard
+remains explicitly unsupported rather than omitted from parity evidence.

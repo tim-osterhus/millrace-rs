@@ -1,0 +1,332 @@
+{
+  "schema_version": "1.0",
+  "kind": "auto_port_v0_17_3_release_parity_evidence",
+  "summary": "Final Rust 0.2.0 release-parity evidence for the Python v0.16.1..v0.17.3 auto-port, covering the implemented Rust parity slices, explicit web-dashboard gap, managed assets, docs, package include rules, and release-readiness command surface.",
+  "python_reference": {
+    "previous_tag": "v0.16.1",
+    "target_tag": "v0.17.3",
+    "target_commit": "a0d6b1bd5b71284eab7e9a5dcc9f76cee6580aaf",
+    "diff_range": "v0.16.1..v0.17.3",
+    "changed_path_families": [
+      "release_workflows",
+      "runtime_docs",
+      "source_package_map",
+      "thinking_level_contracts",
+      "runner_artifacts",
+      "daemon_monitor",
+      "closure_target_actionability",
+      "task_lifecycle_integrity",
+      "optional_web_dashboard"
+    ]
+  },
+  "rust_release": {
+    "crate_version": "0.2.0",
+    "package_name": "millrace-ai",
+    "binary_name": "millrace",
+    "version_command_expectation": "millrace 0.2.0",
+    "package_include_surfaces": [
+      "Cargo.lock",
+      "CHANGELOG.md",
+      "README.md",
+      "docs/**/*.md",
+      "src/assets/**/*",
+      "src/**/*.rs",
+      "tests/**/*.rs",
+      "tests/fixtures/**/*",
+      "tests/support/**/*"
+    ]
+  },
+  "required_surfaces": [
+    "thinking_level_contracts_compiler",
+    "runner_thinking_artifacts",
+    "daemon_monitor_idle_throttle",
+    "closure_target_actionability",
+    "task_lifecycle_integrity",
+    "web_dashboard_unsupported_gap",
+    "assets_docs_release_package"
+  ],
+  "surfaces": [
+    {
+      "surface": "thinking_level_contracts_compiler",
+      "rust_status": "implemented",
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/config/models.py",
+        "../millrace-py/src/millrace_ai/contracts/modes.py",
+        "../millrace-py/src/millrace_ai/architecture/loop_graphs.py",
+        "../millrace-py/src/millrace_ai/architecture/materialization.py",
+        "../millrace-py/src/millrace_ai/compilation/node_materialization.py",
+        "../millrace-py/src/millrace_ai/compilation/validation.py",
+        "../millrace-py/src/millrace_ai/cli/compile_view.py",
+        "../millrace-py/tests/config/test_config.py",
+        "../millrace-py/tests/integration/test_compiler.py"
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/compiler_contracts.rs",
+          "name": "mode_and_graph_contracts_accept_runner_neutral_thinking_bindings"
+        },
+        {
+          "file": "tests/compiler_contracts.rs",
+          "name": "stale_thinking_contract_shapes_are_rejected"
+        },
+        {
+          "file": "tests/compiler_materialization.rs",
+          "name": "thinking_level_precedence_matches_python_materialization_contract"
+        },
+        {
+          "file": "tests/compiler_materialization.rs",
+          "name": "codex_model_reasoning_effort_is_derived_from_effective_thinking_level"
+        },
+        {
+          "file": "tests/compiler_materialization.rs",
+          "name": "conflicting_stage_thinking_aliases_are_rejected"
+        },
+        {
+          "file": "tests/compiler_parity.rs",
+          "name": "rust_compiler_matches_python_normalized_plan_and_cli_fixtures"
+        },
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "rust_compile_show_renders_representative_inspection_fields"
+        }
+      ]
+    },
+    {
+      "surface": "runner_thinking_artifacts",
+      "rust_status": "implemented",
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/runtime/stage_requests.py",
+        "../millrace-py/src/millrace_ai/runners/contracts.py",
+        "../millrace-py/src/millrace_ai/runners/normalization.py",
+        "../millrace-py/src/millrace_ai/runners/requests.py",
+        "../millrace-py/src/millrace_ai/runners/adapters/codex_cli.py",
+        "../millrace-py/src/millrace_ai/runners/adapters/codex_cli_command.py",
+        "../millrace-py/src/millrace_ai/runners/adapters/pi_rpc.py",
+        "../millrace-py/src/millrace_ai/runtime/inspection.py",
+        "../millrace-py/tests/runners/test_runner.py",
+        "../millrace-py/tests/runners/test_runners_codex_adapter.py",
+        "../millrace-py/tests/runners/test_runners_pi_rpc_adapter.py",
+        "../millrace-py/tests/runtime/test_run_inspection.py"
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/contracts_runtime_json.rs",
+          "name": "python_produced_runtime_json_fixtures_round_trip_against_rust_contracts"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "shared_prompt_renderer_persists_stage_request_context"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "runner_artifact_contracts_capture_invocation_completion_and_process_evidence"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "serial_tick_dispatches_fake_runner_persists_artifacts_and_routes_from_graph"
+        },
+        {
+          "file": "tests/runners_codex_cli.rs",
+          "name": "codex_adapter_writes_prompt_invocation_completion_events_stdout_and_tokens"
+        },
+        {
+          "file": "tests/runners_codex_cli.rs",
+          "name": "codex_command_preserves_python_flag_order_and_environment_delta"
+        },
+        {
+          "file": "tests/runners_pi_rpc.rs",
+          "name": "pi_adapter_prefers_request_thinking_level_over_global_default"
+        },
+        {
+          "file": "tests/runners_pi_rpc.rs",
+          "name": "pi_command_preserves_provider_model_thinking_defaults_env_and_rejects_reserved_args"
+        }
+      ]
+    },
+    {
+      "surface": "daemon_monitor_idle_throttle",
+      "rust_status": "implemented",
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/cli/monitoring.py",
+        "../millrace-py/tests/cli/test_monitoring.py"
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/runtime_daemon.rs",
+          "name": "basic_monitor_suppresses_repeated_idle_and_resets_after_activity"
+        },
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "rust_run_daemon_basic_monitor_prints_live_lines_to_stdout"
+        }
+      ]
+    },
+    {
+      "surface": "closure_target_actionability",
+      "rust_status": "implemented",
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/runtime/completion_behavior.py",
+        "../millrace-py/src/millrace_ai/workspace/queue_transitions.py",
+        "../millrace-py/src/millrace_ai/cli/status_view.py",
+        "../millrace-py/tests/runtime/test_completion_behavior.py",
+        "../millrace-py/tests/runtime/test_runtime.py"
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "serial_tick_blocked_closure_target_allows_unrelated_root_spec_to_activate"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "serial_tick_suppresses_closure_target_when_queued_lineage_work_remains"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "serial_tick_suppresses_closure_target_when_blocked_lineage_work_remains"
+        },
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "rust_status_prefers_actionable_closure_target_and_counts_deferred_roots"
+        },
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "rust_status_reports_multiple_actionable_closure_targets_as_invalid"
+        }
+      ]
+    },
+    {
+      "surface": "task_lifecycle_integrity",
+      "rust_status": "implemented",
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/workspace/task_lifecycle_integrity.py",
+        "../millrace-py/src/millrace_ai/workspace/queue_transitions.py",
+        "../millrace-py/src/millrace_ai/doctor.py",
+        "../millrace-py/src/millrace_ai/contracts/work_documents.py",
+        "../millrace-py/tests/workspace/test_doctor.py",
+        "../millrace-py/tests/workspace/test_queue_store.py"
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/workspace_queue_state_stores.rs",
+          "name": "task_lifecycle_duplicate_scan_uses_parsed_ids_and_parse_error_filename_fallback"
+        },
+        {
+          "file": "tests/workspace_queue_state_stores.rs",
+          "name": "mark_task_done_retires_same_root_blocked_duplicate_and_records_audit_evidence"
+        },
+        {
+          "file": "tests/workspace_queue_state_stores.rs",
+          "name": "mark_task_done_keeps_different_root_or_unparseable_blocked_duplicate_in_place"
+        },
+        {
+          "file": "tests/workspace_doctor.rs",
+          "name": "doctor_flags_duplicate_task_lifecycle_state_with_workspace_relative_paths"
+        },
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "rust_doctor_reports_duplicate_task_lifecycle_state_paths"
+        }
+      ]
+    },
+    {
+      "surface": "web_dashboard_unsupported_gap",
+      "rust_status": "arbiter_visible_unsupported_gap",
+      "python_sources": [
+        "../millrace-py/packages/millrace-web/src/millrace_web/app.py",
+        "../millrace-py/packages/millrace-web/src/millrace_web/cli.py",
+        "../millrace-py/packages/millrace-web/src/millrace_web/server.py",
+        "../millrace-py/packages/millrace-web/src/millrace_web/models.py",
+        "../millrace-py/packages/millrace-web/src/millrace_web/services/workspace_registry.py",
+        "../millrace-py/packages/millrace-web/src/millrace_web/services/queue_reader.py",
+        "../millrace-py/packages/millrace-web/src/millrace_web/services/run_reader.py",
+        "../millrace-py/packages/millrace-web/src/millrace_web/services/snapshot_reader.py",
+        "../millrace-py/packages/millrace-web/src/millrace_web/services/baseline_reader.py",
+        "../millrace-py/packages/millrace-web/src/millrace_web/services/compiled_plan_reader.py",
+        "../millrace-py/packages/millrace-web/src/millrace_web/services/arbiter_reader.py",
+        "../millrace-py/packages/millrace-web/src/millrace_web/services/usage_governance_reader.py",
+        "../millrace-py/packages/millrace-web/src/millrace_web/services/event_stream.py",
+        "../millrace-py/packages/millrace-web/src/millrace_web/static/index.html",
+        "../millrace-py/packages/millrace-web/src/millrace_web/static/assets/app.js",
+        "../millrace-py/packages/millrace-web/src/millrace_web/static/assets/styles.css",
+        "../millrace-py/packages/millrace-web/tests/test_app.py",
+        "../millrace-py/packages/millrace-web/tests/test_packaging_boundary.py",
+        "../millrace-py/packages/millrace-web/tests/test_summary_services.py",
+        "../millrace-py/packages/millrace-web/tests/test_workspace_registry.py"
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "committed_web_dashboard_parity_decision_records_unsupported_gap_with_sources"
+        }
+      ]
+    },
+    {
+      "surface": "assets_docs_release_package",
+      "rust_status": "implemented",
+      "python_sources": [
+        "../millrace-py/CHANGELOG.md",
+        "../millrace-py/README.md",
+        "../millrace-py/ROADMAP.md",
+        "../millrace-py/docs/source-package-map.md",
+        "../millrace-py/.github/workflows/publish-to-pypi.yml",
+        "../millrace-py/.github/workflows/repo-guardrails.yml",
+        "../millrace-py/src/millrace_ai/assets/entrypoints/execution/consultant.md",
+        "../millrace-py/src/millrace_ai/assets/entrypoints/planning/manager.md",
+        "../millrace-py/src/millrace_ai/assets/registry/stage_kinds/execution/builder.json",
+        "../millrace-py/tests/assets/test_packaging_runtime_assets.py"
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "rust_version_command_has_millrace_shape"
+        },
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "rust_crate_release_metadata_and_package_include_rules_are_0_2_0"
+        },
+        {
+          "file": "tests/workspace_assets_baseline.rs",
+          "name": "packaged_baseline_manifest_is_sorted_hashed_and_deterministic"
+        },
+        {
+          "file": "tests/workspace_assets_baseline.rs",
+          "name": "initialize_workspace_deploys_managed_assets_and_manifest_io"
+        },
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "committed_auto_port_v0_17_3_release_parity_evidence_covers_python_range_docs_assets_and_tests"
+        }
+      ]
+    }
+  ],
+  "local_docs": [
+    "README.md",
+    "CHANGELOG.md",
+    "docs/rust-port-roadmap.md",
+    "docs/source-package-map.md",
+    "millrace-agents/outline.md",
+    "tests/fixtures/cli_parity/README.md"
+  ],
+  "explicit_gaps": [
+    {
+      "surface": "python_packages_millrace_web",
+      "status": "deferred_unsupported_gap",
+      "evidence_fixture": "tests/fixtures/cli_parity/web_dashboard_parity_decision.json",
+      "reason": "Rust has no accepted web server, static shell, SSE stream, or separate dashboard package target; local read-only CLI inspection remains the Rust-owned boundary."
+    }
+  ],
+  "release_readiness_commands": [
+    "cargo fmt --check",
+    "cargo clippy --all-targets --all-features -- -D warnings",
+    "cargo test --all",
+    "cargo publish --dry-run",
+    "cargo publish --dry-run --allow-dirty"
+  ],
+  "forbidden_release_actions": [
+    "publish",
+    "tag",
+    "push",
+    "upload",
+    "deploy"
+  ]
+}

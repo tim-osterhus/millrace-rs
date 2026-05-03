@@ -1,6 +1,6 @@
 [package]
 name = "millrace-ai"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.85"
 description = "Experimental Rust implementation of the Millrace runtime."
@@ -11,14 +11,18 @@ readme = "README.md"
 keywords = ["ai", "agents", "runtime", "workflow"]
 categories = ["command-line-utilities", "development-tools"]
 include = [
-    "build.rs",
-    "Cargo.lock",
-    "Cargo.toml",
-    "README.md",
-    "LICENSE",
-    "docs/**/*.md",
-    "src/assets/**/*",
-    "src/**/*.rs",
+    "/build.rs",
+    "/Cargo.lock",
+    "/Cargo.toml",
+    "/CHANGELOG.md",
+    "/README.md",
+    "/LICENSE",
+    "/docs/**/*.md",
+    "/src/assets/**/*",
+    "/src/**/*.rs",
+    "/tests/**/*.rs",
+    "/tests/fixtures/**/*",
+    "/tests/support/**/*",
 ]
 
 [lib]

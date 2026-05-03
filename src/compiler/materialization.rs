@@ -381,12 +381,23 @@ pub fn materialize_graph_node_plan(
         }
     }
 
-    let mut model_reasoning_effort = config.runners.codex.model_reasoning_effort.clone();
+    let mut thinking_level = node.thinking_level.clone();
     if let Some(stage_config) = stage_config {
-        if let Some(reasoning_effort) = &stage_config.model_reasoning_effort {
-            model_reasoning_effort = Some(reasoning_effort.clone());
+        if let Some(config_thinking_level) = &stage_config.thinking_level {
+            thinking_level = Some(config_thinking_level.clone());
         }
     }
+    if let Some(stage_name) = stage_name {
+        if let Some(mode_thinking_level) = mode.stage_thinking_bindings.get(&stage_name) {
+            thinking_level = mode_thinking_level.clone();
+        }
+    }
+
+    let model_reasoning_effort = if runner_name.as_deref() == Some("codex_cli") {
+        thinking_level.clone()
+    } else {
+        None
+    };
 
     let mut timeout_seconds = node
         .timeout_seconds
@@ -410,6 +421,7 @@ pub fn materialize_graph_node_plan(
         attached_skill_additions,
         runner_name,
         model_name,
+        thinking_level,
         model_reasoning_effort,
         timeout_seconds,
     };

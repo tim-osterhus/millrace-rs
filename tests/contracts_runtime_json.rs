@@ -174,6 +174,7 @@ fn stage_result_json() -> Value {
         "stderr_path": "stderr.txt",
         "runner_name": "codex_cli",
         "model_name": "gpt-5",
+        "thinking_level": "medium",
         "model_reasoning_effort": "medium",
         "token_usage": {
             "input_tokens": 100,

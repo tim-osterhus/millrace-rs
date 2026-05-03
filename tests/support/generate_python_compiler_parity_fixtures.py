@@ -52,6 +52,19 @@ def main() -> None:
             "package": "millrace-ai",
             "version": millrace_ai.__version__,
             "python_root": "../millrace-py",
+            "contract_sources": [
+                "src/millrace_ai/config/models.py",
+                "src/millrace_ai/contracts/modes.py",
+                "src/millrace_ai/architecture/loop_graphs.py",
+                "src/millrace_ai/architecture/materialization.py",
+                "src/millrace_ai/compilation/node_materialization.py",
+                "src/millrace_ai/compilation/validation.py",
+                "src/millrace_ai/cli/compile_view.py",
+                "tests/config/test_config.py",
+                "tests/assets/test_modes.py",
+                "tests/assets/test_loop_graphs.py",
+                "tests/integration/test_compiler.py",
+            ],
         },
         "normalization": {
             "timestamps": "<timestamp>",
@@ -59,7 +72,7 @@ def main() -> None:
             "compile_input_fingerprints": "<cfg-fingerprint> / <assets-fingerprint>",
             "baseline_manifest": "<baseline_manifest_id> / <package_version>",
             "paths": "runtime-root-relative with forward slashes",
-            "resolved_asset_content_sha256": "preserved",
+            "resolved_asset_content_sha256": "<content-sha256> unless missing",
         },
         "cases": [build_case(mode) for mode in MODES],
     }
@@ -136,6 +149,8 @@ def normalize_plan(value: Any, key: str | None = None, mode_id: str | None = Non
         return "<assets-fingerprint>"
     if key == "compile_time_path" and isinstance(value, str):
         return normalize_runtime_path(value)
+    if key == "content_sha256" and isinstance(value, str) and value != "missing":
+        return "<content-sha256>"
 
     return value
 
@@ -247,6 +262,7 @@ STAGE_FIELDS = {
     "attached_skills",
     "runner_name",
     "model_name",
+    "thinking_level",
     "model_reasoning_effort",
     "timeout_seconds",
 }

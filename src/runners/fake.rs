@@ -8,9 +8,10 @@ use crate::contracts::{ResultClass, StageName, Timestamp, TokenUsage};
 use crate::runtime::StageRunRequest;
 
 use super::{
-    RunnerEnvironmentDelta, RunnerError, RunnerExitKind, RunnerRawResult, RunnerResult,
-    StageRunnerAdapter, completion_artifact_from_raw_result, invocation_artifact_from_request,
-    write_runner_completion, write_runner_invocation, write_stage_prompt_artifact,
+    RunnerCompletionArtifactContext, RunnerEnvironmentDelta, RunnerError, RunnerExitKind,
+    RunnerRawResult, RunnerResult, StageRunnerAdapter, completion_artifact_from_raw_result,
+    invocation_artifact_from_request, write_runner_completion, write_runner_invocation,
+    write_stage_prompt_artifact,
 };
 
 const DEFAULT_FAKE_START: &str = "2026-04-15T00:00:00Z";
@@ -153,6 +154,7 @@ impl StageRunnerAdapter for FakeRunner {
             stage: request.stage,
             runner_name: runner_name.clone(),
             model_name: request.model_name.clone(),
+            thinking_level: request.thinking_level.clone(),
             model_reasoning_effort: request.model_reasoning_effort.clone(),
             exit_kind: result.exit_kind,
             exit_code: result.exit_code,
@@ -167,18 +169,18 @@ impl StageRunnerAdapter for FakeRunner {
             ended_at: self.config.fixed_ended_at.clone(),
         };
         raw_result.validate()?;
-        let completion = completion_artifact_from_raw_result(
-            request,
+        let completion_context = RunnerCompletionArtifactContext::new(
             runner_name,
-            &raw_result,
             command,
             request.run_dir.clone(),
             environment_delta,
             Some(prompt_path.display().to_string()),
             self.config.fixed_ended_at.clone(),
-            fake_failure_class(raw_result.exit_kind).map(str::to_owned),
-            vec!["deterministic fake runner result".to_owned()],
-        )?;
+        )
+        .with_failure_class(fake_failure_class(raw_result.exit_kind).map(str::to_owned))
+        .with_notes(vec!["deterministic fake runner result".to_owned()]);
+        let completion =
+            completion_artifact_from_raw_result(request, &raw_result, completion_context)?;
         write_runner_completion(&paths.completion_path, &completion)?;
         Ok(raw_result)
     }

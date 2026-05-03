@@ -1291,7 +1291,7 @@ fn markdown_stems(directory: &Path) -> RuntimeControlResult<Vec<String>> {
     for entry in entries {
         let entry = entry.map_err(|error| RuntimeControlError::io(directory, error))?;
         let path = entry.path();
-        if !path.extension().is_some_and(|extension| extension == "md") {
+        if path.extension().is_none_or(|extension| extension != "md") {
             continue;
         }
         let file_type = entry

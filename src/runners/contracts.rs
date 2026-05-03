@@ -46,6 +46,7 @@ pub struct RunnerRawResult {
     pub stage: StageName,
     pub runner_name: String,
     pub model_name: Option<String>,
+    pub thinking_level: Option<String>,
     pub model_reasoning_effort: Option<String>,
 
     pub exit_kind: RunnerExitKind,
@@ -126,6 +127,7 @@ struct RunnerRawResultRaw {
     stage: StageName,
     runner_name: String,
     model_name: Option<String>,
+    thinking_level: Option<String>,
     model_reasoning_effort: Option<String>,
 
     exit_kind: RunnerExitKind,
@@ -151,6 +153,7 @@ impl RunnerRawResultRaw {
             stage: self.stage,
             runner_name: self.runner_name,
             model_name: self.model_name,
+            thinking_level: self.thinking_level,
             model_reasoning_effort: self.model_reasoning_effort,
             exit_kind: self.exit_kind,
             exit_code: self.exit_code,

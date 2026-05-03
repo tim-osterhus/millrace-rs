@@ -25,13 +25,14 @@ use millrace_ai::workspace::{
 };
 use millrace_ai::{
     FakeRunner, FakeRunnerConfig, FakeRunnerOutput, FakeRunnerResult, ProcessExecutionResult,
-    ProcessExitKind, RequestKind, RouterAction, RunnerCompletionArtifact, RunnerEnvironmentDelta,
-    RunnerError, RunnerExitKind, RunnerInvocationArtifact, RunnerRawResult, RunnerRegistry,
-    RunnerResult, RuntimeStartupError, RuntimeStartupOptions, RuntimeTickOptions,
-    RuntimeTickOutcomeKind, RuntimeTokenRuleConfig, RuntimeTokenRulesConfig, StageRunRequest,
-    StageRunnerAdapter, StageRunnerDispatcher, SubscriptionQuotaRulesConfig, UsageGovernanceConfig,
-    build_runtime_runner_dispatcher, build_stage_prompt, completion_artifact_from_raw_result,
-    evaluate_runtime_token_rules, evaluate_subscription_quota_rules, evaluate_usage_governance,
+    ProcessExitKind, RequestKind, RouterAction, RunnerCompletionArtifact,
+    RunnerCompletionArtifactContext, RunnerEnvironmentDelta, RunnerError, RunnerExitKind,
+    RunnerInvocationArtifact, RunnerRawResult, RunnerRegistry, RunnerResult, RuntimeStartupError,
+    RuntimeStartupOptions, RuntimeTickOptions, RuntimeTickOutcomeKind, RuntimeTokenRuleConfig,
+    RuntimeTokenRulesConfig, StageRunRequest, StageRunnerAdapter, StageRunnerDispatcher,
+    SubscriptionQuotaRulesConfig, UsageGovernanceConfig, build_runtime_runner_dispatcher,
+    build_stage_prompt, completion_artifact_from_raw_result, evaluate_runtime_token_rules,
+    evaluate_subscription_quota_rules, evaluate_usage_governance,
     healthy_subscription_quota_status, invocation_artifact_from_request, normalize_stage_result,
     reconcile_usage_ledger_from_stage_results, record_stage_result_usage,
     render_stage_request_context_lines, run_serial_runtime_tick,
@@ -87,6 +88,7 @@ fn sample_request(run_dir: &Path) -> StageRunRequest {
         skill_revision_evidence_path: Some(format!("{run_dir}/skill_revision.json")),
         runner_name: Some("fake_runner".to_owned()),
         model_name: Some("fake-model".to_owned()),
+        thinking_level: Some("medium".to_owned()),
         model_reasoning_effort: Some("medium".to_owned()),
         timeout_seconds: 3600,
     };
@@ -123,6 +125,7 @@ fn sample_stage_result_with_tokens(
         stderr_path: None,
         runner_name: Some("fake".to_owned()),
         model_name: None,
+        thinking_level: None,
         model_reasoning_effort: None,
         token_usage: Some(token_usage),
         notes: Vec::new(),
@@ -695,7 +698,6 @@ fn active_run_state(
     plane: Plane,
     stage: StageName,
     node_id: &str,
-    stage_kind_id: &str,
     run_id: &str,
     request_kind: ActiveRunRequestKind,
     work_item_kind: Option<WorkItemKind>,
@@ -705,7 +707,7 @@ fn active_run_state(
         plane,
         stage,
         node_id: node_id.to_owned(),
-        stage_kind_id: stage_kind_id.to_owned(),
+        stage_kind_id: node_id.to_owned(),
         run_id: run_id.to_owned(),
         request_kind,
         work_item_kind,
@@ -991,6 +993,7 @@ impl StageRunnerAdapter for StaticTokenRunner {
             stage: request.stage,
             runner_name: self.runner_name.to_owned(),
             model_name: request.model_name.clone(),
+            thinking_level: request.thinking_level.clone(),
             model_reasoning_effort: request.model_reasoning_effort.clone(),
             exit_kind: millrace_ai::RunnerExitKind::Completed,
             exit_code: Some(0),
@@ -1040,6 +1043,7 @@ impl StageRunnerAdapter for TokenTerminalRunner {
             stage: request.stage,
             runner_name: self.runner_name.to_owned(),
             model_name: request.model_name.clone(),
+            thinking_level: request.thinking_level.clone(),
             model_reasoning_effort: request.model_reasoning_effort.clone(),
             exit_kind: RunnerExitKind::Completed,
             exit_code: Some(0),
@@ -1280,6 +1284,7 @@ impl StageRunnerAdapter for ScriptedE2eRunner {
             stage: request.stage,
             runner_name: "scripted-e2e-runner".to_owned(),
             model_name: request.model_name.clone(),
+            thinking_level: request.thinking_level.clone(),
             model_reasoning_effort: request.model_reasoning_effort.clone(),
             exit_kind: RunnerExitKind::Completed,
             exit_code: Some(0),
@@ -1379,6 +1384,7 @@ fn stage_run_request_serializes_python_compatible_context_fields() {
         serialized["required_skill_paths"][0],
         "millrace-agents/skills/stage/execution/builder-core/SKILL.md"
     );
+    assert_eq!(serialized["thinking_level"], "medium");
     assert_eq!(serialized["timeout_seconds"], 3600);
 
     let decoded = StageRunRequest::from_json_value(serialized.clone()).unwrap();
@@ -1387,6 +1393,7 @@ fn stage_run_request_serializes_python_compatible_context_fields() {
     let context_lines = render_stage_request_context_lines(&decoded);
     assert!(context_lines.contains(&"Entrypoint Contract ID: builder.contract.v1".to_owned()));
     assert!(context_lines.contains(&"Active Work Item: task task-001".to_owned()));
+    assert!(context_lines.contains(&"Thinking Level: medium".to_owned()));
     assert!(context_lines.contains(&"Timeout Seconds: 3600".to_owned()));
 
     let mut unknown_field = serialized;
@@ -1413,6 +1420,7 @@ fn shared_prompt_renderer_persists_stage_request_context() {
     assert!(prompt.contains("Stage Request Context:"));
     assert!(prompt.contains("Entrypoint Contract ID: builder.contract.v1"));
     assert!(prompt.contains("Active Work Item: task task-001"));
+    assert!(prompt.contains("Thinking Level: medium"));
     assert!(prompt.contains("Required Skill Paths:"));
     assert!(prompt.contains("- millrace-agents/skills/stage/execution/builder-core/SKILL.md"));
     assert!(prompt.contains("Legal markers for this stage: `### BUILDER_COMPLETE`."));
@@ -1449,26 +1457,26 @@ fn runner_artifact_contracts_capture_invocation_completion_and_process_evidence(
     assert_eq!(invocation.kind, "runner_invocation");
     assert_eq!(invocation.request_kind, RequestKind::ActiveWorkItem);
     assert_eq!(invocation.runner_name, "codex_cli");
+    assert_eq!(invocation.thinking_level.as_deref(), Some("medium"));
     assert_eq!(invocation.environment_delta.set["MILLRACE_TEST_ENV"], "1");
 
     let runner =
         FakeRunner::with_default(FakeRunnerResult::terminal_marker("### BUILDER_COMPLETE"))
             .unwrap();
     let raw_result = runner.run(&request).unwrap();
-    let completion = completion_artifact_from_raw_result(
-        &request,
+    let completion_context = RunnerCompletionArtifactContext::new(
         "codex_cli",
-        &raw_result,
         command.clone(),
         "/tmp/workspace",
         env_delta.clone(),
         Some(prompt_path.display().to_string()),
         emitted_at.clone(),
-        None,
-        vec!["runner completed".to_owned()],
     )
-    .unwrap();
+    .with_notes(vec!["runner completed".to_owned()]);
+    let completion =
+        completion_artifact_from_raw_result(&request, &raw_result, completion_context).unwrap();
     assert_eq!(completion.kind, "runner_completion");
+    assert_eq!(completion.thinking_level.as_deref(), Some("medium"));
     assert_eq!(completion.duration_seconds, 1.0);
     assert_eq!(completion.exit_code, Some(0));
     assert!(!completion.timed_out);
@@ -1484,6 +1492,8 @@ fn runner_artifact_contracts_capture_invocation_completion_and_process_evidence(
     let completion_json: Value =
         serde_json::from_str(&fs::read_to_string(completion_path).unwrap()).unwrap();
     assert_eq!(invocation_json["command"][0], "codex");
+    assert_eq!(invocation_json["thinking_level"], "medium");
+    assert_eq!(completion_json["thinking_level"], "medium");
     assert_eq!(invocation_json["cwd"], "/tmp/workspace");
     assert_eq!(
         completion_json["prompt_path"],
@@ -1723,6 +1733,9 @@ fn missing_terminal_output_becomes_typed_recoverable_failure() {
     let raw_result = runner.run(&request).unwrap();
     let envelope = normalize_stage_result(&request, &raw_result).unwrap();
 
+    assert_eq!(raw_result.thinking_level.as_deref(), Some("medium"));
+    assert_eq!(envelope.thinking_level.as_deref(), Some("medium"));
+    assert_eq!(envelope.metadata["thinking_level"], json!("medium"));
     assert_eq!(envelope.result_class, ResultClass::RecoverableFailure);
     assert_eq!(
         envelope.metadata["failure_class"],
@@ -1780,7 +1793,7 @@ fn fake_runner_selection_is_deterministic() {
 
     assert_eq!(envelope.terminal_result.as_str(), "BLOCKED");
     assert_eq!(envelope.result_class, ResultClass::Blocked);
-    assert_eq!(envelope.success, false);
+    assert!(!envelope.success);
 }
 
 #[test]
@@ -2097,6 +2110,11 @@ fn serial_tick_claims_execution_when_planning_has_no_work() {
 fn serial_tick_dispatches_fake_runner_persists_artifacts_and_routes_from_graph() {
     let temp = TempDir::new().unwrap();
     let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    fs::write(
+        &paths.runtime_config_file,
+        "[runtime]\ndefault_mode = \"default_codex\"\n\n[stages.builder]\nthinking_level = \"high\"\n",
+    )
+    .unwrap();
     QueueStore::from_paths(paths.clone())
         .enqueue_task(&task_document("task-dispatch"))
         .unwrap();
@@ -2124,8 +2142,27 @@ fn serial_tick_dispatches_fake_runner_persists_artifacts_and_routes_from_graph()
         fs::read_to_string(outcome.terminal_marker_path.as_ref().unwrap()).unwrap(),
         "### BUILDER_COMPLETE\n"
     );
+    let request = outcome.stage_request.as_ref().unwrap();
+    assert_eq!(request.thinking_level.as_deref(), Some("high"));
+    assert_eq!(request.model_reasoning_effort.as_deref(), Some("high"));
+    let persisted_request = StageRunRequest::from_json_str(
+        &fs::read_to_string(outcome.stage_request_path.as_ref().unwrap()).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(persisted_request.thinking_level.as_deref(), Some("high"));
+    assert_eq!(
+        outcome
+            .runner_raw_result
+            .as_ref()
+            .unwrap()
+            .thinking_level
+            .as_deref(),
+        Some("high")
+    );
 
     let stage_result = outcome.stage_result.as_ref().unwrap();
+    assert_eq!(stage_result.thinking_level.as_deref(), Some("high"));
+    assert_eq!(stage_result.metadata["thinking_level"], json!("high"));
     assert_eq!(
         stage_result.terminal_result,
         TerminalResult::Execution(ExecutionTerminalResult::BuilderComplete)
@@ -2446,7 +2483,6 @@ fn serial_tick_execution_run_stage_preserves_active_learning_lane() {
             Plane::Learning,
             StageName::Curator,
             "curator",
-            "curator",
             "run-learning-lane",
             ActiveRunRequestKind::LearningRequest,
             Some(WorkItemKind::LearningRequest),
@@ -2458,7 +2494,6 @@ fn serial_tick_execution_run_stage_preserves_active_learning_lane() {
         active_run_state(
             Plane::Execution,
             StageName::Builder,
-            "builder",
             "builder",
             "run-execution-lane",
             ActiveRunRequestKind::ActiveWorkItem,
@@ -2531,7 +2566,6 @@ fn serial_tick_learning_idle_preserves_active_execution_lane() {
             Plane::Execution,
             StageName::Builder,
             "builder",
-            "builder",
             "run-execution-lane",
             ActiveRunRequestKind::ActiveWorkItem,
             Some(WorkItemKind::Task),
@@ -2543,7 +2577,6 @@ fn serial_tick_learning_idle_preserves_active_execution_lane() {
         active_run_state(
             Plane::Learning,
             StageName::Curator,
-            "curator",
             "curator",
             "run-learning-lane",
             ActiveRunRequestKind::LearningRequest,
@@ -2731,7 +2764,6 @@ fn serial_tick_curator_promotion_defers_until_foreground_drain() {
             Plane::Execution,
             StageName::Updater,
             "updater",
-            "updater",
             "run-execution-promotion",
             ActiveRunRequestKind::ActiveWorkItem,
             Some(WorkItemKind::Task),
@@ -2743,7 +2775,6 @@ fn serial_tick_curator_promotion_defers_until_foreground_drain() {
         active_run_state(
             Plane::Learning,
             StageName::Curator,
-            "curator",
             "curator",
             "run-learning-promotion",
             ActiveRunRequestKind::LearningRequest,
@@ -2865,7 +2896,6 @@ fn serial_tick_curator_rejected_decision_keeps_evidence_without_promotion_or_sou
             Plane::Learning,
             StageName::Curator,
             "curator",
-            "curator",
             "run-learning-rejected",
             ActiveRunRequestKind::LearningRequest,
             Some(WorkItemKind::LearningRequest),
@@ -2960,7 +2990,6 @@ fn serial_tick_curator_blocked_decision_keeps_evidence_without_promotion_or_sour
         active_run_state(
             Plane::Learning,
             StageName::Curator,
-            "curator",
             "curator",
             "run-learning-blocked",
             ActiveRunRequestKind::LearningRequest,
@@ -3922,6 +3951,83 @@ fn serial_tick_suppresses_closure_target_when_blocked_lineage_work_remains() {
     assert!(target.closure_blocked_by_lineage_work);
     assert_eq!(target.blocking_work_ids, vec!["task-blocked".to_owned()]);
     assert_eq!(runtime_events(&paths)[0]["event_type"], "runtime_tick_idle");
+
+    session.finish().unwrap();
+}
+
+#[test]
+fn serial_tick_blocked_closure_target_allows_unrelated_root_spec_to_activate() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    let queue = QueueStore::from_paths(paths.clone());
+    queue.enqueue_task(&task_document("task-blocked")).unwrap();
+    queue.claim_next_execution_task(None).unwrap().unwrap();
+    queue.mark_task_blocked("task-blocked").unwrap();
+
+    let mut blocked_target = closure_target_state("spec-root-001", "idea-001");
+    blocked_target.closure_blocked_by_lineage_work = true;
+    blocked_target.blocking_work_ids = vec!["task-blocked".to_owned()];
+    save_closure_target_state(&paths, &blocked_target).unwrap();
+    write_idea(
+        &paths,
+        "idea-002",
+        "# Idea 002\n\nUnrelated root spec can start.\n",
+    );
+    queue
+        .enqueue_spec(&spec_document_for_lineage("spec-root-002", "idea-002"))
+        .unwrap();
+
+    let mut session =
+        startup_runtime_once_for_paths(&paths, startup_options("tick-closure-blocked-unrelated"))
+            .unwrap();
+    let outcome = run_serial_runtime_tick(
+        &mut session,
+        tick_options("run-unrelated-root", "request-unrelated-root"),
+    )
+    .unwrap();
+
+    let request = outcome.stage_request.unwrap();
+    assert_eq!(request.request_kind, RequestKind::ActiveWorkItem);
+    assert_eq!(request.plane, Plane::Planning);
+    assert_eq!(request.stage, StageName::Planner);
+    assert_eq!(request.active_work_item_kind, Some(WorkItemKind::Spec));
+    assert_eq!(
+        request.active_work_item_id.as_deref(),
+        Some("spec-root-002")
+    );
+    assert!(paths.specs_active_dir.join("spec-root-002.md").is_file());
+    let blocked =
+        millrace_ai::workspace::load_closure_target_state(&paths, "spec-root-001").unwrap();
+    let unrelated =
+        millrace_ai::workspace::load_closure_target_state(&paths, "spec-root-002").unwrap();
+    assert!(blocked.closure_open);
+    assert!(blocked.closure_blocked_by_lineage_work);
+    assert!(unrelated.closure_open);
+    assert!(!unrelated.closure_blocked_by_lineage_work);
+
+    session.finish().unwrap();
+}
+
+#[test]
+fn serial_tick_refuses_multiple_actionable_open_closure_targets() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    save_closure_target_state(&paths, &closure_target_state("spec-root-001", "idea-001")).unwrap();
+    save_closure_target_state(&paths, &closure_target_state("spec-root-002", "idea-002")).unwrap();
+
+    let mut session =
+        startup_runtime_once_for_paths(&paths, startup_options("tick-closure-ambiguous")).unwrap();
+    let error = run_serial_runtime_tick(
+        &mut session,
+        tick_options("run-ambiguous", "request-ambiguous"),
+    )
+    .unwrap_err();
+
+    assert!(
+        error
+            .to_string()
+            .contains("multiple actionable open closure targets found")
+    );
 
     session.finish().unwrap();
 }

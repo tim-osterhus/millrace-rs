@@ -20,6 +20,7 @@ use crate::{
     },
 };
 
+use super::task_lifecycle_integrity::retire_stale_blocked_task_duplicate_after_done;
 use super::{WorkspaceError, WorkspacePaths, initialize_workspace};
 
 /// Result type for queue store operations.
@@ -52,7 +53,7 @@ pub enum QueueStoreError {
 }
 
 impl QueueStoreError {
-    fn io(path: impl Into<PathBuf>, error: io::Error) -> Self {
+    pub(super) fn io(path: impl Into<PathBuf>, error: io::Error) -> Self {
         Self::Io {
             path: path.into(),
             message: error.to_string(),
@@ -310,6 +311,14 @@ impl QueueStore {
     ) -> QueueStoreResult<Option<QueueInspectionEntry>> {
         find_queue_item(&self.paths, work_item_id)
     }
+
+    /// List queued root specs currently deferred behind an open closure target.
+    pub fn list_deferred_root_spec_ids(
+        &self,
+        open_root_spec_id: &str,
+    ) -> QueueStoreResult<Vec<String>> {
+        list_deferred_root_spec_ids(&self.paths, open_root_spec_id)
+    }
 }
 
 /// Inspect all canonical queue work documents without mutating queue state.
@@ -363,6 +372,43 @@ pub fn find_queue_item(
     Ok(inspect_queue_items(paths)?
         .into_iter()
         .find(|entry| entry.work_item_id == work_item_id))
+}
+
+/// List queued root specs whose root differs from the currently actionable closure target.
+pub fn list_deferred_root_spec_ids(
+    paths: &WorkspacePaths,
+    open_root_spec_id: &str,
+) -> QueueStoreResult<Vec<String>> {
+    let mut deferred = Vec::new();
+    for path in list_markdown_files(&paths.specs_queue_dir)? {
+        let raw = match fs::read_to_string(&path) {
+            Ok(raw) => raw,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(QueueStoreError::io(&path, error)),
+        };
+        let document = match parse_spec_document_with_source(&raw, &path.display().to_string()) {
+            Ok(document) => document,
+            Err(_) => continue,
+        };
+        if !is_root_spec_document(&document) {
+            continue;
+        }
+        let Some(root_spec_id) = effective_root_spec_spec(&document) else {
+            continue;
+        };
+        if root_spec_id == open_root_spec_id {
+            continue;
+        }
+        deferred.push((
+            document.created_at.as_str().to_owned(),
+            document.spec_id.clone(),
+        ));
+    }
+    deferred.sort_by(|left, right| (&left.0, &left.1).cmp(&(&right.0, &right.1)));
+    Ok(deferred
+        .into_iter()
+        .map(|(_created_at, spec_id)| spec_id)
+        .collect())
 }
 
 /// Enqueue a task document in the execution queue.
@@ -601,12 +647,14 @@ pub fn claim_next_learning_request(paths: &WorkspacePaths) -> QueueStoreResult<O
 
 /// Mark an active task done.
 pub fn mark_task_done(paths: &WorkspacePaths, task_id: &str) -> QueueStoreResult<PathBuf> {
-    move_item(
+    let destination = move_item(
         &paths.tasks_active_dir,
         &paths.tasks_done_dir,
         task_id,
         WorkItemKind::Task,
-    )
+    )?;
+    retire_stale_blocked_task_duplicate_after_done(paths, task_id)?;
+    Ok(destination)
 }
 
 /// Mark an active task blocked.
@@ -1374,7 +1422,7 @@ fn effective_root_spec_task(document: &TaskDocument) -> Option<&str> {
 }
 
 fn effective_root_spec_spec(document: &SpecDocument) -> Option<&str> {
-    document.root_spec_id.as_deref().or_else(|| {
+    document.root_spec_id.as_deref().or({
         if matches!(
             document.source_type,
             SpecSourceType::Idea | SpecSourceType::Manual
@@ -1384,6 +1432,23 @@ fn effective_root_spec_spec(document: &SpecDocument) -> Option<&str> {
             None
         }
     })
+}
+
+fn is_root_spec_document(document: &SpecDocument) -> bool {
+    if let Some(root_spec_id) = document.root_spec_id.as_deref() {
+        return root_spec_id == document.spec_id;
+    }
+    matches!(
+        document.source_type,
+        SpecSourceType::Idea | SpecSourceType::Manual
+    ) && !has_parent_spec(document)
+}
+
+fn has_parent_spec(document: &SpecDocument) -> bool {
+    document
+        .parent_spec_id
+        .as_deref()
+        .is_some_and(|value| !value.trim().eq_ignore_ascii_case("none"))
 }
 
 fn effective_root_spec_incident(document: &IncidentDocument) -> Option<&str> {

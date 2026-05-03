@@ -31,10 +31,10 @@ use crate::{
         stage_name_for_plane,
     },
     runners::{
-        RunnerEnvironmentDelta, RunnerError, RunnerExitKind, RunnerRawResult, StageRunnerAdapter,
-        completion_artifact_from_raw_result, invocation_artifact_from_request,
-        normalize_stage_result, write_runner_completion, write_runner_invocation,
-        write_stage_prompt_artifact,
+        RunnerCompletionArtifactContext, RunnerEnvironmentDelta, RunnerError, RunnerExitKind,
+        RunnerRawResult, StageRunnerAdapter, completion_artifact_from_raw_result,
+        invocation_artifact_from_request, normalize_stage_result, write_runner_completion,
+        write_runner_invocation, write_stage_prompt_artifact,
     },
     work_documents::{
         parse_incident_document_with_source, parse_learning_request_document_with_source,
@@ -529,8 +529,8 @@ pub(crate) fn apply_stage_worker_raw_result(
             let recovery = schedule_post_stage_exception_recovery(
                 session,
                 &stage_result,
-                &application_error.source,
-                application_error.router_decision.as_ref(),
+                application_error.source.as_ref(),
+                application_error.router_decision.as_deref(),
                 application_error.stage_result_path.as_deref(),
             )?;
             let recovery_router_decision_path = write_recovery_router_decision_artifact(
@@ -631,6 +631,7 @@ pub(crate) fn runner_exception_raw_result(
         stage: request.stage,
         runner_name: runner_name.clone(),
         model_name: request.model_name.clone(),
+        thinking_level: request.thinking_level.clone(),
         model_reasoning_effort: request.model_reasoning_effort.clone(),
         exit_kind: RunnerExitKind::RunnerError,
         exit_code: Some(1),
@@ -645,18 +646,17 @@ pub(crate) fn runner_exception_raw_result(
         ended_at: completed_at.clone(),
     };
     raw_result.validate()?;
-    let completion = completion_artifact_from_raw_result(
-        request,
+    let completion_context = RunnerCompletionArtifactContext::new(
         runner_name,
-        &raw_result,
         command,
         request.run_dir.clone(),
         environment_delta,
         Some(prompt_path.display().to_string()),
         completed_at.clone(),
-        Some("runner_transport_failure".to_owned()),
-        vec![format!("{exception_type}: {exception_message}")],
-    )?;
+    )
+    .with_failure_class(Some("runner_transport_failure".to_owned()))
+    .with_notes(vec![format!("{exception_type}: {exception_message}")]);
+    let completion = completion_artifact_from_raw_result(request, &raw_result, completion_context)?;
     write_runner_completion(&completion_path, &completion)?;
     Ok(raw_result)
 }
@@ -1312,7 +1312,14 @@ fn create_closure_target_for_root_spec(
         Err(LineageRepairError::MissingClosureTarget { .. }) => {}
         Err(error) => return Err(error.into()),
     }
-    if !open_closure_targets(&session.paths)?.is_empty() {
+    let open_targets = open_closure_targets(&session.paths)?;
+    let actionable_targets = actionable_open_closure_targets(open_targets);
+    if actionable_targets.len() > 1 {
+        return Err(invalid_state(
+            "multiple actionable open closure targets found",
+        ));
+    }
+    if !actionable_targets.is_empty() {
         return Err(invalid_state(
             "cannot open closure target while another open closure target exists",
         ));
@@ -1402,8 +1409,8 @@ fn read_spec_document(path: &Path) -> RuntimeTickResult<SpecDocument> {
 }
 
 fn is_root_spec_candidate(spec: &SpecDocument) -> bool {
-    if spec.root_spec_id.as_deref() == Some(spec.spec_id.as_str()) {
-        return true;
+    if let Some(root_spec_id) = spec.root_spec_id.as_deref() {
+        return root_spec_id == spec.spec_id;
     }
     matches!(
         spec.source_type,
@@ -1414,7 +1421,7 @@ fn is_root_spec_candidate(spec: &SpecDocument) -> bool {
 fn has_parent_spec(spec: &SpecDocument) -> bool {
     spec.parent_spec_id
         .as_deref()
-        .is_some_and(|value| value.trim().to_ascii_lowercase() != "none")
+        .is_some_and(|value| !value.trim().eq_ignore_ascii_case("none"))
 }
 
 fn load_root_idea_markdown(
@@ -1643,6 +1650,7 @@ fn build_stage_run_request(
             .map(|path| path.display().to_string()),
         runner_name: stage_plan.runner_name.clone(),
         model_name: stage_plan.model_name.clone(),
+        thinking_level: stage_plan.thinking_level.clone(),
         model_reasoning_effort: stage_plan.model_reasoning_effort.clone(),
         timeout_seconds: stage_plan.timeout_seconds,
     };
@@ -1763,6 +1771,7 @@ fn build_closure_target_stage_run_request(
             .map(|path| path.display().to_string()),
         runner_name: stage_plan.runner_name.clone(),
         model_name: stage_plan.model_name.clone(),
+        thinking_level: stage_plan.thinking_level.clone(),
         model_reasoning_effort: stage_plan.model_reasoning_effort.clone(),
         timeout_seconds: stage_plan.timeout_seconds,
     };
@@ -3149,13 +3158,10 @@ fn increment_route_counters(
     let Some(field) = route_counter_field(decision, stage_result) else {
         return Ok(());
     };
-    let failure_class = decision
-        .failure_class
-        .as_deref()
-        .unwrap_or_else(|| match field {
-            RecoveryCounterField::FixCycleCount => "fix_cycle",
-            _ => "recoverable_failure",
-        });
+    let failure_class = decision.failure_class.as_deref().unwrap_or(match field {
+        RecoveryCounterField::FixCycleCount => "fix_cycle",
+        _ => "recoverable_failure",
+    });
     increment_counter_field(
         &session.paths,
         &mut session.snapshot,
@@ -3554,9 +3560,9 @@ struct DispatchApplicationOutput {
 
 #[derive(Debug)]
 struct DispatchApplicationError {
-    source: RuntimeTickError,
+    source: Box<RuntimeTickError>,
     terminal_marker_path: Option<PathBuf>,
-    router_decision: Option<RouterDecision>,
+    router_decision: Option<Box<RouterDecision>>,
     stage_result_path: Option<PathBuf>,
 }
 
@@ -3570,9 +3576,9 @@ struct DispatchApplicationPartial {
 impl DispatchApplicationPartial {
     fn fail(self, source: RuntimeTickError) -> DispatchApplicationError {
         DispatchApplicationError {
-            source,
+            source: Box::new(source),
             terminal_marker_path: self.terminal_marker_path,
-            router_decision: self.router_decision,
+            router_decision: self.router_decision.map(Box::new),
             stage_result_path: self.stage_result_path,
         }
     }
@@ -5628,10 +5634,13 @@ fn policy_for_stage_plan(
 
 fn active_closure_target(paths: &WorkspacePaths) -> RuntimeTickResult<Option<ClosureTargetState>> {
     let open_targets = open_closure_targets(paths)?;
-    match open_targets.len() {
+    let actionable_targets = actionable_open_closure_targets(open_targets);
+    match actionable_targets.len() {
         0 => Ok(None),
-        1 => Ok(open_targets.into_iter().next()),
-        _ => Err(invalid_state("multiple open closure targets found")),
+        1 => Ok(actionable_targets.into_iter().next()),
+        _ => Err(invalid_state(
+            "multiple actionable open closure targets found",
+        )),
     }
 }
 
@@ -5681,6 +5690,15 @@ fn open_closure_targets(paths: &WorkspacePaths) -> RuntimeTickResult<Vec<Closure
     }
     targets.sort_by(|left, right| left.root_spec_id.cmp(&right.root_spec_id));
     Ok(targets)
+}
+
+fn actionable_open_closure_targets(
+    open_targets: Vec<ClosureTargetState>,
+) -> Vec<ClosureTargetState> {
+    open_targets
+        .into_iter()
+        .filter(|target| !target.closure_blocked_by_lineage_work)
+        .collect()
 }
 
 fn refresh_closure_target_readiness(
@@ -5749,7 +5767,7 @@ fn collect_spec_lineage_ids(
                 source,
             },
         )?;
-        let effective_root = document.root_spec_id.as_deref().or_else(|| {
+        let effective_root = document.root_spec_id.as_deref().or({
             if matches!(
                 document.source_type,
                 SpecSourceType::Idea | SpecSourceType::Manual

@@ -36,6 +36,7 @@
           "attached_skill_additions": [],
           "runner_name": "codex_cli",
           "model_name": null,
+          "thinking_level": "medium",
           "model_reasoning_effort": "medium",
           "timeout_seconds": 3600
         }
@@ -110,6 +111,7 @@
           "attached_skill_additions": [],
           "runner_name": "codex_cli",
           "model_name": null,
+          "thinking_level": null,
           "model_reasoning_effort": null,
           "timeout_seconds": 3600
         }
@@ -218,6 +220,7 @@
         "attached_skill_additions": [],
         "runner_name": "codex_cli",
         "model_name": null,
+        "thinking_level": "medium",
         "model_reasoning_effort": "medium",
         "timeout_seconds": 3600
       }
@@ -292,6 +295,7 @@
         "attached_skill_additions": [],
         "runner_name": "codex_cli",
         "model_name": null,
+        "thinking_level": null,
         "model_reasoning_effort": null,
         "timeout_seconds": 3600
       }

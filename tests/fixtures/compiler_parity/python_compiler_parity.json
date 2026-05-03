@@ -286,6 +286,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "BUILDER_RUNNING",
               "stage_kind_id": "builder",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -318,6 +319,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "CHECKER_RUNNING",
               "stage_kind_id": "checker",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -347,6 +349,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "FIXER_RUNNING",
               "stage_kind_id": "fixer",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -379,6 +382,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "DOUBLECHECKER_RUNNING",
               "stage_kind_id": "doublechecker",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -408,6 +412,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "UPDATER_RUNNING",
               "stage_kind_id": "updater",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -437,6 +442,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "TROUBLESHOOTER_RUNNING",
               "stage_kind_id": "troubleshooter",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -469,6 +475,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "CONSULTANT_RUNNING",
               "stage_kind_id": "consultant",
+              "thinking_level": null,
               "timeout_seconds": 3600
             }
           ],
@@ -1006,6 +1013,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "BUILDER_RUNNING",
                 "stage_kind_id": "builder",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -1038,6 +1046,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "CHECKER_RUNNING",
                 "stage_kind_id": "checker",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -1067,6 +1076,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "FIXER_RUNNING",
                 "stage_kind_id": "fixer",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -1099,6 +1109,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "DOUBLECHECKER_RUNNING",
                 "stage_kind_id": "doublechecker",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -1128,6 +1139,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "UPDATER_RUNNING",
                 "stage_kind_id": "updater",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -1157,6 +1169,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "TROUBLESHOOTER_RUNNING",
                 "stage_kind_id": "troubleshooter",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -1189,6 +1202,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "CONSULTANT_RUNNING",
                 "stage_kind_id": "consultant",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               }
             ],
@@ -1674,6 +1688,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "PLANNER_RUNNING",
                 "stage_kind_id": "planner",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -1703,6 +1718,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "MANAGER_RUNNING",
                 "stage_kind_id": "manager",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -1732,6 +1748,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "MECHANIC_RUNNING",
                 "stage_kind_id": "mechanic",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -1761,6 +1778,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "AUDITOR_RUNNING",
                 "stage_kind_id": "auditor",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -1795,6 +1813,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "ARBITER_RUNNING",
                 "stage_kind_id": "arbiter",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               }
             ],
@@ -2225,6 +2244,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "PLANNER_RUNNING",
               "stage_kind_id": "planner",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -2254,6 +2274,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "MANAGER_RUNNING",
               "stage_kind_id": "manager",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -2283,6 +2304,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "MECHANIC_RUNNING",
               "stage_kind_id": "mechanic",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -2312,6 +2334,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "AUDITOR_RUNNING",
               "stage_kind_id": "auditor",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -2346,6 +2369,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "ARBITER_RUNNING",
               "stage_kind_id": "arbiter",
+              "thinking_level": null,
               "timeout_seconds": 3600
             }
           ],
@@ -2546,235 +2570,235 @@
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/builder.md",
-            "content_sha256": "aff98775d2ce88e70b1a7345bc8aaa6c330b124219298c2de0a606c949c36568",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/builder.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/checker.md",
-            "content_sha256": "e316f471eb5af06c37c055d3fcd5a5853075ee35e254690b391bcc430c28c3d0",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/checker.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/consultant.md",
-            "content_sha256": "0bc9d22cb0027364146d0b903e4c3c273de10fc6d79703edf99b4393ab667cd3",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/consultant.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/doublechecker.md",
-            "content_sha256": "317fbf54c1e7e960f041ad69a70c2bbfb5278669c79da3e0df6a87084e39f1eb",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/doublechecker.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/fixer.md",
-            "content_sha256": "05e2bc5b5d9ba40896134b629934fd0d0e53d60ae0fc908f79cca755ec8111f4",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/fixer.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/troubleshooter.md",
-            "content_sha256": "554c9a61a83e451b4107eea319c383f6119328f0f64fb3f33dcc6748d17a75d0",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/troubleshooter.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/updater.md",
-            "content_sha256": "33d16edbd70ec1f75acf760fe74e26b3c17dec4db2a2c63641287dc67fa76020",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/updater.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/planning/arbiter.md",
-            "content_sha256": "e9065bbb47251a1e9ac1f1246396b825deee5a2a0b16d9e629a3e07c1f3dc51d",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/planning/arbiter.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/planning/auditor.md",
-            "content_sha256": "9e4a685689d3941a6d438e5f1cbbc1764e973906a18ac6b7e0bb1d45fe181948",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/planning/auditor.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/planning/manager.md",
-            "content_sha256": "0d6a15d9bbeae7894dca79bc9f6a91cd6d9f30243dd32ed363cb0d3bc9638ad5",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/planning/manager.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/planning/mechanic.md",
-            "content_sha256": "9c715ed1267c587e82c97bd43077d7fdb68f985e65715ff3bfcfd84a60b51f65",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/planning/mechanic.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/planning/planner.md",
-            "content_sha256": "7301cb6c5713a8eb5f6798ab2460332c16e47fc3340383365c83b9a7ddf45824",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/planning/planner.md"
           },
           {
             "asset_family": "graph_loop",
             "compile_time_path": "graphs/execution/standard.json",
-            "content_sha256": "3957438af72ca5826d194398850289c1a592d1083879c85566e9092d3b03b339",
+            "content_sha256": "<content-sha256>",
             "logical_id": "graph_loop:execution.standard"
           },
           {
             "asset_family": "graph_loop",
             "compile_time_path": "graphs/planning/standard.json",
-            "content_sha256": "8defb2f2466ac065ee7ae5e584d6cd67a9e3aa121d075f5a03ec23816ea4a294",
+            "content_sha256": "<content-sha256>",
             "logical_id": "graph_loop:planning.standard"
           },
           {
             "asset_family": "mode",
             "compile_time_path": "modes/default_codex.json",
-            "content_sha256": "736b0ffc730c5a622c249e3d5369342ae8e4ab052a03d4a9c25aedfae1c8234c",
+            "content_sha256": "<content-sha256>",
             "logical_id": "mode:default_codex"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/builder-core/SKILL.md",
-            "content_sha256": "4b14b537e145ee4287af99a9e33ef77eb36472a9d12b9f8f534efcfa2cf7f52d",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/builder-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/checker-core/SKILL.md",
-            "content_sha256": "be4a309193092e93003f8ec9aeb5114d94513d411ec6686b7c06867269686d7b",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/checker-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/consultant-core/SKILL.md",
-            "content_sha256": "211fe9e657c53accdeb2997efc2e0323fed81cf5dbe84d0203971ac27933240b",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/consultant-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/doublechecker-core/SKILL.md",
-            "content_sha256": "7c9b957cf8978ea74c1723559447b37898927195c083184178df6258ff5a02da",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/doublechecker-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/fixer-core/SKILL.md",
-            "content_sha256": "8beac60429e899969b094ebd2f4dd15639750b30c1b7564470509bee8ea07e15",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/fixer-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/troubleshooter-core/SKILL.md",
-            "content_sha256": "0d95a66232c0005278469298e0ff5edf898cdcc11f1a286fc7c5b6dad29ffc43",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/troubleshooter-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/updater-core/SKILL.md",
-            "content_sha256": "a8a1a872e731913d913c36452e9b09636783a6263c9f73d3ff6a8ac9dddcbd64",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/updater-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/planning/arbiter-core/SKILL.md",
-            "content_sha256": "af9469afd1caba08afb9d97070f9701b51c81ab315085fc286e25ec0850d3297",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/planning/arbiter-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/planning/auditor-core/SKILL.md",
-            "content_sha256": "e0fa6997358b3bdd7c3d7171c30c61caa4047dc0315d2b61d0925aa06dc7b6e1",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/planning/auditor-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/planning/manager-core/SKILL.md",
-            "content_sha256": "1252c6e6f981ac98799565b0e6042668514f48956b71331af4d632a11b85b92c",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/planning/manager-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/planning/mechanic-core/SKILL.md",
-            "content_sha256": "fad988a3f925b15e2b28ad3fd2a0edf35cbc559151a13271506b047591b9f239",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/planning/mechanic-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/planning/planner-core/SKILL.md",
-            "content_sha256": "ffe43d5d10bc26f1280909d96b44a52452ad886c9448d93466bec428581dc234",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/planning/planner-core/SKILL.md"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/arbiter.json",
-            "content_sha256": "ccd5e6501a60f700ca8451a83deca7a301bcee3ee44d5ddd606e0b3b2b12fe82",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:arbiter"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/auditor.json",
-            "content_sha256": "a02aab9503cba4e766e7eaa3f26f7f7213c6b455f7ec705813c4a008def9485e",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:auditor"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/builder.json",
-            "content_sha256": "a20c05040e80c71bae2a8538439c2c6c679e4de15f8be3b7656b8c90ed268903",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:builder"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/checker.json",
-            "content_sha256": "663b08581031cbddc4414074d8641dad8da6f098f45673517b696986abd4f33e",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:checker"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/consultant.json",
-            "content_sha256": "e1feda9504646538a23e88acffb5733e6f21ea63c1200760a35f2d34b7034c95",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:consultant"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/doublechecker.json",
-            "content_sha256": "bb662399188efe1fc47a7b2d99ad086b735f3429a3aba2760444e734d728e68f",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:doublechecker"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/fixer.json",
-            "content_sha256": "cdd986e468f37089266a92dbaa71dd2fbbe36570e97fb681c87a4c83036169e4",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:fixer"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/manager.json",
-            "content_sha256": "ea39785ec4c8bcf154ddf86a02bbfe720a073634c6f048b51a161a72a9810483",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:manager"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/mechanic.json",
-            "content_sha256": "105ffc7051dbd1ada9e89e12622973896fd38584e3567beaad07a2633a4b440f",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:mechanic"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/planner.json",
-            "content_sha256": "6f9adc4223c6fe9dd1bfee5ebefa021be22ec78e0db4ec7539acab7e4670c5f5",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:planner"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/troubleshooter.json",
-            "content_sha256": "6a19b2ab940ba69da3465779ad1b4670d660d292fd0f14eb082fb98836c3bc17",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:troubleshooter"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/updater.json",
-            "content_sha256": "5382ac59214d6e38952425960a3d5fee4167668e2540cfdb6817a56c30fd3c9b",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:updater"
           }
         ],
@@ -2838,6 +2862,7 @@
               "running_status_marker": "BUILDER_RUNNING",
               "stage": "execution.builder",
               "stage_kind_id": "builder",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -2851,6 +2876,7 @@
               "running_status_marker": "CHECKER_RUNNING",
               "stage": "execution.checker",
               "stage_kind_id": "checker",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -2864,6 +2890,7 @@
               "running_status_marker": "CONSULTANT_RUNNING",
               "stage": "execution.consultant",
               "stage_kind_id": "consultant",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -2877,6 +2904,7 @@
               "running_status_marker": "DOUBLECHECKER_RUNNING",
               "stage": "execution.doublechecker",
               "stage_kind_id": "doublechecker",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -2890,6 +2918,7 @@
               "running_status_marker": "FIXER_RUNNING",
               "stage": "execution.fixer",
               "stage_kind_id": "fixer",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -2903,6 +2932,7 @@
               "running_status_marker": "TROUBLESHOOTER_RUNNING",
               "stage": "execution.troubleshooter",
               "stage_kind_id": "troubleshooter",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -2916,6 +2946,7 @@
               "running_status_marker": "UPDATER_RUNNING",
               "stage": "execution.updater",
               "stage_kind_id": "updater",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -2929,6 +2960,7 @@
               "running_status_marker": "ARBITER_RUNNING",
               "stage": "planning.arbiter",
               "stage_kind_id": "arbiter",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -2942,6 +2974,7 @@
               "running_status_marker": "AUDITOR_RUNNING",
               "stage": "planning.auditor",
               "stage_kind_id": "auditor",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -2955,6 +2988,7 @@
               "running_status_marker": "MANAGER_RUNNING",
               "stage": "planning.manager",
               "stage_kind_id": "manager",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -2968,6 +3002,7 @@
               "running_status_marker": "MECHANIC_RUNNING",
               "stage": "planning.mechanic",
               "stage_kind_id": "mechanic",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -2981,6 +3016,7 @@
               "running_status_marker": "PLANNER_RUNNING",
               "stage": "planning.planner",
               "stage_kind_id": "planner",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             }
           ]
@@ -3284,6 +3320,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "BUILDER_RUNNING",
               "stage_kind_id": "builder",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -3316,6 +3353,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "CHECKER_RUNNING",
               "stage_kind_id": "checker",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -3345,6 +3383,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "FIXER_RUNNING",
               "stage_kind_id": "fixer",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -3377,6 +3416,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "DOUBLECHECKER_RUNNING",
               "stage_kind_id": "doublechecker",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -3406,6 +3446,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "UPDATER_RUNNING",
               "stage_kind_id": "updater",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -3435,6 +3476,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "TROUBLESHOOTER_RUNNING",
               "stage_kind_id": "troubleshooter",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -3467,6 +3509,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "CONSULTANT_RUNNING",
               "stage_kind_id": "consultant",
+              "thinking_level": null,
               "timeout_seconds": 3600
             }
           ],
@@ -4004,6 +4047,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "BUILDER_RUNNING",
                 "stage_kind_id": "builder",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -4036,6 +4080,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "CHECKER_RUNNING",
                 "stage_kind_id": "checker",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -4065,6 +4110,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "FIXER_RUNNING",
                 "stage_kind_id": "fixer",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -4097,6 +4143,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "DOUBLECHECKER_RUNNING",
                 "stage_kind_id": "doublechecker",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -4126,6 +4173,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "UPDATER_RUNNING",
                 "stage_kind_id": "updater",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -4155,6 +4203,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "TROUBLESHOOTER_RUNNING",
                 "stage_kind_id": "troubleshooter",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -4187,6 +4236,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "CONSULTANT_RUNNING",
                 "stage_kind_id": "consultant",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               }
             ],
@@ -4672,6 +4722,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "PLANNER_RUNNING",
                 "stage_kind_id": "planner",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -4701,6 +4752,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "MANAGER_RUNNING",
                 "stage_kind_id": "manager",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -4730,6 +4782,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "MECHANIC_RUNNING",
                 "stage_kind_id": "mechanic",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -4759,6 +4812,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "AUDITOR_RUNNING",
                 "stage_kind_id": "auditor",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -4793,6 +4847,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "ARBITER_RUNNING",
                 "stage_kind_id": "arbiter",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               }
             ],
@@ -5223,6 +5278,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "PLANNER_RUNNING",
               "stage_kind_id": "planner",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -5252,6 +5308,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "MANAGER_RUNNING",
               "stage_kind_id": "manager",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -5281,6 +5338,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "MECHANIC_RUNNING",
               "stage_kind_id": "mechanic",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -5310,6 +5368,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "AUDITOR_RUNNING",
               "stage_kind_id": "auditor",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -5344,6 +5403,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "ARBITER_RUNNING",
               "stage_kind_id": "arbiter",
+              "thinking_level": null,
               "timeout_seconds": 3600
             }
           ],
@@ -5544,235 +5604,235 @@
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/builder.md",
-            "content_sha256": "aff98775d2ce88e70b1a7345bc8aaa6c330b124219298c2de0a606c949c36568",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/builder.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/checker.md",
-            "content_sha256": "e316f471eb5af06c37c055d3fcd5a5853075ee35e254690b391bcc430c28c3d0",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/checker.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/consultant.md",
-            "content_sha256": "0bc9d22cb0027364146d0b903e4c3c273de10fc6d79703edf99b4393ab667cd3",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/consultant.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/doublechecker.md",
-            "content_sha256": "317fbf54c1e7e960f041ad69a70c2bbfb5278669c79da3e0df6a87084e39f1eb",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/doublechecker.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/fixer.md",
-            "content_sha256": "05e2bc5b5d9ba40896134b629934fd0d0e53d60ae0fc908f79cca755ec8111f4",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/fixer.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/troubleshooter.md",
-            "content_sha256": "554c9a61a83e451b4107eea319c383f6119328f0f64fb3f33dcc6748d17a75d0",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/troubleshooter.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/updater.md",
-            "content_sha256": "33d16edbd70ec1f75acf760fe74e26b3c17dec4db2a2c63641287dc67fa76020",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/updater.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/planning/arbiter.md",
-            "content_sha256": "e9065bbb47251a1e9ac1f1246396b825deee5a2a0b16d9e629a3e07c1f3dc51d",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/planning/arbiter.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/planning/auditor.md",
-            "content_sha256": "9e4a685689d3941a6d438e5f1cbbc1764e973906a18ac6b7e0bb1d45fe181948",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/planning/auditor.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/planning/manager.md",
-            "content_sha256": "0d6a15d9bbeae7894dca79bc9f6a91cd6d9f30243dd32ed363cb0d3bc9638ad5",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/planning/manager.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/planning/mechanic.md",
-            "content_sha256": "9c715ed1267c587e82c97bd43077d7fdb68f985e65715ff3bfcfd84a60b51f65",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/planning/mechanic.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/planning/planner.md",
-            "content_sha256": "7301cb6c5713a8eb5f6798ab2460332c16e47fc3340383365c83b9a7ddf45824",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/planning/planner.md"
           },
           {
             "asset_family": "graph_loop",
             "compile_time_path": "graphs/execution/standard.json",
-            "content_sha256": "3957438af72ca5826d194398850289c1a592d1083879c85566e9092d3b03b339",
+            "content_sha256": "<content-sha256>",
             "logical_id": "graph_loop:execution.standard"
           },
           {
             "asset_family": "graph_loop",
             "compile_time_path": "graphs/planning/standard.json",
-            "content_sha256": "8defb2f2466ac065ee7ae5e584d6cd67a9e3aa121d075f5a03ec23816ea4a294",
+            "content_sha256": "<content-sha256>",
             "logical_id": "graph_loop:planning.standard"
           },
           {
             "asset_family": "mode",
             "compile_time_path": "modes/default_pi.json",
-            "content_sha256": "23f4c30a328b8821df168f45972d7ec534a6c91682567da891c0295ac72b2ff5",
+            "content_sha256": "<content-sha256>",
             "logical_id": "mode:default_pi"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/builder-core/SKILL.md",
-            "content_sha256": "4b14b537e145ee4287af99a9e33ef77eb36472a9d12b9f8f534efcfa2cf7f52d",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/builder-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/checker-core/SKILL.md",
-            "content_sha256": "be4a309193092e93003f8ec9aeb5114d94513d411ec6686b7c06867269686d7b",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/checker-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/consultant-core/SKILL.md",
-            "content_sha256": "211fe9e657c53accdeb2997efc2e0323fed81cf5dbe84d0203971ac27933240b",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/consultant-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/doublechecker-core/SKILL.md",
-            "content_sha256": "7c9b957cf8978ea74c1723559447b37898927195c083184178df6258ff5a02da",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/doublechecker-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/fixer-core/SKILL.md",
-            "content_sha256": "8beac60429e899969b094ebd2f4dd15639750b30c1b7564470509bee8ea07e15",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/fixer-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/troubleshooter-core/SKILL.md",
-            "content_sha256": "0d95a66232c0005278469298e0ff5edf898cdcc11f1a286fc7c5b6dad29ffc43",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/troubleshooter-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/updater-core/SKILL.md",
-            "content_sha256": "a8a1a872e731913d913c36452e9b09636783a6263c9f73d3ff6a8ac9dddcbd64",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/updater-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/planning/arbiter-core/SKILL.md",
-            "content_sha256": "af9469afd1caba08afb9d97070f9701b51c81ab315085fc286e25ec0850d3297",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/planning/arbiter-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/planning/auditor-core/SKILL.md",
-            "content_sha256": "e0fa6997358b3bdd7c3d7171c30c61caa4047dc0315d2b61d0925aa06dc7b6e1",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/planning/auditor-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/planning/manager-core/SKILL.md",
-            "content_sha256": "1252c6e6f981ac98799565b0e6042668514f48956b71331af4d632a11b85b92c",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/planning/manager-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/planning/mechanic-core/SKILL.md",
-            "content_sha256": "fad988a3f925b15e2b28ad3fd2a0edf35cbc559151a13271506b047591b9f239",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/planning/mechanic-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/planning/planner-core/SKILL.md",
-            "content_sha256": "ffe43d5d10bc26f1280909d96b44a52452ad886c9448d93466bec428581dc234",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/planning/planner-core/SKILL.md"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/arbiter.json",
-            "content_sha256": "ccd5e6501a60f700ca8451a83deca7a301bcee3ee44d5ddd606e0b3b2b12fe82",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:arbiter"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/auditor.json",
-            "content_sha256": "a02aab9503cba4e766e7eaa3f26f7f7213c6b455f7ec705813c4a008def9485e",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:auditor"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/builder.json",
-            "content_sha256": "a20c05040e80c71bae2a8538439c2c6c679e4de15f8be3b7656b8c90ed268903",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:builder"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/checker.json",
-            "content_sha256": "663b08581031cbddc4414074d8641dad8da6f098f45673517b696986abd4f33e",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:checker"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/consultant.json",
-            "content_sha256": "e1feda9504646538a23e88acffb5733e6f21ea63c1200760a35f2d34b7034c95",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:consultant"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/doublechecker.json",
-            "content_sha256": "bb662399188efe1fc47a7b2d99ad086b735f3429a3aba2760444e734d728e68f",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:doublechecker"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/fixer.json",
-            "content_sha256": "cdd986e468f37089266a92dbaa71dd2fbbe36570e97fb681c87a4c83036169e4",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:fixer"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/manager.json",
-            "content_sha256": "ea39785ec4c8bcf154ddf86a02bbfe720a073634c6f048b51a161a72a9810483",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:manager"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/mechanic.json",
-            "content_sha256": "105ffc7051dbd1ada9e89e12622973896fd38584e3567beaad07a2633a4b440f",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:mechanic"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/planner.json",
-            "content_sha256": "6f9adc4223c6fe9dd1bfee5ebefa021be22ec78e0db4ec7539acab7e4670c5f5",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:planner"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/troubleshooter.json",
-            "content_sha256": "6a19b2ab940ba69da3465779ad1b4670d660d292fd0f14eb082fb98836c3bc17",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:troubleshooter"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/updater.json",
-            "content_sha256": "5382ac59214d6e38952425960a3d5fee4167668e2540cfdb6817a56c30fd3c9b",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:updater"
           }
         ],
@@ -5836,6 +5896,7 @@
               "running_status_marker": "BUILDER_RUNNING",
               "stage": "execution.builder",
               "stage_kind_id": "builder",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -5849,6 +5910,7 @@
               "running_status_marker": "CHECKER_RUNNING",
               "stage": "execution.checker",
               "stage_kind_id": "checker",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -5862,6 +5924,7 @@
               "running_status_marker": "CONSULTANT_RUNNING",
               "stage": "execution.consultant",
               "stage_kind_id": "consultant",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -5875,6 +5938,7 @@
               "running_status_marker": "DOUBLECHECKER_RUNNING",
               "stage": "execution.doublechecker",
               "stage_kind_id": "doublechecker",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -5888,6 +5952,7 @@
               "running_status_marker": "FIXER_RUNNING",
               "stage": "execution.fixer",
               "stage_kind_id": "fixer",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -5901,6 +5966,7 @@
               "running_status_marker": "TROUBLESHOOTER_RUNNING",
               "stage": "execution.troubleshooter",
               "stage_kind_id": "troubleshooter",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -5914,6 +5980,7 @@
               "running_status_marker": "UPDATER_RUNNING",
               "stage": "execution.updater",
               "stage_kind_id": "updater",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -5927,6 +5994,7 @@
               "running_status_marker": "ARBITER_RUNNING",
               "stage": "planning.arbiter",
               "stage_kind_id": "arbiter",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -5940,6 +6008,7 @@
               "running_status_marker": "AUDITOR_RUNNING",
               "stage": "planning.auditor",
               "stage_kind_id": "auditor",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -5953,6 +6022,7 @@
               "running_status_marker": "MANAGER_RUNNING",
               "stage": "planning.manager",
               "stage_kind_id": "manager",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -5966,6 +6036,7 @@
               "running_status_marker": "MECHANIC_RUNNING",
               "stage": "planning.mechanic",
               "stage_kind_id": "mechanic",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -5979,6 +6050,7 @@
               "running_status_marker": "PLANNER_RUNNING",
               "stage": "planning.planner",
               "stage_kind_id": "planner",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             }
           ]
@@ -6299,6 +6371,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "BUILDER_RUNNING",
               "stage_kind_id": "builder",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -6331,6 +6404,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "CHECKER_RUNNING",
               "stage_kind_id": "checker",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -6360,6 +6434,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "FIXER_RUNNING",
               "stage_kind_id": "fixer",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -6392,6 +6467,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "DOUBLECHECKER_RUNNING",
               "stage_kind_id": "doublechecker",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -6421,6 +6497,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "UPDATER_RUNNING",
               "stage_kind_id": "updater",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -6450,6 +6527,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "TROUBLESHOOTER_RUNNING",
               "stage_kind_id": "troubleshooter",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -6482,6 +6560,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "CONSULTANT_RUNNING",
               "stage_kind_id": "consultant",
+              "thinking_level": null,
               "timeout_seconds": 3600
             }
           ],
@@ -7019,6 +7098,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "BUILDER_RUNNING",
                 "stage_kind_id": "builder",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -7051,6 +7131,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "CHECKER_RUNNING",
                 "stage_kind_id": "checker",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -7080,6 +7161,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "FIXER_RUNNING",
                 "stage_kind_id": "fixer",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -7112,6 +7194,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "DOUBLECHECKER_RUNNING",
                 "stage_kind_id": "doublechecker",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -7141,6 +7224,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "UPDATER_RUNNING",
                 "stage_kind_id": "updater",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -7170,6 +7254,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "TROUBLESHOOTER_RUNNING",
                 "stage_kind_id": "troubleshooter",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -7202,6 +7287,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "CONSULTANT_RUNNING",
                 "stage_kind_id": "consultant",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               }
             ],
@@ -7572,6 +7658,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "ANALYST_RUNNING",
                 "stage_kind_id": "analyst",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -7601,6 +7688,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "PROFESSOR_RUNNING",
                 "stage_kind_id": "professor",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -7630,6 +7718,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "CURATOR_RUNNING",
                 "stage_kind_id": "curator",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               }
             ],
@@ -7962,6 +8051,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "PLANNER_RUNNING",
                 "stage_kind_id": "planner",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -7991,6 +8081,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "MANAGER_RUNNING",
                 "stage_kind_id": "manager",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -8020,6 +8111,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "MECHANIC_RUNNING",
                 "stage_kind_id": "mechanic",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -8049,6 +8141,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "AUDITOR_RUNNING",
                 "stage_kind_id": "auditor",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -8083,6 +8176,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "ARBITER_RUNNING",
                 "stage_kind_id": "arbiter",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               }
             ],
@@ -8390,6 +8484,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "ANALYST_RUNNING",
               "stage_kind_id": "analyst",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -8419,6 +8514,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "PROFESSOR_RUNNING",
               "stage_kind_id": "professor",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -8448,6 +8544,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "CURATOR_RUNNING",
               "stage_kind_id": "curator",
+              "thinking_level": null,
               "timeout_seconds": 3600
             }
           ],
@@ -8822,6 +8919,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "PLANNER_RUNNING",
               "stage_kind_id": "planner",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -8851,6 +8949,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "MANAGER_RUNNING",
               "stage_kind_id": "manager",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -8880,6 +8979,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "MECHANIC_RUNNING",
               "stage_kind_id": "mechanic",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -8909,6 +9009,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "AUDITOR_RUNNING",
               "stage_kind_id": "auditor",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -8943,6 +9044,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "ARBITER_RUNNING",
               "stage_kind_id": "arbiter",
+              "thinking_level": null,
               "timeout_seconds": 3600
             }
           ],
@@ -9143,295 +9245,295 @@
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/builder.md",
-            "content_sha256": "aff98775d2ce88e70b1a7345bc8aaa6c330b124219298c2de0a606c949c36568",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/builder.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/checker.md",
-            "content_sha256": "e316f471eb5af06c37c055d3fcd5a5853075ee35e254690b391bcc430c28c3d0",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/checker.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/consultant.md",
-            "content_sha256": "0bc9d22cb0027364146d0b903e4c3c273de10fc6d79703edf99b4393ab667cd3",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/consultant.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/doublechecker.md",
-            "content_sha256": "317fbf54c1e7e960f041ad69a70c2bbfb5278669c79da3e0df6a87084e39f1eb",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/doublechecker.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/fixer.md",
-            "content_sha256": "05e2bc5b5d9ba40896134b629934fd0d0e53d60ae0fc908f79cca755ec8111f4",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/fixer.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/troubleshooter.md",
-            "content_sha256": "554c9a61a83e451b4107eea319c383f6119328f0f64fb3f33dcc6748d17a75d0",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/troubleshooter.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/updater.md",
-            "content_sha256": "33d16edbd70ec1f75acf760fe74e26b3c17dec4db2a2c63641287dc67fa76020",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/updater.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/learning/analyst.md",
-            "content_sha256": "8e7e8e2d1ecb3c0b41123c5a1c5778a06dc844396735c3b684c45e73abe9295f",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/learning/analyst.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/learning/curator.md",
-            "content_sha256": "c67288b388e927b3bd78a4a4eb72814cd8dec011923ea912996bbab4ed1175b6",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/learning/curator.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/learning/professor.md",
-            "content_sha256": "5c2eb01ff213385eab9cc5c22e6cc0664f90e75fd89b0d57efee54869c42701e",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/learning/professor.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/planning/arbiter.md",
-            "content_sha256": "e9065bbb47251a1e9ac1f1246396b825deee5a2a0b16d9e629a3e07c1f3dc51d",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/planning/arbiter.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/planning/auditor.md",
-            "content_sha256": "9e4a685689d3941a6d438e5f1cbbc1764e973906a18ac6b7e0bb1d45fe181948",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/planning/auditor.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/planning/manager.md",
-            "content_sha256": "0d6a15d9bbeae7894dca79bc9f6a91cd6d9f30243dd32ed363cb0d3bc9638ad5",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/planning/manager.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/planning/mechanic.md",
-            "content_sha256": "9c715ed1267c587e82c97bd43077d7fdb68f985e65715ff3bfcfd84a60b51f65",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/planning/mechanic.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/planning/planner.md",
-            "content_sha256": "7301cb6c5713a8eb5f6798ab2460332c16e47fc3340383365c83b9a7ddf45824",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/planning/planner.md"
           },
           {
             "asset_family": "graph_loop",
             "compile_time_path": "graphs/execution/standard.json",
-            "content_sha256": "3957438af72ca5826d194398850289c1a592d1083879c85566e9092d3b03b339",
+            "content_sha256": "<content-sha256>",
             "logical_id": "graph_loop:execution.standard"
           },
           {
             "asset_family": "graph_loop",
             "compile_time_path": "graphs/learning/standard.json",
-            "content_sha256": "6c1185b778219780758e6df6fdcf11118713b3e2f42d3857dcfc62edc11bfd95",
+            "content_sha256": "<content-sha256>",
             "logical_id": "graph_loop:learning.standard"
           },
           {
             "asset_family": "graph_loop",
             "compile_time_path": "graphs/planning/standard.json",
-            "content_sha256": "8defb2f2466ac065ee7ae5e584d6cd67a9e3aa121d075f5a03ec23816ea4a294",
+            "content_sha256": "<content-sha256>",
             "logical_id": "graph_loop:planning.standard"
           },
           {
             "asset_family": "mode",
             "compile_time_path": "modes/learning_codex.json",
-            "content_sha256": "4e00a95579dc87c93787fe73030f3ff44a66e9a408e930c5a8618e1041a642de",
+            "content_sha256": "<content-sha256>",
             "logical_id": "mode:learning_codex"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/builder-core/SKILL.md",
-            "content_sha256": "4b14b537e145ee4287af99a9e33ef77eb36472a9d12b9f8f534efcfa2cf7f52d",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/builder-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/checker-core/SKILL.md",
-            "content_sha256": "be4a309193092e93003f8ec9aeb5114d94513d411ec6686b7c06867269686d7b",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/checker-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/consultant-core/SKILL.md",
-            "content_sha256": "211fe9e657c53accdeb2997efc2e0323fed81cf5dbe84d0203971ac27933240b",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/consultant-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/doublechecker-core/SKILL.md",
-            "content_sha256": "7c9b957cf8978ea74c1723559447b37898927195c083184178df6258ff5a02da",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/doublechecker-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/fixer-core/SKILL.md",
-            "content_sha256": "8beac60429e899969b094ebd2f4dd15639750b30c1b7564470509bee8ea07e15",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/fixer-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/troubleshooter-core/SKILL.md",
-            "content_sha256": "0d95a66232c0005278469298e0ff5edf898cdcc11f1a286fc7c5b6dad29ffc43",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/troubleshooter-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/updater-core/SKILL.md",
-            "content_sha256": "a8a1a872e731913d913c36452e9b09636783a6263c9f73d3ff6a8ac9dddcbd64",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/updater-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/learning/analyst-core/SKILL.md",
-            "content_sha256": "144033addbc7e56577270f9191e27e90e6f4ead62a121e3fa07fe9370df238fd",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/learning/analyst-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/learning/curator-core/SKILL.md",
-            "content_sha256": "0f6b9a0127505e4fd3b94e5cedaee6e4ad73826099474c31d97f9c927022f9cc",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/learning/curator-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/learning/professor-core/SKILL.md",
-            "content_sha256": "4240b8c733d3263fc5e6a9410ac176928cf604387b2106c5613eead1862c1e27",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/learning/professor-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/planning/arbiter-core/SKILL.md",
-            "content_sha256": "af9469afd1caba08afb9d97070f9701b51c81ab315085fc286e25ec0850d3297",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/planning/arbiter-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/planning/auditor-core/SKILL.md",
-            "content_sha256": "e0fa6997358b3bdd7c3d7171c30c61caa4047dc0315d2b61d0925aa06dc7b6e1",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/planning/auditor-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/planning/manager-core/SKILL.md",
-            "content_sha256": "1252c6e6f981ac98799565b0e6042668514f48956b71331af4d632a11b85b92c",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/planning/manager-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/planning/mechanic-core/SKILL.md",
-            "content_sha256": "fad988a3f925b15e2b28ad3fd2a0edf35cbc559151a13271506b047591b9f239",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/planning/mechanic-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/planning/planner-core/SKILL.md",
-            "content_sha256": "ffe43d5d10bc26f1280909d96b44a52452ad886c9448d93466bec428581dc234",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/planning/planner-core/SKILL.md"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/learning/analyst.json",
-            "content_sha256": "5b767b8d595420fc88ef0763591b06f17ec7594b62175311077b2eee8ec48705",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:analyst"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/arbiter.json",
-            "content_sha256": "ccd5e6501a60f700ca8451a83deca7a301bcee3ee44d5ddd606e0b3b2b12fe82",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:arbiter"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/auditor.json",
-            "content_sha256": "a02aab9503cba4e766e7eaa3f26f7f7213c6b455f7ec705813c4a008def9485e",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:auditor"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/builder.json",
-            "content_sha256": "a20c05040e80c71bae2a8538439c2c6c679e4de15f8be3b7656b8c90ed268903",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:builder"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/checker.json",
-            "content_sha256": "663b08581031cbddc4414074d8641dad8da6f098f45673517b696986abd4f33e",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:checker"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/consultant.json",
-            "content_sha256": "e1feda9504646538a23e88acffb5733e6f21ea63c1200760a35f2d34b7034c95",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:consultant"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/learning/curator.json",
-            "content_sha256": "0a319cbb6ad0b51cb9121ec86e0d39bb970bab4144796bc24a150ddb996668b5",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:curator"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/doublechecker.json",
-            "content_sha256": "bb662399188efe1fc47a7b2d99ad086b735f3429a3aba2760444e734d728e68f",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:doublechecker"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/fixer.json",
-            "content_sha256": "cdd986e468f37089266a92dbaa71dd2fbbe36570e97fb681c87a4c83036169e4",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:fixer"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/manager.json",
-            "content_sha256": "ea39785ec4c8bcf154ddf86a02bbfe720a073634c6f048b51a161a72a9810483",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:manager"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/mechanic.json",
-            "content_sha256": "105ffc7051dbd1ada9e89e12622973896fd38584e3567beaad07a2633a4b440f",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:mechanic"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/planner.json",
-            "content_sha256": "6f9adc4223c6fe9dd1bfee5ebefa021be22ec78e0db4ec7539acab7e4670c5f5",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:planner"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/learning/professor.json",
-            "content_sha256": "8b13f46f1f9cdd7df78d7527a7eea7a2d1e20ea27cab73c69cde6c967e399353",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:professor"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/troubleshooter.json",
-            "content_sha256": "6a19b2ab940ba69da3465779ad1b4670d660d292fd0f14eb082fb98836c3bc17",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:troubleshooter"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/updater.json",
-            "content_sha256": "5382ac59214d6e38952425960a3d5fee4167668e2540cfdb6817a56c30fd3c9b",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:updater"
           }
         ],
@@ -9498,6 +9600,7 @@
               "running_status_marker": "BUILDER_RUNNING",
               "stage": "execution.builder",
               "stage_kind_id": "builder",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -9511,6 +9614,7 @@
               "running_status_marker": "CHECKER_RUNNING",
               "stage": "execution.checker",
               "stage_kind_id": "checker",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -9524,6 +9628,7 @@
               "running_status_marker": "CONSULTANT_RUNNING",
               "stage": "execution.consultant",
               "stage_kind_id": "consultant",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -9537,6 +9642,7 @@
               "running_status_marker": "DOUBLECHECKER_RUNNING",
               "stage": "execution.doublechecker",
               "stage_kind_id": "doublechecker",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -9550,6 +9656,7 @@
               "running_status_marker": "FIXER_RUNNING",
               "stage": "execution.fixer",
               "stage_kind_id": "fixer",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -9563,6 +9670,7 @@
               "running_status_marker": "TROUBLESHOOTER_RUNNING",
               "stage": "execution.troubleshooter",
               "stage_kind_id": "troubleshooter",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -9576,6 +9684,7 @@
               "running_status_marker": "UPDATER_RUNNING",
               "stage": "execution.updater",
               "stage_kind_id": "updater",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -9589,6 +9698,7 @@
               "running_status_marker": "ANALYST_RUNNING",
               "stage": "learning.analyst",
               "stage_kind_id": "analyst",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -9602,6 +9712,7 @@
               "running_status_marker": "CURATOR_RUNNING",
               "stage": "learning.curator",
               "stage_kind_id": "curator",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -9615,6 +9726,7 @@
               "running_status_marker": "PROFESSOR_RUNNING",
               "stage": "learning.professor",
               "stage_kind_id": "professor",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -9628,6 +9740,7 @@
               "running_status_marker": "ARBITER_RUNNING",
               "stage": "planning.arbiter",
               "stage_kind_id": "arbiter",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -9641,6 +9754,7 @@
               "running_status_marker": "AUDITOR_RUNNING",
               "stage": "planning.auditor",
               "stage_kind_id": "auditor",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -9654,6 +9768,7 @@
               "running_status_marker": "MANAGER_RUNNING",
               "stage": "planning.manager",
               "stage_kind_id": "manager",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -9667,6 +9782,7 @@
               "running_status_marker": "MECHANIC_RUNNING",
               "stage": "planning.mechanic",
               "stage_kind_id": "mechanic",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -9680,6 +9796,7 @@
               "running_status_marker": "PLANNER_RUNNING",
               "stage": "planning.planner",
               "stage_kind_id": "planner",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             }
           ]
@@ -10000,6 +10117,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "BUILDER_RUNNING",
               "stage_kind_id": "builder",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -10032,6 +10150,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "CHECKER_RUNNING",
               "stage_kind_id": "checker",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -10061,6 +10180,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "FIXER_RUNNING",
               "stage_kind_id": "fixer",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -10093,6 +10213,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "DOUBLECHECKER_RUNNING",
               "stage_kind_id": "doublechecker",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -10122,6 +10243,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "UPDATER_RUNNING",
               "stage_kind_id": "updater",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -10151,6 +10273,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "TROUBLESHOOTER_RUNNING",
               "stage_kind_id": "troubleshooter",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -10183,6 +10306,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "CONSULTANT_RUNNING",
               "stage_kind_id": "consultant",
+              "thinking_level": null,
               "timeout_seconds": 3600
             }
           ],
@@ -10720,6 +10844,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "BUILDER_RUNNING",
                 "stage_kind_id": "builder",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -10752,6 +10877,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "CHECKER_RUNNING",
                 "stage_kind_id": "checker",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -10781,6 +10907,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "FIXER_RUNNING",
                 "stage_kind_id": "fixer",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -10813,6 +10940,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "DOUBLECHECKER_RUNNING",
                 "stage_kind_id": "doublechecker",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -10842,6 +10970,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "UPDATER_RUNNING",
                 "stage_kind_id": "updater",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -10871,6 +11000,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "TROUBLESHOOTER_RUNNING",
                 "stage_kind_id": "troubleshooter",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -10903,6 +11033,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "CONSULTANT_RUNNING",
                 "stage_kind_id": "consultant",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               }
             ],
@@ -11273,6 +11404,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "ANALYST_RUNNING",
                 "stage_kind_id": "analyst",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -11302,6 +11434,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "PROFESSOR_RUNNING",
                 "stage_kind_id": "professor",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -11331,6 +11464,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "CURATOR_RUNNING",
                 "stage_kind_id": "curator",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               }
             ],
@@ -11663,6 +11797,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "PLANNER_RUNNING",
                 "stage_kind_id": "planner",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -11692,6 +11827,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "MANAGER_RUNNING",
                 "stage_kind_id": "manager",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -11721,6 +11857,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "MECHANIC_RUNNING",
                 "stage_kind_id": "mechanic",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -11750,6 +11887,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "AUDITOR_RUNNING",
                 "stage_kind_id": "auditor",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -11784,6 +11922,7 @@
                 "runner_name": "pi_rpc",
                 "running_status_marker": "ARBITER_RUNNING",
                 "stage_kind_id": "arbiter",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               }
             ],
@@ -12091,6 +12230,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "ANALYST_RUNNING",
               "stage_kind_id": "analyst",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -12120,6 +12260,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "PROFESSOR_RUNNING",
               "stage_kind_id": "professor",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -12149,6 +12290,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "CURATOR_RUNNING",
               "stage_kind_id": "curator",
+              "thinking_level": null,
               "timeout_seconds": 3600
             }
           ],
@@ -12523,6 +12665,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "PLANNER_RUNNING",
               "stage_kind_id": "planner",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -12552,6 +12695,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "MANAGER_RUNNING",
               "stage_kind_id": "manager",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -12581,6 +12725,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "MECHANIC_RUNNING",
               "stage_kind_id": "mechanic",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -12610,6 +12755,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "AUDITOR_RUNNING",
               "stage_kind_id": "auditor",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -12644,6 +12790,7 @@
               "runner_name": "pi_rpc",
               "running_status_marker": "ARBITER_RUNNING",
               "stage_kind_id": "arbiter",
+              "thinking_level": null,
               "timeout_seconds": 3600
             }
           ],
@@ -12844,295 +12991,295 @@
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/builder.md",
-            "content_sha256": "aff98775d2ce88e70b1a7345bc8aaa6c330b124219298c2de0a606c949c36568",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/builder.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/checker.md",
-            "content_sha256": "e316f471eb5af06c37c055d3fcd5a5853075ee35e254690b391bcc430c28c3d0",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/checker.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/consultant.md",
-            "content_sha256": "0bc9d22cb0027364146d0b903e4c3c273de10fc6d79703edf99b4393ab667cd3",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/consultant.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/doublechecker.md",
-            "content_sha256": "317fbf54c1e7e960f041ad69a70c2bbfb5278669c79da3e0df6a87084e39f1eb",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/doublechecker.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/fixer.md",
-            "content_sha256": "05e2bc5b5d9ba40896134b629934fd0d0e53d60ae0fc908f79cca755ec8111f4",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/fixer.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/troubleshooter.md",
-            "content_sha256": "554c9a61a83e451b4107eea319c383f6119328f0f64fb3f33dcc6748d17a75d0",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/troubleshooter.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/updater.md",
-            "content_sha256": "33d16edbd70ec1f75acf760fe74e26b3c17dec4db2a2c63641287dc67fa76020",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/updater.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/learning/analyst.md",
-            "content_sha256": "8e7e8e2d1ecb3c0b41123c5a1c5778a06dc844396735c3b684c45e73abe9295f",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/learning/analyst.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/learning/curator.md",
-            "content_sha256": "c67288b388e927b3bd78a4a4eb72814cd8dec011923ea912996bbab4ed1175b6",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/learning/curator.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/learning/professor.md",
-            "content_sha256": "5c2eb01ff213385eab9cc5c22e6cc0664f90e75fd89b0d57efee54869c42701e",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/learning/professor.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/planning/arbiter.md",
-            "content_sha256": "e9065bbb47251a1e9ac1f1246396b825deee5a2a0b16d9e629a3e07c1f3dc51d",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/planning/arbiter.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/planning/auditor.md",
-            "content_sha256": "9e4a685689d3941a6d438e5f1cbbc1764e973906a18ac6b7e0bb1d45fe181948",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/planning/auditor.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/planning/manager.md",
-            "content_sha256": "0d6a15d9bbeae7894dca79bc9f6a91cd6d9f30243dd32ed363cb0d3bc9638ad5",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/planning/manager.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/planning/mechanic.md",
-            "content_sha256": "9c715ed1267c587e82c97bd43077d7fdb68f985e65715ff3bfcfd84a60b51f65",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/planning/mechanic.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/planning/planner.md",
-            "content_sha256": "7301cb6c5713a8eb5f6798ab2460332c16e47fc3340383365c83b9a7ddf45824",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/planning/planner.md"
           },
           {
             "asset_family": "graph_loop",
             "compile_time_path": "graphs/execution/standard.json",
-            "content_sha256": "3957438af72ca5826d194398850289c1a592d1083879c85566e9092d3b03b339",
+            "content_sha256": "<content-sha256>",
             "logical_id": "graph_loop:execution.standard"
           },
           {
             "asset_family": "graph_loop",
             "compile_time_path": "graphs/learning/standard.json",
-            "content_sha256": "6c1185b778219780758e6df6fdcf11118713b3e2f42d3857dcfc62edc11bfd95",
+            "content_sha256": "<content-sha256>",
             "logical_id": "graph_loop:learning.standard"
           },
           {
             "asset_family": "graph_loop",
             "compile_time_path": "graphs/planning/standard.json",
-            "content_sha256": "8defb2f2466ac065ee7ae5e584d6cd67a9e3aa121d075f5a03ec23816ea4a294",
+            "content_sha256": "<content-sha256>",
             "logical_id": "graph_loop:planning.standard"
           },
           {
             "asset_family": "mode",
             "compile_time_path": "modes/learning_pi.json",
-            "content_sha256": "602c3dc86afa88020dbb03a92981e5219d762b81ce0299f8a6e199f9e898c8a1",
+            "content_sha256": "<content-sha256>",
             "logical_id": "mode:learning_pi"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/builder-core/SKILL.md",
-            "content_sha256": "4b14b537e145ee4287af99a9e33ef77eb36472a9d12b9f8f534efcfa2cf7f52d",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/builder-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/checker-core/SKILL.md",
-            "content_sha256": "be4a309193092e93003f8ec9aeb5114d94513d411ec6686b7c06867269686d7b",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/checker-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/consultant-core/SKILL.md",
-            "content_sha256": "211fe9e657c53accdeb2997efc2e0323fed81cf5dbe84d0203971ac27933240b",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/consultant-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/doublechecker-core/SKILL.md",
-            "content_sha256": "7c9b957cf8978ea74c1723559447b37898927195c083184178df6258ff5a02da",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/doublechecker-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/fixer-core/SKILL.md",
-            "content_sha256": "8beac60429e899969b094ebd2f4dd15639750b30c1b7564470509bee8ea07e15",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/fixer-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/troubleshooter-core/SKILL.md",
-            "content_sha256": "0d95a66232c0005278469298e0ff5edf898cdcc11f1a286fc7c5b6dad29ffc43",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/troubleshooter-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/updater-core/SKILL.md",
-            "content_sha256": "a8a1a872e731913d913c36452e9b09636783a6263c9f73d3ff6a8ac9dddcbd64",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/updater-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/learning/analyst-core/SKILL.md",
-            "content_sha256": "144033addbc7e56577270f9191e27e90e6f4ead62a121e3fa07fe9370df238fd",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/learning/analyst-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/learning/curator-core/SKILL.md",
-            "content_sha256": "0f6b9a0127505e4fd3b94e5cedaee6e4ad73826099474c31d97f9c927022f9cc",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/learning/curator-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/learning/professor-core/SKILL.md",
-            "content_sha256": "4240b8c733d3263fc5e6a9410ac176928cf604387b2106c5613eead1862c1e27",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/learning/professor-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/planning/arbiter-core/SKILL.md",
-            "content_sha256": "af9469afd1caba08afb9d97070f9701b51c81ab315085fc286e25ec0850d3297",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/planning/arbiter-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/planning/auditor-core/SKILL.md",
-            "content_sha256": "e0fa6997358b3bdd7c3d7171c30c61caa4047dc0315d2b61d0925aa06dc7b6e1",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/planning/auditor-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/planning/manager-core/SKILL.md",
-            "content_sha256": "1252c6e6f981ac98799565b0e6042668514f48956b71331af4d632a11b85b92c",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/planning/manager-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/planning/mechanic-core/SKILL.md",
-            "content_sha256": "fad988a3f925b15e2b28ad3fd2a0edf35cbc559151a13271506b047591b9f239",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/planning/mechanic-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/planning/planner-core/SKILL.md",
-            "content_sha256": "ffe43d5d10bc26f1280909d96b44a52452ad886c9448d93466bec428581dc234",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/planning/planner-core/SKILL.md"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/learning/analyst.json",
-            "content_sha256": "5b767b8d595420fc88ef0763591b06f17ec7594b62175311077b2eee8ec48705",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:analyst"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/arbiter.json",
-            "content_sha256": "ccd5e6501a60f700ca8451a83deca7a301bcee3ee44d5ddd606e0b3b2b12fe82",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:arbiter"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/auditor.json",
-            "content_sha256": "a02aab9503cba4e766e7eaa3f26f7f7213c6b455f7ec705813c4a008def9485e",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:auditor"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/builder.json",
-            "content_sha256": "a20c05040e80c71bae2a8538439c2c6c679e4de15f8be3b7656b8c90ed268903",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:builder"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/checker.json",
-            "content_sha256": "663b08581031cbddc4414074d8641dad8da6f098f45673517b696986abd4f33e",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:checker"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/consultant.json",
-            "content_sha256": "e1feda9504646538a23e88acffb5733e6f21ea63c1200760a35f2d34b7034c95",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:consultant"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/learning/curator.json",
-            "content_sha256": "0a319cbb6ad0b51cb9121ec86e0d39bb970bab4144796bc24a150ddb996668b5",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:curator"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/doublechecker.json",
-            "content_sha256": "bb662399188efe1fc47a7b2d99ad086b735f3429a3aba2760444e734d728e68f",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:doublechecker"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/fixer.json",
-            "content_sha256": "cdd986e468f37089266a92dbaa71dd2fbbe36570e97fb681c87a4c83036169e4",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:fixer"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/manager.json",
-            "content_sha256": "ea39785ec4c8bcf154ddf86a02bbfe720a073634c6f048b51a161a72a9810483",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:manager"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/mechanic.json",
-            "content_sha256": "105ffc7051dbd1ada9e89e12622973896fd38584e3567beaad07a2633a4b440f",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:mechanic"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/planner.json",
-            "content_sha256": "6f9adc4223c6fe9dd1bfee5ebefa021be22ec78e0db4ec7539acab7e4670c5f5",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:planner"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/learning/professor.json",
-            "content_sha256": "8b13f46f1f9cdd7df78d7527a7eea7a2d1e20ea27cab73c69cde6c967e399353",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:professor"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/troubleshooter.json",
-            "content_sha256": "6a19b2ab940ba69da3465779ad1b4670d660d292fd0f14eb082fb98836c3bc17",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:troubleshooter"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/updater.json",
-            "content_sha256": "5382ac59214d6e38952425960a3d5fee4167668e2540cfdb6817a56c30fd3c9b",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:updater"
           }
         ],
@@ -13199,6 +13346,7 @@
               "running_status_marker": "BUILDER_RUNNING",
               "stage": "execution.builder",
               "stage_kind_id": "builder",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -13212,6 +13360,7 @@
               "running_status_marker": "CHECKER_RUNNING",
               "stage": "execution.checker",
               "stage_kind_id": "checker",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -13225,6 +13374,7 @@
               "running_status_marker": "CONSULTANT_RUNNING",
               "stage": "execution.consultant",
               "stage_kind_id": "consultant",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -13238,6 +13388,7 @@
               "running_status_marker": "DOUBLECHECKER_RUNNING",
               "stage": "execution.doublechecker",
               "stage_kind_id": "doublechecker",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -13251,6 +13402,7 @@
               "running_status_marker": "FIXER_RUNNING",
               "stage": "execution.fixer",
               "stage_kind_id": "fixer",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -13264,6 +13416,7 @@
               "running_status_marker": "TROUBLESHOOTER_RUNNING",
               "stage": "execution.troubleshooter",
               "stage_kind_id": "troubleshooter",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -13277,6 +13430,7 @@
               "running_status_marker": "UPDATER_RUNNING",
               "stage": "execution.updater",
               "stage_kind_id": "updater",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -13290,6 +13444,7 @@
               "running_status_marker": "ANALYST_RUNNING",
               "stage": "learning.analyst",
               "stage_kind_id": "analyst",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -13303,6 +13458,7 @@
               "running_status_marker": "CURATOR_RUNNING",
               "stage": "learning.curator",
               "stage_kind_id": "curator",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -13316,6 +13472,7 @@
               "running_status_marker": "PROFESSOR_RUNNING",
               "stage": "learning.professor",
               "stage_kind_id": "professor",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -13329,6 +13486,7 @@
               "running_status_marker": "ARBITER_RUNNING",
               "stage": "planning.arbiter",
               "stage_kind_id": "arbiter",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -13342,6 +13500,7 @@
               "running_status_marker": "AUDITOR_RUNNING",
               "stage": "planning.auditor",
               "stage_kind_id": "auditor",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -13355,6 +13514,7 @@
               "running_status_marker": "MANAGER_RUNNING",
               "stage": "planning.manager",
               "stage_kind_id": "manager",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -13368,6 +13528,7 @@
               "running_status_marker": "MECHANIC_RUNNING",
               "stage": "planning.mechanic",
               "stage_kind_id": "mechanic",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -13381,6 +13542,7 @@
               "running_status_marker": "PLANNER_RUNNING",
               "stage": "planning.planner",
               "stage_kind_id": "planner",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             }
           ]
@@ -13684,6 +13846,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "BUILDER_RUNNING",
               "stage_kind_id": "builder",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -13716,6 +13879,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "CHECKER_RUNNING",
               "stage_kind_id": "checker",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -13745,6 +13909,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "FIXER_RUNNING",
               "stage_kind_id": "fixer",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -13777,6 +13942,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "DOUBLECHECKER_RUNNING",
               "stage_kind_id": "doublechecker",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -13806,6 +13972,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "UPDATER_RUNNING",
               "stage_kind_id": "updater",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -13835,6 +14002,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "TROUBLESHOOTER_RUNNING",
               "stage_kind_id": "troubleshooter",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -13867,6 +14035,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "CONSULTANT_RUNNING",
               "stage_kind_id": "consultant",
+              "thinking_level": null,
               "timeout_seconds": 3600
             }
           ],
@@ -14404,6 +14573,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "BUILDER_RUNNING",
                 "stage_kind_id": "builder",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -14436,6 +14606,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "CHECKER_RUNNING",
                 "stage_kind_id": "checker",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -14465,6 +14636,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "FIXER_RUNNING",
                 "stage_kind_id": "fixer",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -14497,6 +14669,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "DOUBLECHECKER_RUNNING",
                 "stage_kind_id": "doublechecker",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -14526,6 +14699,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "UPDATER_RUNNING",
                 "stage_kind_id": "updater",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -14555,6 +14729,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "TROUBLESHOOTER_RUNNING",
                 "stage_kind_id": "troubleshooter",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -14587,6 +14762,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "CONSULTANT_RUNNING",
                 "stage_kind_id": "consultant",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               }
             ],
@@ -15072,6 +15248,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "PLANNER_RUNNING",
                 "stage_kind_id": "planner",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -15101,6 +15278,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "MANAGER_RUNNING",
                 "stage_kind_id": "manager",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -15130,6 +15308,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "MECHANIC_RUNNING",
                 "stage_kind_id": "mechanic",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -15159,6 +15338,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "AUDITOR_RUNNING",
                 "stage_kind_id": "auditor",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               },
               {
@@ -15193,6 +15373,7 @@
                 "runner_name": "codex_cli",
                 "running_status_marker": "ARBITER_RUNNING",
                 "stage_kind_id": "arbiter",
+                "thinking_level": null,
                 "timeout_seconds": 3600
               }
             ],
@@ -15623,6 +15804,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "PLANNER_RUNNING",
               "stage_kind_id": "planner",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -15652,6 +15834,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "MANAGER_RUNNING",
               "stage_kind_id": "manager",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -15681,6 +15864,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "MECHANIC_RUNNING",
               "stage_kind_id": "mechanic",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -15710,6 +15894,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "AUDITOR_RUNNING",
               "stage_kind_id": "auditor",
+              "thinking_level": null,
               "timeout_seconds": 3600
             },
             {
@@ -15744,6 +15929,7 @@
               "runner_name": "codex_cli",
               "running_status_marker": "ARBITER_RUNNING",
               "stage_kind_id": "arbiter",
+              "thinking_level": null,
               "timeout_seconds": 3600
             }
           ],
@@ -15944,235 +16130,235 @@
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/builder.md",
-            "content_sha256": "aff98775d2ce88e70b1a7345bc8aaa6c330b124219298c2de0a606c949c36568",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/builder.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/checker.md",
-            "content_sha256": "e316f471eb5af06c37c055d3fcd5a5853075ee35e254690b391bcc430c28c3d0",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/checker.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/consultant.md",
-            "content_sha256": "0bc9d22cb0027364146d0b903e4c3c273de10fc6d79703edf99b4393ab667cd3",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/consultant.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/doublechecker.md",
-            "content_sha256": "317fbf54c1e7e960f041ad69a70c2bbfb5278669c79da3e0df6a87084e39f1eb",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/doublechecker.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/fixer.md",
-            "content_sha256": "05e2bc5b5d9ba40896134b629934fd0d0e53d60ae0fc908f79cca755ec8111f4",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/fixer.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/troubleshooter.md",
-            "content_sha256": "554c9a61a83e451b4107eea319c383f6119328f0f64fb3f33dcc6748d17a75d0",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/troubleshooter.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/execution/updater.md",
-            "content_sha256": "33d16edbd70ec1f75acf760fe74e26b3c17dec4db2a2c63641287dc67fa76020",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/execution/updater.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/planning/arbiter.md",
-            "content_sha256": "e9065bbb47251a1e9ac1f1246396b825deee5a2a0b16d9e629a3e07c1f3dc51d",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/planning/arbiter.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/planning/auditor.md",
-            "content_sha256": "9e4a685689d3941a6d438e5f1cbbc1764e973906a18ac6b7e0bb1d45fe181948",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/planning/auditor.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/planning/manager.md",
-            "content_sha256": "0d6a15d9bbeae7894dca79bc9f6a91cd6d9f30243dd32ed363cb0d3bc9638ad5",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/planning/manager.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/planning/mechanic.md",
-            "content_sha256": "9c715ed1267c587e82c97bd43077d7fdb68f985e65715ff3bfcfd84a60b51f65",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/planning/mechanic.md"
           },
           {
             "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/planning/planner.md",
-            "content_sha256": "7301cb6c5713a8eb5f6798ab2460332c16e47fc3340383365c83b9a7ddf45824",
+            "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/planning/planner.md"
           },
           {
             "asset_family": "graph_loop",
             "compile_time_path": "graphs/execution/standard.json",
-            "content_sha256": "3957438af72ca5826d194398850289c1a592d1083879c85566e9092d3b03b339",
+            "content_sha256": "<content-sha256>",
             "logical_id": "graph_loop:execution.standard"
           },
           {
             "asset_family": "graph_loop",
             "compile_time_path": "graphs/planning/standard.json",
-            "content_sha256": "8defb2f2466ac065ee7ae5e584d6cd67a9e3aa121d075f5a03ec23816ea4a294",
+            "content_sha256": "<content-sha256>",
             "logical_id": "graph_loop:planning.standard"
           },
           {
             "asset_family": "mode",
             "compile_time_path": "modes/default_codex.json",
-            "content_sha256": "736b0ffc730c5a622c249e3d5369342ae8e4ab052a03d4a9c25aedfae1c8234c",
+            "content_sha256": "<content-sha256>",
             "logical_id": "mode:default_codex"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/builder-core/SKILL.md",
-            "content_sha256": "4b14b537e145ee4287af99a9e33ef77eb36472a9d12b9f8f534efcfa2cf7f52d",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/builder-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/checker-core/SKILL.md",
-            "content_sha256": "be4a309193092e93003f8ec9aeb5114d94513d411ec6686b7c06867269686d7b",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/checker-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/consultant-core/SKILL.md",
-            "content_sha256": "211fe9e657c53accdeb2997efc2e0323fed81cf5dbe84d0203971ac27933240b",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/consultant-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/doublechecker-core/SKILL.md",
-            "content_sha256": "7c9b957cf8978ea74c1723559447b37898927195c083184178df6258ff5a02da",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/doublechecker-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/fixer-core/SKILL.md",
-            "content_sha256": "8beac60429e899969b094ebd2f4dd15639750b30c1b7564470509bee8ea07e15",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/fixer-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/troubleshooter-core/SKILL.md",
-            "content_sha256": "0d95a66232c0005278469298e0ff5edf898cdcc11f1a286fc7c5b6dad29ffc43",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/troubleshooter-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/execution/updater-core/SKILL.md",
-            "content_sha256": "a8a1a872e731913d913c36452e9b09636783a6263c9f73d3ff6a8ac9dddcbd64",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/execution/updater-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/planning/arbiter-core/SKILL.md",
-            "content_sha256": "af9469afd1caba08afb9d97070f9701b51c81ab315085fc286e25ec0850d3297",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/planning/arbiter-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/planning/auditor-core/SKILL.md",
-            "content_sha256": "e0fa6997358b3bdd7c3d7171c30c61caa4047dc0315d2b61d0925aa06dc7b6e1",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/planning/auditor-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/planning/manager-core/SKILL.md",
-            "content_sha256": "1252c6e6f981ac98799565b0e6042668514f48956b71331af4d632a11b85b92c",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/planning/manager-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/planning/mechanic-core/SKILL.md",
-            "content_sha256": "fad988a3f925b15e2b28ad3fd2a0edf35cbc559151a13271506b047591b9f239",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/planning/mechanic-core/SKILL.md"
           },
           {
             "asset_family": "skill",
             "compile_time_path": "skills/stage/planning/planner-core/SKILL.md",
-            "content_sha256": "ffe43d5d10bc26f1280909d96b44a52452ad886c9448d93466bec428581dc234",
+            "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/planning/planner-core/SKILL.md"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/arbiter.json",
-            "content_sha256": "ccd5e6501a60f700ca8451a83deca7a301bcee3ee44d5ddd606e0b3b2b12fe82",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:arbiter"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/auditor.json",
-            "content_sha256": "a02aab9503cba4e766e7eaa3f26f7f7213c6b455f7ec705813c4a008def9485e",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:auditor"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/builder.json",
-            "content_sha256": "a20c05040e80c71bae2a8538439c2c6c679e4de15f8be3b7656b8c90ed268903",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:builder"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/checker.json",
-            "content_sha256": "663b08581031cbddc4414074d8641dad8da6f098f45673517b696986abd4f33e",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:checker"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/consultant.json",
-            "content_sha256": "e1feda9504646538a23e88acffb5733e6f21ea63c1200760a35f2d34b7034c95",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:consultant"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/doublechecker.json",
-            "content_sha256": "bb662399188efe1fc47a7b2d99ad086b735f3429a3aba2760444e734d728e68f",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:doublechecker"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/fixer.json",
-            "content_sha256": "cdd986e468f37089266a92dbaa71dd2fbbe36570e97fb681c87a4c83036169e4",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:fixer"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/manager.json",
-            "content_sha256": "ea39785ec4c8bcf154ddf86a02bbfe720a073634c6f048b51a161a72a9810483",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:manager"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/mechanic.json",
-            "content_sha256": "105ffc7051dbd1ada9e89e12622973896fd38584e3567beaad07a2633a4b440f",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:mechanic"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/planner.json",
-            "content_sha256": "6f9adc4223c6fe9dd1bfee5ebefa021be22ec78e0db4ec7539acab7e4670c5f5",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:planner"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/troubleshooter.json",
-            "content_sha256": "6a19b2ab940ba69da3465779ad1b4670d660d292fd0f14eb082fb98836c3bc17",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:troubleshooter"
           },
           {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/updater.json",
-            "content_sha256": "5382ac59214d6e38952425960a3d5fee4167668e2540cfdb6817a56c30fd3c9b",
+            "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:updater"
           }
         ],
@@ -16236,6 +16422,7 @@
               "running_status_marker": "BUILDER_RUNNING",
               "stage": "execution.builder",
               "stage_kind_id": "builder",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -16249,6 +16436,7 @@
               "running_status_marker": "CHECKER_RUNNING",
               "stage": "execution.checker",
               "stage_kind_id": "checker",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -16262,6 +16450,7 @@
               "running_status_marker": "CONSULTANT_RUNNING",
               "stage": "execution.consultant",
               "stage_kind_id": "consultant",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -16275,6 +16464,7 @@
               "running_status_marker": "DOUBLECHECKER_RUNNING",
               "stage": "execution.doublechecker",
               "stage_kind_id": "doublechecker",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -16288,6 +16478,7 @@
               "running_status_marker": "FIXER_RUNNING",
               "stage": "execution.fixer",
               "stage_kind_id": "fixer",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -16301,6 +16492,7 @@
               "running_status_marker": "TROUBLESHOOTER_RUNNING",
               "stage": "execution.troubleshooter",
               "stage_kind_id": "troubleshooter",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -16314,6 +16506,7 @@
               "running_status_marker": "UPDATER_RUNNING",
               "stage": "execution.updater",
               "stage_kind_id": "updater",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -16327,6 +16520,7 @@
               "running_status_marker": "ARBITER_RUNNING",
               "stage": "planning.arbiter",
               "stage_kind_id": "arbiter",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -16340,6 +16534,7 @@
               "running_status_marker": "AUDITOR_RUNNING",
               "stage": "planning.auditor",
               "stage_kind_id": "auditor",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -16353,6 +16548,7 @@
               "running_status_marker": "MANAGER_RUNNING",
               "stage": "planning.manager",
               "stage_kind_id": "manager",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -16366,6 +16562,7 @@
               "running_status_marker": "MECHANIC_RUNNING",
               "stage": "planning.mechanic",
               "stage_kind_id": "mechanic",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             },
             {
@@ -16379,6 +16576,7 @@
               "running_status_marker": "PLANNER_RUNNING",
               "stage": "planning.planner",
               "stage_kind_id": "planner",
+              "thinking_level": "none",
               "timeout_seconds": "3600"
             }
           ]
@@ -16403,13 +16601,26 @@
     "compile_input_fingerprints": "<cfg-fingerprint> / <assets-fingerprint>",
     "compiled_plan_ids": "<compiled_plan_id:{effective_mode_id}>",
     "paths": "runtime-root-relative with forward slashes",
-    "resolved_asset_content_sha256": "preserved",
+    "resolved_asset_content_sha256": "<content-sha256> unless missing",
     "timestamps": "<timestamp>"
   },
   "schema_version": "1.0",
   "source": {
+    "contract_sources": [
+      "src/millrace_ai/config/models.py",
+      "src/millrace_ai/contracts/modes.py",
+      "src/millrace_ai/architecture/loop_graphs.py",
+      "src/millrace_ai/architecture/materialization.py",
+      "src/millrace_ai/compilation/node_materialization.py",
+      "src/millrace_ai/compilation/validation.py",
+      "src/millrace_ai/cli/compile_view.py",
+      "tests/config/test_config.py",
+      "tests/assets/test_modes.py",
+      "tests/assets/test_loop_graphs.py",
+      "tests/integration/test_compiler.py"
+    ],
     "package": "millrace-ai",
     "python_root": "../millrace-py",
-    "version": "0.16.1"
+    "version": "0.17.3"
   }
 }

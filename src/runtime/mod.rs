@@ -366,6 +366,7 @@ pub struct StageRunRequest {
 
     pub runner_name: Option<String>,
     pub model_name: Option<String>,
+    pub thinking_level: Option<String>,
     pub model_reasoning_effort: Option<String>,
     #[serde(default)]
     pub timeout_seconds: u64,
@@ -642,6 +643,10 @@ impl StageRunRequest {
                 self.model_name.as_deref().unwrap_or("none")
             ),
             format!(
+                "Thinking Level: {}",
+                self.thinking_level.as_deref().unwrap_or("none")
+            ),
+            format!(
                 "Model Reasoning Effort: {}",
                 self.model_reasoning_effort.as_deref().unwrap_or("none")
             ),
@@ -727,6 +732,7 @@ struct StageRunRequestRaw {
 
     runner_name: Option<String>,
     model_name: Option<String>,
+    thinking_level: Option<String>,
     model_reasoning_effort: Option<String>,
     #[serde(default)]
     timeout_seconds: u64,
@@ -773,6 +779,7 @@ impl StageRunRequestRaw {
             skill_revision_evidence_path: self.skill_revision_evidence_path,
             runner_name: self.runner_name,
             model_name: self.model_name,
+            thinking_level: self.thinking_level,
             model_reasoning_effort: self.model_reasoning_effort,
             timeout_seconds: self.timeout_seconds,
         };

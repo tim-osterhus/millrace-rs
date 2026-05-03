@@ -13,9 +13,10 @@ use crate::work_documents::{
 };
 
 use super::{
-    BaselineManifest, RuntimeOwnershipLockState, WorkspacePaths, inspect_runtime_ownership_lock,
-    load_baseline_manifest, load_execution_status, load_learning_status, load_planning_status,
-    load_recovery_counters, load_snapshot, workspace_paths,
+    BaselineManifest, RuntimeOwnershipLockState, WorkspacePaths, find_duplicate_task_lifecycle_ids,
+    inspect_runtime_ownership_lock, load_baseline_manifest, load_execution_status,
+    load_learning_status, load_planning_status, load_recovery_counters, load_snapshot,
+    workspace_paths,
 };
 
 /// One workspace doctor finding with deterministic code and optional path context.
@@ -74,6 +75,7 @@ pub fn run_workspace_doctor_for_paths(paths: &WorkspacePaths) -> DoctorReport {
     validate_status_and_state(paths, &mut errors);
     validate_runtime_ownership_lock(paths, &mut errors, &mut warnings);
     validate_queue_parseability(paths, &mut errors);
+    validate_task_lifecycle_uniqueness(paths, &mut errors);
     if let Some(manifest) = baseline_manifest.as_ref() {
         validate_manifest_tracked_managed_files(paths, manifest, &mut errors);
     }
@@ -333,6 +335,41 @@ fn validate_queue_parseability(paths: &WorkspacePaths, errors: &mut Vec<DoctorIs
     }
 }
 
+fn validate_task_lifecycle_uniqueness(paths: &WorkspacePaths, errors: &mut Vec<DoctorIssue>) {
+    let duplicates = match find_duplicate_task_lifecycle_ids(paths) {
+        Ok(duplicates) => duplicates,
+        Err(error) => {
+            errors.push(DoctorIssue::new(
+                "task_lifecycle_scan_failed",
+                error.to_string(),
+                paths.tasks_dir.clone(),
+            ));
+            return;
+        }
+    };
+
+    for duplicate in duplicates {
+        let state_summary = duplicate
+            .state_paths
+            .iter()
+            .map(|(state, path)| format!("{}:{}", state, workspace_relative_path(paths, path)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let primary_path = duplicate
+            .state_paths
+            .first()
+            .map(|(_state, path)| path.clone());
+        errors.push(DoctorIssue::new(
+            "duplicate_task_lifecycle_state",
+            format!(
+                "task {} appears in multiple lifecycle states: {}",
+                duplicate.task_id, state_summary
+            ),
+            primary_path,
+        ));
+    }
+}
+
 fn queue_targets(paths: &WorkspacePaths) -> Vec<QueueTarget<'_>> {
     vec![
         QueueTarget::task(&paths.tasks_queue_dir),
@@ -522,4 +559,11 @@ fn issue_path_key(issue: &DoctorIssue) -> String {
         .as_ref()
         .map(|path| path.to_string_lossy().into_owned())
         .unwrap_or_default()
+}
+
+fn workspace_relative_path(paths: &WorkspacePaths, path: &Path) -> String {
+    path.strip_prefix(&paths.root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/")
 }

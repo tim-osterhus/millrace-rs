@@ -385,7 +385,7 @@ impl SurfaceDocument {
                 .root_spec_id
                 .as_deref()
                 .or(document.spec_id.as_deref()),
-            Self::Spec(document) => document.root_spec_id.as_deref().or_else(|| {
+            Self::Spec(document) => document.root_spec_id.as_deref().or({
                 if matches!(
                     document.source_type,
                     SpecSourceType::Idea | SpecSourceType::Manual

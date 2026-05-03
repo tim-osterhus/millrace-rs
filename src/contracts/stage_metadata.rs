@@ -452,7 +452,7 @@ pub const STAGE_TO_PLANE: &[(StageName, Plane)] = &[
 ];
 
 /// Legal terminal results for every stage in metadata order.
-pub const STAGE_LEGAL_TERMINAL_RESULTS: &[(StageName, &'static [TerminalResult])] = &[
+pub const STAGE_LEGAL_TERMINAL_RESULTS: &[(StageName, &[TerminalResult])] = &[
     (StageName::Builder, BUILDER_LEGAL),
     (StageName::Checker, CHECKER_LEGAL),
     (StageName::Fixer, FIXER_LEGAL),

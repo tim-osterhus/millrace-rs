@@ -88,6 +88,31 @@ fn rust_compiler_matches_python_normalized_plan_and_cli_fixtures() {
 
 #[test]
 fn compiler_parity_fixture_documents_regeneration_surface() {
+    let fixture: Value = serde_json::from_str(
+        &read_fixture("compiler_parity/python_compiler_parity.json")
+            .expect("read compiler parity fixture"),
+    )
+    .expect("parse compiler parity fixture");
+    assert_eq!(fixture["source"]["version"], "0.17.3");
+    for source_path in [
+        "src/millrace_ai/config/models.py",
+        "src/millrace_ai/contracts/modes.py",
+        "src/millrace_ai/compilation/node_materialization.py",
+        "src/millrace_ai/cli/compile_view.py",
+        "tests/config/test_config.py",
+        "tests/assets/test_modes.py",
+        "tests/integration/test_compiler.py",
+    ] {
+        assert!(
+            fixture["source"]["contract_sources"]
+                .as_array()
+                .expect("fixture source paths must be an array")
+                .iter()
+                .any(|value| value.as_str() == Some(source_path)),
+            "compiler parity fixture does not name Python source {source_path}",
+        );
+    }
+
     assert!(fixture_path("compiler_parity/README.md").is_file());
     assert!(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -153,6 +178,9 @@ fn normalize_plan_value(value: Value, key: Option<&str>, mode_id: Option<String>
             Some("compiled_at" | "emitted_at") => Value::String("<timestamp>".to_owned()),
             Some("config_fingerprint") => Value::String("<cfg-fingerprint>".to_owned()),
             Some("assets_fingerprint") => Value::String("<assets-fingerprint>".to_owned()),
+            Some("content_sha256") if text != "missing" => {
+                Value::String("<content-sha256>".to_owned())
+            }
             Some("compile_time_path") => Value::String(normalize_runtime_path(&text)),
             _ => Value::String(text),
         },
@@ -357,6 +385,7 @@ fn is_stage_field(key: &str) -> bool {
             | "attached_skills"
             | "runner_name"
             | "model_name"
+            | "thinking_level"
             | "model_reasoning_effort"
             | "timeout_seconds"
     )

@@ -19,8 +19,9 @@ use millrace_ai::work_documents::{
 };
 use millrace_ai::workspace::{
     LineageRepairError, QueueStore, QueueStoreError, RuntimeOwnershipLockOptions, StateStore,
-    StateStoreError, acquire_runtime_ownership_lock_with_options, initialize_workspace,
-    load_closure_target_state, repair_closure_lineage, save_closure_target_state,
+    StateStoreError, acquire_runtime_ownership_lock_with_options,
+    find_duplicate_task_lifecycle_ids, initialize_workspace, load_closure_target_state,
+    repair_closure_lineage, save_closure_target_state,
 };
 
 const NOW: &str = "2026-04-15T00:00:00Z";
@@ -216,6 +217,44 @@ fn closure_target_loading_reports_path_aware_failures() {
         LineageRepairError::ClosureTargetContract { .. }
     ));
     assert!(invalid_target.to_string().contains("invalid-target.json"));
+}
+
+#[test]
+fn queue_store_lists_deferred_root_specs_without_mutating_invalid_queue_artifacts() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+    let store = QueueStore::from_paths(paths.clone());
+
+    let mut same_root = spec_document("spec-root-open", "2026-04-15T00:00:01Z");
+    same_root.root_spec_id = Some("spec-root-open".to_owned());
+    store.enqueue_spec(&same_root).unwrap();
+
+    let mut later_root = spec_document("spec-root-later", "2026-04-15T00:00:03Z");
+    later_root.root_spec_id = Some("spec-root-later".to_owned());
+    store.enqueue_spec(&later_root).unwrap();
+
+    let mut earlier_root = spec_document("spec-root-earlier", "2026-04-15T00:00:02Z");
+    earlier_root.root_spec_id = Some("spec-root-earlier".to_owned());
+    store.enqueue_spec(&earlier_root).unwrap();
+
+    let mut child_spec = spec_document("spec-child", "2026-04-15T00:00:00Z");
+    child_spec.root_spec_id = Some("spec-root-earlier".to_owned());
+    store.enqueue_spec(&child_spec).unwrap();
+
+    fs::write(paths.specs_queue_dir.join("malformed.md"), "not a spec\n").unwrap();
+    let before = fs::read_dir(&paths.specs_queue_dir).unwrap().count();
+
+    let deferred = store.list_deferred_root_spec_ids("spec-root-open").unwrap();
+
+    assert_eq!(
+        deferred,
+        vec!["spec-root-earlier".to_owned(), "spec-root-later".to_owned()]
+    );
+    assert_eq!(
+        fs::read_dir(&paths.specs_queue_dir).unwrap().count(),
+        before
+    );
+    assert!(paths.specs_queue_dir.join("malformed.md").is_file());
 }
 
 #[test]
@@ -605,6 +644,142 @@ fn task_queue_claiming_is_deterministic_dependency_aware_and_canonical() {
         .enqueue_task(&task_document("task-prereq", NOW))
         .unwrap_err();
     assert!(duplicate.to_string().contains("already exists"));
+}
+
+#[test]
+fn task_lifecycle_duplicate_scan_uses_parsed_ids_and_parse_error_filename_fallback() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+
+    fs::write(
+        paths.tasks_active_dir.join("task-duplicate.md"),
+        "# Broken continuation\n\nTask-ID: task-duplicate\nTitle: Broken continuation\n",
+    )
+    .unwrap();
+    fs::write(
+        paths.tasks_done_dir.join("done-alias.md"),
+        render_task_document(&task_document("task-duplicate", NOW)),
+    )
+    .unwrap();
+
+    let duplicates = find_duplicate_task_lifecycle_ids(&paths).unwrap();
+
+    assert_eq!(duplicates.len(), 1);
+    assert_eq!(duplicates[0].task_id, "task-duplicate");
+    assert_eq!(duplicates[0].states(), vec!["active", "done"]);
+    assert_eq!(
+        duplicates[0].state_paths[0].1,
+        paths.tasks_active_dir.join("task-duplicate.md")
+    );
+    assert_eq!(
+        duplicates[0].state_paths[1].1,
+        paths.tasks_done_dir.join("done-alias.md")
+    );
+}
+
+#[test]
+fn mark_task_done_retires_same_root_blocked_duplicate_and_records_audit_evidence() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+    let store = QueueStore::from_paths(paths.clone());
+    let source = task_document("task-duplicate", NOW);
+    let mut continuation = source.clone();
+    continuation.summary = "same-id continuation".to_owned();
+    let blocked_path = paths.tasks_blocked_dir.join("task-duplicate.md");
+    let active_path = paths.tasks_active_dir.join("task-duplicate.md");
+    fs::write(&blocked_path, render_task_document(&source)).unwrap();
+    fs::write(&active_path, render_task_document(&continuation)).unwrap();
+    fs::write(
+        paths.tasks_blocked_dir.join("task-unrelated.md"),
+        render_task_document(&task_document("task-unrelated", NOW)),
+    )
+    .unwrap();
+
+    let destination = store.mark_task_done("task-duplicate").unwrap();
+
+    assert_eq!(destination, paths.tasks_done_dir.join("task-duplicate.md"));
+    assert!(destination.is_file());
+    assert!(!blocked_path.exists());
+    assert!(paths.tasks_blocked_dir.join("task-unrelated.md").is_file());
+    let superseded_dir = paths.tasks_blocked_dir.join("superseded");
+    let superseded: Vec<_> = fs::read_dir(&superseded_dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().and_then(|value| value.to_str()) == Some("md"))
+        .collect();
+    assert_eq!(superseded.len(), 1);
+    let archived = fs::read_to_string(&superseded[0]).unwrap();
+    assert!(archived.contains("Task-ID: task-duplicate"));
+    assert!(!archived.contains("same-id continuation"));
+
+    let retirements = read_json_lines(&superseded_dir.join("retirements.jsonl"));
+    assert_eq!(retirements.len(), 1);
+    assert_eq!(retirements[0]["task_id"], "task-duplicate");
+    assert_eq!(retirements[0]["root_spec_id"], "spec-root-001");
+    assert_eq!(retirements[0]["reason"], "same_id_done_continuation");
+    assert_eq!(
+        retirements[0]["source_path"],
+        "millrace-agents/tasks/blocked/task-duplicate.md"
+    );
+    assert!(
+        retirements[0]["archive_path"]
+            .as_str()
+            .unwrap()
+            .starts_with("millrace-agents/tasks/blocked/superseded/task-duplicate.")
+    );
+}
+
+#[test]
+fn mark_task_done_keeps_different_root_or_unparseable_blocked_duplicate_in_place() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+    let store = QueueStore::from_paths(paths.clone());
+    let source = task_document("task-different-root", NOW);
+    let mut continuation = source.clone();
+    continuation.root_spec_id = Some("spec-root-002".to_owned());
+    continuation.spec_id = Some("spec-root-002".to_owned());
+    fs::write(
+        paths.tasks_blocked_dir.join("task-different-root.md"),
+        render_task_document(&source),
+    )
+    .unwrap();
+    fs::write(
+        paths.tasks_active_dir.join("task-different-root.md"),
+        render_task_document(&continuation),
+    )
+    .unwrap();
+
+    store.mark_task_done("task-different-root").unwrap();
+
+    assert!(
+        paths
+            .tasks_blocked_dir
+            .join("task-different-root.md")
+            .is_file()
+    );
+    assert!(!paths.tasks_blocked_dir.join("superseded").exists());
+
+    let valid = task_document("task-unparseable-blocked", NOW);
+    fs::write(
+        paths.tasks_blocked_dir.join("task-unparseable-blocked.md"),
+        "# Broken blocked predecessor\n\nTask-ID: task-unparseable-blocked\n",
+    )
+    .unwrap();
+    fs::write(
+        paths.tasks_active_dir.join("task-unparseable-blocked.md"),
+        render_task_document(&valid),
+    )
+    .unwrap();
+
+    store.mark_task_done("task-unparseable-blocked").unwrap();
+
+    assert!(
+        paths
+            .tasks_blocked_dir
+            .join("task-unparseable-blocked.md")
+            .is_file()
+    );
+    assert!(!paths.tasks_blocked_dir.join("superseded").exists());
 }
 
 #[test]

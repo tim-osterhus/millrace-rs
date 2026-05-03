@@ -22,6 +22,8 @@ mod runtime_control;
 mod runtime_lock;
 #[path = "workspace/state_store.rs"]
 mod state_store;
+#[path = "workspace/task_lifecycle_integrity.rs"]
+mod task_lifecycle_integrity;
 
 pub use doctor::{DoctorIssue, DoctorReport, run_workspace_doctor, run_workspace_doctor_for_paths};
 pub use lineage_repair::{
@@ -46,10 +48,10 @@ pub use queue_store::{
     StaleActiveState, claim_next_execution_task, claim_next_learning_request,
     claim_next_planning_item, detect_execution_stale_state, detect_learning_stale_state,
     detect_planning_stale_state, enqueue_incident, enqueue_learning_request, enqueue_spec,
-    enqueue_task, find_queue_item, inspect_queue_items, mark_incident_blocked,
-    mark_incident_resolved, mark_learning_request_blocked, mark_learning_request_done,
-    mark_spec_blocked, mark_spec_done, mark_task_blocked, mark_task_done, requeue_incident,
-    requeue_learning_request, requeue_spec, requeue_task,
+    enqueue_task, find_queue_item, inspect_queue_items, list_deferred_root_spec_ids,
+    mark_incident_blocked, mark_incident_resolved, mark_learning_request_blocked,
+    mark_learning_request_done, mark_spec_blocked, mark_spec_done, mark_task_blocked,
+    mark_task_done, requeue_incident, requeue_learning_request, requeue_spec, requeue_task,
 };
 pub use runtime_control::{
     RuntimeControl, RuntimeControlActionResult, RuntimeControlError, RuntimeControlMode,
@@ -70,6 +72,10 @@ pub use state_store::{
     load_usage_governance_state, normalize_status_marker, reset_forward_progress_counters,
     save_recovery_counters, save_snapshot, save_usage_governance_state, set_execution_status,
     set_learning_status, set_planning_status,
+};
+pub use task_lifecycle_integrity::{
+    TaskLifecycleDuplicate, find_duplicate_task_lifecycle_ids,
+    retire_stale_blocked_task_duplicate_after_done,
 };
 
 /// Result type for workspace filesystem operations.

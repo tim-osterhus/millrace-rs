@@ -93,6 +93,7 @@ fn baseline_mode_graph_and_stage_kind_assets_parse_through_contracts() {
             .map(String::as_str),
         Some("codex_cli")
     );
+    assert!(default_mode.stage_thinking_bindings.is_empty());
 
     let learning_mode: ModeDefinition = parse_contract(include_str!(
         "../src/assets/baseline/modes/learning_codex.json"
@@ -134,6 +135,11 @@ fn baseline_mode_graph_and_stage_kind_assets_parse_through_contracts() {
         builder_kind.allowed_result_classes_by_outcome["BLOCKED"],
         [ResultClass::Blocked, ResultClass::RecoverableFailure]
     );
+    assert!(
+        builder_kind
+            .allowed_overrides
+            .contains(&"thinking_level".to_owned())
+    );
 }
 
 #[test]
@@ -145,6 +151,10 @@ fn compiled_run_plan_fixture_validates_aliases_completion_and_currentness() {
     assert_eq!(plan.mode_id, "default_codex");
     assert_eq!(plan.execution_graph.loop_id, "execution.standard");
     assert_eq!(plan.planning_graph.loop_id, "planning.standard");
+    assert_eq!(
+        plan.execution_graph.nodes[0].thinking_level.as_deref(),
+        Some("medium")
+    );
     assert_eq!(
         plan.planning_graph
             .compiled_completion_entry
@@ -165,6 +175,52 @@ fn compiled_run_plan_fixture_validates_aliases_completion_and_currentness() {
         persisted_fingerprint: Some(plan.compile_input_fingerprint.clone()),
     };
     currentness.validate().unwrap();
+}
+
+#[test]
+fn mode_and_graph_contracts_accept_runner_neutral_thinking_bindings() {
+    let mode: ModeDefinition = parse_contract(
+        r#"{
+  "schema_version": "1.0",
+  "kind": "mode",
+  "mode_id": "thinking_mode",
+  "loop_ids_by_plane": {
+    "execution": "execution.standard",
+    "planning": "planning.standard"
+  },
+  "stage_thinking_bindings": {
+    "checker": "high",
+    "updater": null
+  }
+}"#,
+    );
+    assert_eq!(
+        mode.stage_thinking_bindings
+            .get(&millrace_ai::contracts::StageName::Checker),
+        Some(&Some("high".to_owned()))
+    );
+    assert_eq!(
+        mode.stage_thinking_bindings
+            .get(&millrace_ai::contracts::StageName::Updater),
+        Some(&None)
+    );
+
+    let mut graph_value = fixture_value(include_str!(
+        "../src/assets/baseline/graphs/execution/standard.json"
+    ));
+    graph_value["nodes"][0]["thinking_level"] = json!("medium");
+    let graph = GraphLoopDefinition::from_json_value(graph_value).unwrap();
+    assert_eq!(graph.nodes[0].thinking_level.as_deref(), Some("medium"));
+}
+
+#[test]
+fn stale_thinking_contract_shapes_are_rejected() {
+    let mut blank_mode = fixture_value(include_str!(
+        "../src/assets/baseline/modes/default_codex.json"
+    ));
+    blank_mode["stage_thinking_bindings"] = json!({"builder": " "});
+    let error = ModeDefinition::from_json_value(blank_mode).unwrap_err();
+    assert!(error.to_string().contains("stage binding"));
 }
 
 #[test]

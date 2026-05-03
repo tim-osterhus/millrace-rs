@@ -603,7 +603,7 @@ fn utc_now_timestamp() -> CompilerPersistenceResult<Timestamp> {
         .map_err(|error| CompilerPersistenceError::Time {
             message: error.to_string(),
         })?;
-    Timestamp::parse("emitted_at", &rendered).map_err(|error| time_error(error))
+    Timestamp::parse("emitted_at", &rendered).map_err(time_error)
 }
 
 fn time_error(error: WorkDocumentError) -> CompilerPersistenceError {

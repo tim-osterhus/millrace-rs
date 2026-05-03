@@ -87,6 +87,7 @@ fn sample_request(
         ),
         runner_name: Some("codex_cli".to_owned()),
         model_name: Some("gpt-5".to_owned()),
+        thinking_level: None,
         model_reasoning_effort: None,
         timeout_seconds: 120,
     };
@@ -126,7 +127,10 @@ fn command_option_value<'a>(command: &'a [String], flag: &str) -> &'a str {
 #[test]
 fn codex_adapter_writes_prompt_invocation_completion_events_stdout_and_tokens() {
     let temp = TempDir::new().unwrap();
-    let request = sample_request(temp.path(), StageName::Builder, REQUEST_ID, RUN_ID);
+    let mut request = sample_request(temp.path(), StageName::Builder, REQUEST_ID, RUN_ID);
+    request.thinking_level = Some("high".to_owned());
+    request.model_reasoning_effort = Some("medium".to_owned());
+    request.validate().unwrap();
     let seen = Rc::new(RefCell::new(None));
     let seen_for_executor = Rc::clone(&seen);
     let executor = FnExecutor(move |process_request: &CodexProcessRequest| {
@@ -162,6 +166,8 @@ fn codex_adapter_writes_prompt_invocation_completion_events_stdout_and_tokens() 
     let result = adapter.run(&request).unwrap();
 
     assert_eq!(result.exit_kind, RunnerExitKind::Completed);
+    assert_eq!(result.thinking_level.as_deref(), Some("high"));
+    assert_eq!(result.model_reasoning_effort.as_deref(), Some("high"));
     assert_eq!(
         result.token_usage,
         Some(TokenUsage {
@@ -188,6 +194,7 @@ fn codex_adapter_writes_prompt_invocation_completion_events_stdout_and_tokens() 
     let prompt = fs::read_to_string(run_dir.join("runner_prompt.req-001.md")).unwrap();
     assert!(prompt.contains("Stage Request Context:"));
     assert!(prompt.contains("Entrypoint Contract ID: builder.contract.v1"));
+    assert!(prompt.contains("Thinking Level: high"));
     assert!(prompt.contains("Required Skill Paths:"));
     assert!(prompt.contains("Do not invent or rename terminal markers."));
 
@@ -201,8 +208,12 @@ fn codex_adapter_writes_prompt_invocation_completion_events_stdout_and_tokens() 
     .unwrap();
     assert_eq!(invocation["runner_name"], "codex_cli");
     assert_eq!(invocation["request_id"], request.request_id);
+    assert_eq!(invocation["thinking_level"], "high");
+    assert_eq!(invocation["model_reasoning_effort"], "medium");
     assert_eq!(completion["runner_name"], "codex_cli");
     assert_eq!(completion["run_id"], request.run_id);
+    assert_eq!(completion["thinking_level"], "high");
+    assert_eq!(completion["model_reasoning_effort"], "high");
     let event_log_text = event_log_path.display().to_string();
     assert_eq!(
         completion["event_log_path"].as_str(),
@@ -216,7 +227,9 @@ fn codex_adapter_writes_prompt_invocation_completion_events_stdout_and_tokens() 
 fn codex_command_preserves_python_flag_order_and_environment_delta() {
     let temp = TempDir::new().unwrap();
     let mut request = sample_request(temp.path(), StageName::Builder, REQUEST_ID, RUN_ID);
-    request.model_reasoning_effort = Some("high".to_owned());
+    request.thinking_level = Some("high".to_owned());
+    request.model_reasoning_effort = Some("medium".to_owned());
+    request.validate().unwrap();
     let mut env = BTreeMap::new();
     env.insert("MILLRACE_TEST_ENV".to_owned(), "1".to_owned());
     let config = CodexCliConfig {
@@ -276,7 +289,8 @@ fn codex_command_preserves_python_flag_order_and_environment_delta() {
     let c_values = command
         .iter()
         .enumerate()
-        .filter_map(|(index, value)| (value == "-c").then(|| command[index + 1].clone()))
+        .filter(|&(_, value)| value == "-c")
+        .map(|(index, _)| command[index + 1].clone())
         .collect::<Vec<_>>();
     assert_eq!(
         &c_values[c_values.len() - 3..],
