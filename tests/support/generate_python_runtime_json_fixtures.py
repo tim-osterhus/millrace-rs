@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -239,6 +240,39 @@ def build_fixtures() -> dict[str, object]:
             captured_at=NOW,
         ),
         "token_usage.json": token_usage,
+        "auto_port_v0_18_0_runtime_contract_scout.json": {
+            "schema_version": "1.0",
+            "kind": "auto_port_v0_18_0_runtime_contract_scout",
+            "python_reference": {
+                "previous_tag": "v0.17.4",
+                "previous_commit": "304e537964ff772c815689b87e4c1e3b805c656c",
+                "target_tag": "v0.18.0",
+                "target_commit": "e4ccf099c8345a8b8708cdaa1ac510bdc7851387",
+                "diff_range": "v0.17.4..v0.18.0",
+            },
+            "contract_sources": [
+                "../millrace-py/src/millrace_ai/contracts/graph_exports.py",
+                "../millrace-py/src/millrace_ai/contracts/run_trace.py",
+                "../millrace-py/src/millrace_ai/runtime/run_traces.py",
+                "../millrace-py/tests/integration/test_graph_exports.py",
+                "../millrace-py/tests/runtime/test_run_traces.py",
+            ],
+            "expected_rust_contract_targets": [
+                "src/contracts/graph_exports.rs",
+                "src/contracts/run_trace.rs",
+                "src/runtime/run_traces.rs",
+                "tests/contracts_runtime_json.rs",
+                "tests/runtime_serial.rs",
+                "tests/runtime_daemon.rs",
+            ],
+            "no_live_guarantees": [
+                "no live Codex runner",
+                "no live Pi runner",
+                "no network",
+                "no credentials",
+                "no web server",
+            ],
+        },
     }
 
 
@@ -246,7 +280,11 @@ def main() -> None:
     fixture_dir = Path(__file__).resolve().parents[1] / "fixtures" / "runtime_json"
     fixture_dir.mkdir(parents=True, exist_ok=True)
     for name, model in build_fixtures().items():
-        (fixture_dir / name).write_text(model.model_dump_json(indent=2) + "\n")
+        if hasattr(model, "model_dump_json"):
+            rendered = model.model_dump_json(indent=2)
+        else:
+            rendered = json.dumps(model, indent=2, sort_keys=True)
+        (fixture_dir / name).write_text(rendered + "\n")
 
 
 if __name__ == "__main__":

@@ -5,8 +5,9 @@ use tempfile::TempDir;
 
 use millrace_ai::contracts::{
     ActiveRunRequestKind, ActiveRunState, LearningRequestAction, LearningRequestDocument,
-    MailboxCommand, MailboxCommandEnvelope, Plane, ReloadOutcome, RuntimeMode, SpecDocument,
-    SpecSourceType, StageName, TaskDocument, Timestamp, TokenUsage, WatcherMode, WorkItemKind,
+    MailboxCommand, MailboxCommandEnvelope, Plane, ReloadOutcome, RunTraceGraph,
+    RuntimeJsonContract, RuntimeMode, SpecDocument, SpecSourceType, StageName, TaskDocument,
+    Timestamp, TokenUsage, WatcherMode, WorkItemKind,
 };
 use millrace_ai::work_documents::{parse_spec_document, render_task_document};
 use millrace_ai::workspace::{
@@ -2189,6 +2190,12 @@ fn daemon_loop_runs_one_max_tick_drains_worker_and_releases_lock() {
     );
     assert!(paths.tasks_done_dir.join("task-loop-max.md").is_file());
     assert!(!paths.tasks_active_dir.join("task-loop-max.md").exists());
+    let trace_path = paths.runs_dir.join("run-loop-max/run_trace.json");
+    assert!(trace_path.is_file());
+    let trace = RunTraceGraph::from_json_str(&fs::read_to_string(trace_path).unwrap()).unwrap();
+    assert_eq!(trace.status.as_str(), "complete");
+    assert_eq!(trace.nodes[0].stage, "updater");
+    assert_eq!(trace.edges[0].edge_kind, "idle");
 }
 
 #[test]

@@ -54,6 +54,9 @@ use super::{
     AllowedResultClassPolicy, AllowedResultClassesByOutcome, RequestKind, RuntimeStartupError,
     RuntimeStartupSession, RuntimeWatchEvent, StageRunRequest, StageRunRequestError,
     build_runtime_watcher_session, evaluate_usage_governance, load_runtime_startup_config,
+    run_traces::{
+        record_router_decision_trace, spawned_work_ref_from_path, upsert_stage_result_trace_node,
+    },
 };
 
 static RUN_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -989,13 +992,18 @@ fn persist_and_apply_dispatch_result(
     if let Err(error) = write_stage_result_artifact(stage_result_path, stage_result) {
         return Err(partial.fail(error));
     }
+    let run_dir = Path::new(&request.run_dir);
+    upsert_stage_result_trace_node(&session.paths, run_dir, stage_result, stage_result_path);
     partial.stage_result_path = Some(stage_result_path.to_path_buf());
 
-    if let Err(error) =
-        enqueue_learning_requests_for_stage_result(session, stage_result, stage_result_path)
-    {
-        return Err(partial.fail(error));
-    }
+    let learning_request_paths = match enqueue_learning_requests_for_stage_result(
+        session,
+        stage_result,
+        stage_result_path,
+    ) {
+        Ok(paths) => paths,
+        Err(error) => return Err(partial.fail(error)),
+    };
 
     let router_decision_path =
         match write_router_decision_artifact(request, &router_decision, stage_result_path) {
@@ -1039,11 +1047,25 @@ fn persist_and_apply_dispatch_result(
         Err(error) => return Err(partial.fail(error)),
     };
 
-    if let Err(error) =
-        apply_router_decision(session, &router_decision, stage_result, stage_result_path)
-    {
-        return Err(partial.fail(error));
-    }
+    let spawned_paths =
+        match apply_router_decision(session, &router_decision, stage_result, stage_result_path) {
+            Ok(paths) => paths,
+            Err(error) => return Err(partial.fail(error)),
+        };
+    let spawned_work = learning_request_paths
+        .iter()
+        .map(|path| spawned_work_ref_from_path(path, stage_result, "learning_trigger"))
+        .chain(spawned_paths.iter().map(|path| {
+            spawned_work_ref_from_path(path, stage_result, router_decision.reason.clone())
+        }))
+        .collect();
+    record_router_decision_trace(
+        &session.paths,
+        run_dir,
+        stage_result,
+        &router_decision,
+        spawned_work,
+    );
     if let Err(error) = handle_learning_curator_promotion_boundary(session, stage_result) {
         return Err(partial.fail(error));
     }
@@ -2360,7 +2382,7 @@ fn apply_router_decision(
     decision: &RouterDecision,
     stage_result: &StageResultEnvelope,
     stage_result_path: &Path,
-) -> RuntimeTickResult<()> {
+) -> RuntimeTickResult<Vec<PathBuf>> {
     clear_runtime_error_context_if_consumed(session, stage_result)?;
 
     if is_closure_target_stage_result(stage_result) {
@@ -2368,12 +2390,16 @@ fn apply_router_decision(
     }
 
     match decision.action {
-        RouterAction::RunStage => apply_run_stage_decision(session, decision, stage_result),
-        RouterAction::Idle => apply_idle_decision(session, stage_result),
+        RouterAction::RunStage => {
+            apply_run_stage_decision(session, decision, stage_result).map(|()| Vec::new())
+        }
+        RouterAction::Idle => apply_idle_decision(session, stage_result).map(|()| Vec::new()),
         RouterAction::Handoff => {
             apply_handoff_decision(session, decision, stage_result, stage_result_path)
         }
-        RouterAction::Blocked => apply_blocked_decision(session, decision, stage_result),
+        RouterAction::Blocked => {
+            apply_blocked_decision(session, decision, stage_result).map(|()| Vec::new())
+        }
     }
 }
 
@@ -2728,9 +2754,15 @@ fn apply_handoff_decision(
     decision: &RouterDecision,
     stage_result: &StageResultEnvelope,
     stage_result_path: &Path,
-) -> RuntimeTickResult<()> {
+) -> RuntimeTickResult<Vec<PathBuf>> {
+    let mut spawned_paths = Vec::new();
     if decision.create_incident {
-        enqueue_handoff_incident(session, decision, stage_result, stage_result_path)?;
+        spawned_paths.push(enqueue_handoff_incident(
+            session,
+            decision,
+            stage_result,
+            stage_result_path,
+        )?);
     }
     mark_active_work_item_blocked(&session.paths, stage_result)?;
     clear_active_plane(
@@ -2748,7 +2780,7 @@ fn apply_handoff_decision(
     refresh_queue_depths(&session.paths, &mut session.snapshot)?;
     session.snapshot.updated_at = stage_result.completed_at.clone();
     save_snapshot(&session.paths, &session.snapshot)?;
-    Ok(())
+    Ok(spawned_paths)
 }
 
 fn apply_blocked_decision(
@@ -2780,7 +2812,7 @@ fn apply_closure_target_result(
     decision: &RouterDecision,
     stage_result: &StageResultEnvelope,
     stage_result_path: &Path,
-) -> RuntimeTickResult<()> {
+) -> RuntimeTickResult<Vec<PathBuf>> {
     let mut target = load_closure_target_for_stage_result(&session.paths, stage_result)?;
     let previous_arbiter_run_id = target.last_arbiter_run_id.clone();
     target.latest_verdict_path = existing_workspace_artifact(
@@ -2816,7 +2848,7 @@ fn apply_closure_target_result(
                 decision,
                 None,
             )?;
-            Ok(())
+            Ok(Vec::new())
         }
         RouterAction::Handoff => {
             target.closure_open = true;
@@ -2827,7 +2859,7 @@ fn apply_closure_target_result(
                 previous_arbiter_run_id.as_deref(),
             )? {
                 block_repeated_closure_remediation(session, &target, stage_result)?;
-                return Ok(());
+                return Ok(Vec::new());
             }
             let incident_path = if decision.create_incident {
                 Some(enqueue_handoff_incident(
@@ -2857,7 +2889,7 @@ fn apply_closure_target_result(
                 decision,
                 incident_path.as_deref(),
             )?;
-            Ok(())
+            Ok(incident_path.into_iter().collect())
         }
         RouterAction::Blocked => {
             target.closure_open = true;
@@ -2881,7 +2913,7 @@ fn apply_closure_target_result(
                 decision,
                 None,
             )?;
-            Ok(())
+            Ok(Vec::new())
         }
         RouterAction::RunStage => Err(invalid_state(
             "closure-target results cannot route to run_stage",

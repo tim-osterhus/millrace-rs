@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "kind": "web_dashboard_parity_decision",
   "release_surface": "python_packages_millrace_web",
-  "summary": "Python v0.17.3 added the optional millrace-web read-only dashboard package, and Python v0.17.4 syncs that package's version and millrace-ai runtime dependency. Rust records this release surface as an intentional unsupported parity gap because the accepted Rust boundary is the CLI plus local millrace-agents workspace artifacts, not a web server, static shell, or separate dashboard package.",
+  "summary": "Python v0.17.3 added the optional millrace-web read-only dashboard package, Python v0.17.4 synced that package's version and millrace-ai runtime dependency, and Python v0.18.0 adds graph/trace dashboard evidence. Rust records this release surface as an intentional unsupported parity gap because the accepted Rust boundary is the CLI plus local millrace-agents workspace artifacts, not a web server, static shell, dashboard HTTP API, SSE stream, or separate dashboard package.",
   "rust_decision": {
     "status": "deferred_unsupported_gap",
     "arbiter_visible": true,
@@ -60,7 +60,8 @@
       "rust_shadow_commands": [
         "millrace runs ls",
         "millrace runs show",
-        "millrace runs tail"
+        "millrace runs tail",
+        "millrace runs trace <run_id>"
       ],
       "python_sources": [
         "../millrace-py/packages/millrace-web/src/millrace_web/services/run_reader.py"
@@ -96,6 +97,7 @@
       "rust_status": "existing_read_only_cli_shadow_only",
       "rust_shadow_commands": [
         "millrace compile show",
+        "millrace compile graph",
         "millrace status"
       ],
       "python_sources": [
@@ -166,10 +168,10 @@
   "existing_non_mutating_rust_surfaces": [
     "queue ls/show",
     "status/status show/status watch",
-    "runs ls/show/tail",
+    "runs ls/show/tail/trace",
     "modes list/show",
     "config show",
-    "compile show"
+    "compile show/graph"
   ],
   "version_sync_evidence": {
     "python_target_tag": "v0.17.4",
@@ -185,6 +187,39 @@
       "FastAPI application version 0.17.3 -> 0.17.4"
     ],
     "rust_release_handling": "Recorded as version/dependency sync evidence for the existing unsupported dashboard gap; no Rust web server, static shell, SSE stream, or separate dashboard package is added."
+  },
+  "v0_18_0_graph_trace_evidence": {
+    "python_previous_tag": "v0.17.4",
+    "python_target_tag": "v0.18.0",
+    "diff_range": "v0.17.4..v0.18.0",
+    "changed_python_sources": [
+      "../millrace-py/packages/millrace-web/CHANGELOG.md",
+      "../millrace-py/packages/millrace-web/README.md",
+      "../millrace-py/packages/millrace-web/docs/README.md",
+      "../millrace-py/packages/millrace-web/pyproject.toml",
+      "../millrace-py/packages/millrace-web/src/millrace_web/__init__.py",
+      "../millrace-py/packages/millrace-web/src/millrace_web/app.py",
+      "../millrace-py/packages/millrace-web/src/millrace_web/models.py",
+      "../millrace-py/packages/millrace-web/src/millrace_web/services/compiled_plan_reader.py",
+      "../millrace-py/packages/millrace-web/src/millrace_web/services/run_reader.py",
+      "../millrace-py/packages/millrace-web/src/millrace_web/services/snapshot_reader.py",
+      "../millrace-py/packages/millrace-web/src/millrace_web/static/assets/app.js",
+      "../millrace-py/packages/millrace-web/src/millrace_web/static/assets/styles.css",
+      "../millrace-py/packages/millrace-web/tests/test_app.py"
+    ],
+    "required_gap_surfaces": [
+      "compiled_plan_graph_api_summary",
+      "run_trace_api_summary",
+      "recent_trace_flow_overlay",
+      "trace_outcome_labels",
+      "package_version_dependency_sync",
+      "read_only_no_lock_guarantee"
+    ],
+    "rust_shadow_commands": [
+      "millrace compile graph",
+      "millrace runs trace <run_id>"
+    ],
+    "rust_release_handling": "Recorded as graph/trace unsupported-gap and shadow-CLI evidence for the existing Rust CLI/workspace boundary. Rust implements read-only CLI graph and trace commands, but this fixture does not authorize a web server, static dashboard shell, dashboard HTTP API, SSE stream, or separate dashboard package."
   },
   "safety_guarantees": [
     "existing_read_only_cli_commands_remain_non_mutating",

@@ -10,10 +10,11 @@ use millrace_ai::contracts::{
     ActiveRunRequestKind, ActiveRunState, ClosureTargetState, ExecutionTerminalResult,
     IncidentDecision, IncidentDocument, IncidentSeverity, LearningRequestAction,
     LearningRequestDocument, LearningTerminalResult, Plane, PlanningTerminalResult, ResultClass,
-    RuntimeErrorContext, RuntimeMode, SpecDocument, SpecSourceType, StageName, StageResultEnvelope,
-    SubscriptionQuotaWindowReading, TaskDocument, TerminalResult, Timestamp, TokenUsage,
-    UsageGovernanceDegradedPolicy, UsageGovernanceRuntimeTokenMetric,
-    UsageGovernanceRuntimeTokenWindow, UsageGovernanceSubscriptionWindow, WorkItemKind,
+    RunTraceGraph, RuntimeErrorContext, RuntimeJsonContract, RuntimeMode, SpecDocument,
+    SpecSourceType, StageName, StageResultEnvelope, SubscriptionQuotaWindowReading, TaskDocument,
+    TerminalResult, Timestamp, TokenUsage, UsageGovernanceDegradedPolicy,
+    UsageGovernanceRuntimeTokenMetric, UsageGovernanceRuntimeTokenWindow,
+    UsageGovernanceSubscriptionWindow, WorkItemKind,
 };
 use millrace_ai::work_documents::{parse_incident_document, parse_learning_request_document};
 use millrace_ai::workspace::{
@@ -25,7 +26,7 @@ use millrace_ai::workspace::{
 };
 use millrace_ai::{
     FakeRunner, FakeRunnerConfig, FakeRunnerOutput, FakeRunnerResult, ProcessExecutionResult,
-    ProcessExitKind, RequestKind, RouterAction, RunnerCompletionArtifact,
+    ProcessExitKind, RequestKind, RouterAction, RouterDecision, RunnerCompletionArtifact,
     RunnerCompletionArtifactContext, RunnerEnvironmentDelta, RunnerError, RunnerExitKind,
     RunnerInvocationArtifact, RunnerRawResult, RunnerRegistry, RunnerResult, RuntimeStartupError,
     RuntimeStartupOptions, RuntimeTickOptions, RuntimeTickOutcomeKind, RuntimeTokenRuleConfig,
@@ -33,12 +34,13 @@ use millrace_ai::{
     SubscriptionQuotaRulesConfig, UsageGovernanceConfig, build_runtime_runner_dispatcher,
     build_stage_prompt, completion_artifact_from_raw_result, evaluate_runtime_token_rules,
     evaluate_subscription_quota_rules, evaluate_usage_governance,
-    healthy_subscription_quota_status, invocation_artifact_from_request, normalize_stage_result,
-    reconcile_usage_ledger_from_stage_results, record_stage_result_usage,
-    render_stage_request_context_lines, run_serial_runtime_tick,
-    run_serial_runtime_tick_with_runner, runner_prompt_path, startup_runtime_once,
-    startup_runtime_once_for_paths, subscription_quota_status_unavailable, write_runner_completion,
-    write_runner_invocation, write_stage_prompt_artifact,
+    healthy_subscription_quota_status, inspect_run_trace, invocation_artifact_from_request,
+    normalize_stage_result, reconcile_usage_ledger_from_stage_results,
+    record_router_decision_trace, record_stage_result_usage, render_stage_request_context_lines,
+    run_serial_runtime_tick, run_serial_runtime_tick_with_runner, runner_prompt_path,
+    spawned_work_ref_from_path, startup_runtime_once, startup_runtime_once_for_paths,
+    subscription_quota_status_unavailable, trace_path_for_run_dir, upsert_stage_result_trace_node,
+    write_runner_completion, write_runner_invocation, write_stage_prompt_artifact,
 };
 
 const RUN_ID: &str = "run-001";
@@ -824,6 +826,213 @@ fn assert_no_learning_update_candidate_records(paths: &millrace_ai::WorkspacePat
             records
         );
     }
+}
+
+#[test]
+fn inspect_run_trace_derives_incomplete_fallback_from_stage_results() {
+    let temp = TempDir::new().unwrap();
+    let run_dir = temp.path().join("run-fallback");
+    let stage_results_dir = run_dir.join("stage_results");
+    fs::create_dir_all(&stage_results_dir).unwrap();
+    let mut stage_result = sample_stage_result_with_tokens(
+        TokenUsage {
+            input_tokens: 10,
+            cached_input_tokens: 2,
+            output_tokens: 4,
+            thinking_tokens: 1,
+            total_tokens: 14,
+        },
+        STARTUP_NOW,
+    );
+    stage_result.run_id = "run-fallback".to_owned();
+    stage_result.metadata.insert(
+        "request_id".to_owned(),
+        Value::String("request-fallback".to_owned()),
+    );
+    stage_result.metadata.insert(
+        "compiled_plan_id".to_owned(),
+        Value::String("plan-fallback".to_owned()),
+    );
+    fs::write(
+        stage_results_dir.join("request-fallback.json"),
+        serde_json::to_string_pretty(&stage_result).unwrap() + "\n",
+    )
+    .unwrap();
+
+    let trace = inspect_run_trace(&run_dir).unwrap();
+
+    assert_eq!(trace.kind, "run_trace_graph");
+    assert_eq!(trace.status.as_str(), "incomplete");
+    assert_eq!(trace.run_id, "run-fallback");
+    assert_eq!(trace.compiled_plan_id.as_deref(), Some("plan-fallback"));
+    assert_eq!(trace.nodes[0].trace_node_id, "request-fallback");
+    assert_eq!(trace.nodes[0].terminal_result, "BUILDER_COMPLETE");
+    assert_eq!(
+        trace.nodes[0].token_usage.as_ref().unwrap().total_tokens,
+        14
+    );
+    assert!(trace.edges.is_empty());
+    assert!(
+        trace
+            .notes
+            .iter()
+            .any(|note| note == "derived from stage result artifacts")
+    );
+    assert!(!trace_path_for_run_dir(&run_dir).exists());
+}
+
+#[test]
+fn inspect_run_trace_derives_malformed_fallback_when_trace_json_cannot_decode() {
+    let temp = TempDir::new().unwrap();
+    let run_dir = temp.path().join("run-malformed");
+    let stage_results_dir = run_dir.join("stage_results");
+    fs::create_dir_all(&stage_results_dir).unwrap();
+    fs::write(run_dir.join("run_trace.json"), "{bad\n").unwrap();
+    let mut stage_result = sample_stage_result_with_tokens(
+        TokenUsage {
+            input_tokens: 1,
+            cached_input_tokens: 0,
+            output_tokens: 1,
+            thinking_tokens: 0,
+            total_tokens: 2,
+        },
+        STARTUP_NOW,
+    );
+    stage_result.run_id = "run-malformed".to_owned();
+    stage_result.metadata.insert(
+        "request_id".to_owned(),
+        Value::String("request-malformed".to_owned()),
+    );
+    fs::write(
+        stage_results_dir.join("request-malformed.json"),
+        serde_json::to_string_pretty(&stage_result).unwrap() + "\n",
+    )
+    .unwrap();
+
+    let trace = inspect_run_trace(&run_dir).unwrap();
+
+    assert_eq!(trace.status.as_str(), "malformed");
+    assert!(
+        trace
+            .notes
+            .iter()
+            .any(|note| note.contains("run_trace.json malformed"))
+    );
+    assert_eq!(trace.nodes[0].trace_node_id, "request-malformed");
+    assert_eq!(
+        fs::read_to_string(run_dir.join("run_trace.json")).unwrap(),
+        "{bad\n"
+    );
+}
+
+#[test]
+fn record_router_decision_trace_includes_spawned_learning_request_edge_evidence() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    let run_dir = paths.runs_dir.join("run-spawned");
+    let stage_results_dir = run_dir.join("stage_results");
+    fs::create_dir_all(&stage_results_dir).unwrap();
+    let stage_result_path = stage_results_dir.join("request-spawned.json");
+    let mut stage_result = sample_stage_result_with_tokens(
+        TokenUsage {
+            input_tokens: 1,
+            cached_input_tokens: 0,
+            output_tokens: 1,
+            thinking_tokens: 0,
+            total_tokens: 2,
+        },
+        STARTUP_NOW,
+    );
+    stage_result.run_id = "run-spawned".to_owned();
+    stage_result.metadata.insert(
+        "request_id".to_owned(),
+        Value::String("request-spawned".to_owned()),
+    );
+    fs::write(
+        &stage_result_path,
+        serde_json::to_string_pretty(&stage_result).unwrap() + "\n",
+    )
+    .unwrap();
+    upsert_stage_result_trace_node(&paths, &run_dir, &stage_result, &stage_result_path);
+    let learning_request_path = paths.learning_requests_queue_dir.join("learn-spawned.md");
+    fs::create_dir_all(learning_request_path.parent().unwrap()).unwrap();
+    fs::write(&learning_request_path, "# Learn\n").unwrap();
+
+    let decision = RouterDecision {
+        action: RouterAction::RunStage,
+        next_plane: None,
+        next_stage: Some(StageName::Checker),
+        next_node_id: Some("checker".to_owned()),
+        next_stage_kind_id: Some("checker".to_owned()),
+        failure_class: None,
+        counter_key: None,
+        create_incident: false,
+        reason: "builder:BUILDER_COMPLETE".to_owned(),
+    };
+    record_router_decision_trace(
+        &paths,
+        &run_dir,
+        &stage_result,
+        &decision,
+        vec![spawned_work_ref_from_path(
+            &learning_request_path,
+            &stage_result,
+            "learning_trigger",
+        )],
+    );
+
+    let trace =
+        RunTraceGraph::from_json_str(&fs::read_to_string(run_dir.join("run_trace.json")).unwrap())
+            .unwrap();
+    assert_eq!(trace.edges[0].target_node_id.as_deref(), Some("checker"));
+    assert_eq!(
+        trace.edges[0].spawned_work[0].kind.as_str(),
+        "learning_request"
+    );
+    assert_eq!(trace.edges[0].spawned_work[0].item_id, "learn-spawned");
+    assert_eq!(
+        trace.edges[0].spawned_work[0].reason.as_deref(),
+        Some("learning_trigger")
+    );
+}
+
+#[test]
+fn run_trace_write_failure_emits_runtime_event_without_blocking_stage_result() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    let run_dir = paths.runs_dir.join("run-trace-write-fail");
+    let stage_results_dir = run_dir.join("stage_results");
+    fs::create_dir_all(&stage_results_dir).unwrap();
+    fs::create_dir_all(run_dir.join("run_trace.json")).unwrap();
+    let stage_result_path = stage_results_dir.join("request-trace-write-fail.json");
+    let mut stage_result = sample_stage_result_with_tokens(
+        TokenUsage {
+            input_tokens: 1,
+            cached_input_tokens: 0,
+            output_tokens: 1,
+            thinking_tokens: 0,
+            total_tokens: 2,
+        },
+        STARTUP_NOW,
+    );
+    stage_result.run_id = "run-trace-write-fail".to_owned();
+    stage_result.metadata.insert(
+        "request_id".to_owned(),
+        Value::String("request-trace-write-fail".to_owned()),
+    );
+    fs::write(
+        &stage_result_path,
+        serde_json::to_string_pretty(&stage_result).unwrap() + "\n",
+    )
+    .unwrap();
+
+    upsert_stage_result_trace_node(&paths, &run_dir, &stage_result, &stage_result_path);
+
+    assert!(stage_result_path.is_file());
+    let events = runtime_events(&paths);
+    assert_eq!(events[0]["event_type"], "run_trace_write_failed");
+    assert_eq!(events[0]["data"]["run_id"], "run-trace-write-fail");
+    assert_eq!(events[0]["data"]["phase"], "node");
 }
 
 fn default_source_skill_tree() -> PathBuf {
@@ -2340,6 +2549,31 @@ fn serial_tick_dispatches_fake_runner_persists_artifacts_and_routes_from_graph()
     );
     assert_eq!(events[2]["event_type"], "router_decision");
     assert_eq!(events[2]["data"]["next_stage"], "checker");
+
+    let trace_path = paths.runs_dir.join("run-dispatch/run_trace.json");
+    assert!(trace_path.is_file());
+    let trace = RunTraceGraph::from_json_str(&fs::read_to_string(&trace_path).unwrap()).unwrap();
+    assert_eq!(trace.status.as_str(), "active");
+    assert_eq!(trace.run_id, "run-dispatch");
+    assert_eq!(trace.nodes.len(), 1);
+    assert_eq!(trace.nodes[0].trace_node_id, "request-dispatch");
+    assert_eq!(trace.nodes[0].stage, "builder");
+    assert_eq!(trace.nodes[0].thinking_level.as_deref(), Some("high"));
+    assert!(
+        trace.nodes[0]
+            .artifacts
+            .iter()
+            .any(|artifact| artifact.kind == "stage_result")
+    );
+    assert_eq!(trace.edges.len(), 1);
+    assert_eq!(trace.edges[0].source_trace_node_id, "request-dispatch");
+    assert_eq!(trace.edges[0].outcome, "BUILDER_COMPLETE");
+    assert_eq!(trace.edges[0].edge_kind, "run_stage");
+    assert_eq!(trace.edges[0].target_node_id.as_deref(), Some("checker"));
+    assert_eq!(
+        inspect_run_trace(paths.runs_dir.join("run-dispatch")).unwrap(),
+        trace
+    );
 
     session.finish().unwrap();
 }

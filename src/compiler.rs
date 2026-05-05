@@ -2,6 +2,7 @@
 
 pub mod assets;
 pub mod contracts;
+pub mod graph_exports;
 pub mod materialization;
 pub mod persistence;
 
@@ -26,6 +27,10 @@ pub use contracts::{
     LearningTriggerRuleDefinition, MaterializedGraphNodePlan, ModeDefinition,
     PlaneConcurrencyPolicyDefinition, RecoveryRole, RegisteredStageKindDefinition,
     ResolvedAssetRef, StageIdempotencePolicy, validate_graph_stage_kind_references,
+};
+pub use graph_exports::{
+    CompilerGraphExportError, CompilerGraphExportResult, export_compiled_stage_graph,
+    export_compiled_stage_graph_at, export_compiled_stage_graphs, export_compiled_stage_graphs_at,
 };
 pub use materialization::{
     CompilerMaterializationError, CompilerMaterializationResult, DEFAULT_STAGE_TIMEOUT_SECONDS,

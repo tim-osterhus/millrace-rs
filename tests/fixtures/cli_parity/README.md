@@ -37,8 +37,9 @@ contracts, preview-only live/native surfaces, and the completed validation
 command set; `tests/parity_cli.rs` rejects unknown, malformed, stale, or
 missing Rust test references in that fixture. `web_dashboard_parity_decision.json`
 records the Python v0.17.3 optional `packages/millrace-web` surface as an
-intentional unsupported Rust parity gap, and now also records the Python
-v0.17.4 package version/dependency sync as evidence for that same gap. It names
+intentional unsupported Rust parity gap, records the Python v0.17.4 package
+version/dependency sync, and records the Python v0.18.0 graph/trace dashboard
+evidence for that same gap. It names
 the workspace registry, summary DTO, queue/run/snapshot/baseline/compiled-plan/
 Arbiter/usage-governance/event readers, static shell, CLI/server boundary, and
 package-boundary tests, while documenting that Rust currently keeps the
@@ -65,6 +66,27 @@ rules, README/changelog/roadmap/runtime docs, release-readiness commands, the
 Python v0.17.4 source docs, and the `millrace-web` version/dependency sync
 unsupported-gap evidence. `tests/parity_cli.rs` rejects missing, malformed,
 unknown, stale, or omitted Rust test references in that release fixture.
+`auto_port_v0_18_0_parity_evidence.json` records the target-facing scout
+evidence for Python `v0.17.4..v0.18.0` and planned Rust `0.3.0`. It maps the
+generated scout's changed Python paths to expected Rust implementation, test,
+documentation, fixture, or unsupported-gap targets. The graph-export slice now
+implements the compiled graph contract/projection targets, and the trace-runtime
+slice now implements the run-trace contract, runtime persistence, spawned-work
+edge evidence, and fallback-inspection targets. The graph/trace CLI slice now
+implements the read-only `millrace compile graph` and `millrace runs trace`
+shadow commands over those contracts, including text, JSON, selected-plane,
+output-file, missing-plane, missing-run, malformed-trace fallback, and
+absent-trace fallback coverage. The same fixture continues to gate the web-gap,
+docs/version, and release evidence now represented by the final release and
+web-dashboard fixtures.
+`auto_port_v0_18_0_release_parity_evidence.json` records the final Rust
+`0.3.0` release evidence for version-visible CLI metadata, package include
+rules, README/changelog/roadmap/runtime docs, graph/trace CLI operator docs,
+release-readiness commands, package-readiness dry-run evidence, and the Python
+v0.18.0 `millrace-web` compiled graph/run-trace/Flow overlay unsupported-gap
+evidence. `tests/parity_cli.rs` rejects missing, malformed, unknown, stale, or
+omitted Rust test references in that release fixture and confirms release
+evidence does not require publish, upload, push, tag, or deployment commands.
 
 The evidence is intentionally not a byte-for-byte transcript. Paths, generated
 ids, timestamps, package versions, command ids, run ids, compact run handles,

@@ -3,8 +3,10 @@ use std::any::type_name;
 use serde_json::json;
 
 use millrace_ai::contracts::{
-    ActiveRunRequestKind, ActiveRunState, CompileDiagnostics, ContractError, ExecutionStageName,
-    ExecutionTerminalResult, IdentifierErrorReason, IncidentDecision, IncidentDocument,
+    ActiveRunRequestKind, ActiveRunState, CompileDiagnostics, CompiledStageGraphExport,
+    ContractError, ExecutionStageName, ExecutionTerminalResult, GraphExportContract,
+    GraphExportContractError, GraphExportEdge, GraphExportEntry, GraphExportNode,
+    GraphExportTerminalState, IdentifierErrorReason, IncidentDecision, IncidentDocument,
     IncidentSeverity, LearningRequestAction, LearningRequestDocument, LearningStageName,
     LearningTerminalResult, LoopEdgeKind, MailboxAddIdeaPayload, MailboxCommand,
     MailboxCommandEnvelope, OutcomeResultClasses, PauseSource, Plane, PlanningStageName,
@@ -61,15 +63,23 @@ type InvocationArtifactBuilder = fn(
 
 fn assert_runtime_contract<T: RuntimeJsonContract>() {}
 
+fn assert_graph_export_contract<T: GraphExportContract>() {}
+
 #[test]
 fn public_contract_exports_remain_importable() {
     let public_type_names = [
         type_name::<ActiveRunRequestKind>(),
         type_name::<ActiveRunState>(),
         type_name::<CompileDiagnostics>(),
+        type_name::<CompiledStageGraphExport>(),
         type_name::<ContractError>(),
         type_name::<ExecutionStageName>(),
         type_name::<ExecutionTerminalResult>(),
+        type_name::<GraphExportContractError>(),
+        type_name::<GraphExportEdge>(),
+        type_name::<GraphExportEntry>(),
+        type_name::<GraphExportNode>(),
+        type_name::<GraphExportTerminalState>(),
         type_name::<IdentifierErrorReason>(),
         type_name::<IncidentDecision>(),
         type_name::<IncidentDocument>(),
@@ -164,6 +174,7 @@ fn public_contract_exports_remain_importable() {
     assert_runtime_contract::<RecoveryCounters>();
     assert_runtime_contract::<RuntimeSnapshot>();
     assert_runtime_contract::<TokenUsage>();
+    assert_graph_export_contract::<CompiledStageGraphExport>();
 
     let _adapter: Option<&dyn StageRunnerAdapter> = None;
     let _codex_executor: Option<&dyn CodexProcessExecutor> = None;

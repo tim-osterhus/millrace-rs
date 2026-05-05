@@ -1,0 +1,33 @@
+{
+  "contract_sources": [
+    "../millrace-py/src/millrace_ai/contracts/graph_exports.py",
+    "../millrace-py/src/millrace_ai/contracts/run_trace.py",
+    "../millrace-py/src/millrace_ai/runtime/run_traces.py",
+    "../millrace-py/tests/integration/test_graph_exports.py",
+    "../millrace-py/tests/runtime/test_run_traces.py"
+  ],
+  "expected_rust_contract_targets": [
+    "src/contracts/graph_exports.rs",
+    "src/contracts/run_trace.rs",
+    "src/runtime/run_traces.rs",
+    "tests/contracts_runtime_json.rs",
+    "tests/runtime_serial.rs",
+    "tests/runtime_daemon.rs"
+  ],
+  "kind": "auto_port_v0_18_0_runtime_contract_scout",
+  "no_live_guarantees": [
+    "no live Codex runner",
+    "no live Pi runner",
+    "no network",
+    "no credentials",
+    "no web server"
+  ],
+  "python_reference": {
+    "diff_range": "v0.17.4..v0.18.0",
+    "previous_commit": "304e537964ff772c815689b87e4c1e3b805c656c",
+    "previous_tag": "v0.17.4",
+    "target_commit": "e4ccf099c8345a8b8708cdaa1ac510bdc7851387",
+    "target_tag": "v0.18.0"
+  },
+  "schema_version": "1.0"
+}

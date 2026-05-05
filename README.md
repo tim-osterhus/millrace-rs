@@ -4,9 +4,9 @@
 governed runtime for long-running agent work.
 
 The production implementation is currently the Python package
-[`millrace-ai`](https://pypi.org/project/millrace-ai/). The Rust `0.2.1`
-release consolidates the Python `v0.17.3..v0.17.4` parity pass on top of the
-earlier `v0.16.1..v0.17.3` port while the crate remains experimental.
+[`millrace-ai`](https://pypi.org/project/millrace-ai/). The Rust `0.3.0`
+release consolidates the Python `v0.17.4..v0.18.0` parity pass on top of the
+earlier `v0.17.3..v0.17.4` port while the crate remains experimental.
 
 ## Package Names
 
@@ -22,15 +22,15 @@ Website:       https://millrace.ai
 
 This crate is intentionally small. It exposes a status API, a `millrace`
 binary for version, status/about, `init --workspace <path>`, first
-`doctor --workspace <path>` output, and Slice 3 compile validate/show output
+`doctor --workspace <path>` output, and Slice 3 compile validate/show/graph output
 for initialized workspaces. The first Slice 4 CLI command framework now lives
 behind `millrace_ai::cli`; it shares parsing, initialized-workspace checks, and
 rendering while recognizing the primary operator command groups and
 compatibility aliases. It implements read-only operator inspection commands for
 `queue ls/show`, `status`/`status show`/bounded `status watch`, `runs
-ls/show/tail`, `modes list/show`, and `config show`, plus queue intake commands
-for `queue add-task`, `queue add-spec`, `queue add-idea`, and the top-level
-`add-task`/`add-spec`/`add-idea` aliases, plus `queue repair-lineage`
+ls/show/tail/trace`, `modes list/show`, and `config show`, plus queue intake
+commands for `queue add-task`, `queue add-spec`, `queue add-idea`, and the
+top-level `add-task`/`add-spec`/`add-idea` aliases, plus `queue repair-lineage`
 preview/apply wiring over the workspace repair boundary. It also implements
 control commands for `pause`, `resume`, `stop`, `retry-active`,
 `clear-stale-state`, and `reload-config`, the `planning retry-active` alias,
@@ -57,11 +57,15 @@ first Slice 2 workspace substrate library surface through
 `millrace_ai::workspace`, including queue and state stores plus runtime
 ownership lock helpers. It also exposes the first Slice 3 compiler
 contract-model, asset-resolution, compile-input fingerprint, graph
-materialization, persisted compiled-plan authority, and currentness inspection
-boundary through `millrace_ai::compiler`. The first Slice 5 runtime/runner
-contract, the first Slice 6 daemon startup/config, supervisor/completion,
-bounded loop/shutdown, mailbox/reload, watcher poll-intake, basic monitor
-rendering, daemon CLI execution boundaries, and Slice 7 shared runner
+materialization, compiled-stage-graph export projection, persisted
+compiled-plan authority, and currentness inspection boundary through
+`millrace_ai::compiler`. The runtime contract surface also exposes
+Python-compatible `run_trace_graph` contracts plus runtime-owned
+`run_trace.json` persistence and read-only fallback inspection helpers. The
+first Slice 5 runtime/runner contract, the first Slice 6 daemon startup/config,
+supervisor/completion, bounded loop/shutdown, mailbox/reload, watcher
+poll-intake, basic monitor rendering, daemon CLI execution boundaries, and Slice
+7 shared runner
 prompt/artifact/process/registry/dispatcher plus Codex CLI, Pi RPC, runtime
 config, and runtime-dispatch integration boundaries are exposed through
 `millrace_ai::runtime` and
@@ -102,10 +106,12 @@ compiled-plan-authorized work item or actionable closure target, builds
 writes running markers, projects active-run snapshot state, and emits runtime
 events. Runner dispatch persists stage request, raw runner result, normalized
 stage result,
-terminal marker, and router decision artifacts with thinking-level evidence
-across success and recoverable failure paths, routes through compiled graph
-policy, persists recoverable runtime error context/report evidence, updates
-last-terminal/result snapshot fields, applies router
+terminal marker, router decision, and best-effort `run_trace.json` node/edge
+artifacts with thinking-level evidence across success and recoverable failure
+paths, routes through compiled graph policy, emits `run_trace_write_failed`
+events without failing otherwise valid outcomes, persists recoverable runtime
+error context/report evidence, updates last-terminal/result snapshot fields,
+applies router
 decisions through typed queue/state helpers for stage advancement, completion,
 blocked, and handoff outcomes, mutates recovery counters, creates typed handoff
 incidents, schedules post-stage application-failure recovery with runtime-error
@@ -215,18 +221,25 @@ runtime JSON contracts for runtime snapshots, recovery counters, mailbox
 command envelopes and add-task/add-spec/add-idea payload wrappers, compile
 diagnostics, stage-result envelopes, runtime error contexts, token usage
 records, usage-governance state/blockers, usage-governance token ledger entries,
-and subscription quota telemetry status/window readings.
+subscription quota telemetry status/window readings, Python-compatible
+compiled-stage-graph exports, and Python-compatible `run_trace_graph`
+contracts.
 Always-on tests cover the public exports and Python-produced markdown/JSON
 fixtures without requiring a live daemon. The compiler parity tests also use a
 committed Python-normalized fixture so ordinary `cargo test` can compare
-compiled-plan structure and key compile CLI output without probing Python. The
+compiled-plan structure and key compile CLI output without probing Python; that
+fixture now pins the Python `v0.17.4..v0.18.0` source range and graph-export
+references used by the Rust compiled-stage-graph export tests. The
 CLI/runtime parity suite now includes a committed Slice 4 CLI evidence matrix,
 a committed Slice 5 serial runtime evidence matrix, a committed Slice 6 daemon
 runtime evidence matrix, a committed Slice 7 runner adapter evidence matrix,
 a committed Slice 8 E2E handoff evidence matrix, and a consolidated Slice 8
 advanced parity evidence matrix, plus a Python `millrace-web` dashboard parity
 decision fixture that records the optional web package as an Arbiter-visible
-unsupported gap rather than a silently omitted Rust surface. The Slice 5
+unsupported gap rather than a silently omitted Rust surface, plus a
+target-facing Python `v0.17.4..v0.18.0` scout fixture plus final Rust `0.3.0`
+release evidence for graph/trace docs, version metadata, package include
+readiness, and web-gap handling. The Slice 5
 evidence maps
 Rust fake-runner startup, tick, routing,
 result-application, recovery, closure, and `run once` scenarios back to the
@@ -256,7 +269,16 @@ workspaces. The fixtures
 normalize request ids, run ids,
 timestamps, absolute paths, process ids, generated command ids, compact run
 handles, compiled plan ids, config versions, runner artifact paths, timeout
-durations, token usage, and incident ids. Focused `run once`
+durations, token usage, and incident ids. The v0.18.0 scout fixture maps all 52
+generated Python scout paths to expected Rust implementation, test,
+documentation, fixture, reference-evidence, or unsupported-gap targets, covering
+compiled graph exports now implemented in the Rust contract/projection slice,
+run-trace contracts/runtime persistence now implemented in the Rust trace slice,
+graph/trace CLI behavior now implemented by the read-only `millrace compile
+graph` and `millrace runs trace` commands, operator docs, web graph/trace gap
+evidence, active guardrail tests, no-live guarantees, and the docs/version plus
+final release evidence now captured in the v0.18.0 release fixture. Focused
+`run once`
 coverage exercises one-stage mocked Codex dispatcher execution, idle/pause/stop
 outcomes, startup failures, lock contention, and run-artifact inspection, and
 focused daemon startup, supervisor, loop, mailbox/reload, and watcher
@@ -293,7 +315,8 @@ repeated-remediation behavior, advanced read-only run
 inspection for malformed stage results, runner artifacts, stage-request and
 runner-artifact thinking evidence, governance ledger links, closure metadata,
 closure-target actionability/deferred root status, skill evidence, tail
-fallbacks, and no-mutation guarantees, duplicate task lifecycle doctor output
+fallbacks, `runs trace` text/JSON/output/fallback coverage, and no-mutation
+guarantees, duplicate task lifecycle doctor output
 and same-root blocked-predecessor retirement, advanced E2E handoff queue/status,
 runtime-error, Consultant handoff incident, planning re-entry, closure, and
 remediation transitions, stale/malformed Slice 7 fixture detection, Slice 8
@@ -325,9 +348,14 @@ v0.17.4 `ANALYST_NOOP` stage-result shape for learning-request work items;
 `tests/fixtures/cli_parity/auto_port_v0_17_4_release_parity_evidence.json`
 records the final Rust `0.2.1` release evidence for version metadata,
 package include rules, docs/runtime docs, release-readiness commands, and the
-Python `v0.17.4` `millrace-web` version/dependency sync gap;
-the optional Python `millrace-web` dashboard remains an explicit unsupported
-Rust parity gap with source references and non-goal wording; native filesystem
+Python `v0.17.4` `millrace-web` version/dependency sync gap; and
+`tests/fixtures/cli_parity/auto_port_v0_18_0_release_parity_evidence.json`
+records the final Rust `0.3.0` release evidence for compiled graph exports,
+run traces, graph/trace CLI commands, docs/runtime docs, version metadata,
+package include readiness, and the Python `v0.18.0` `millrace-web`
+graph/trace unsupported gap. The optional Python `millrace-web` dashboard
+remains an explicit unsupported Rust parity gap with source references,
+shadow-CLI graph/trace commands, and non-goal wording; native filesystem
 watcher integration and live subscription quota integration remain
 preview-only/deferred work. The runner adapter docs
 do not claim broader compiled-plan, queue-state, or stage-machine changes
@@ -338,8 +366,9 @@ The compiler layer currently covers serde-backed mode definitions including
 `thinking_level` and `no_op` terminal classes, stage-kind registry entries,
 learning triggers with `target_skill_id` and normalized
 `preferred_output_paths`, plane concurrency policy definitions, compiled graph
-and compiled run plan shapes, resolved asset references, compile outcome data,
-persisted compiled-plan authority, and compiled-plan currentness data. It also
+and compiled run plan shapes, compiled-stage-graph export contracts and
+projection helpers, resolved asset references, compile outcome data, persisted
+compiled-plan authority, and compiled-plan currentness data. It also
 resolves authoritative
 compile assets from initialized workspace `modes/`,
 `graphs/`, `registry/stage_kinds/`, `entrypoints/`, and `skills/` paths,
@@ -359,14 +388,21 @@ overrides. It persists compiler-authoritative
 missing/current/stale/unknown currentness from compile-input fingerprints,
 preserves last-known-good plans on compile failure, and refuses stale
 last-known-good plans when compile inputs drift and recompilation fails. The
-`millrace compile validate` and `millrace compile show` commands require an
-initialized workspace, accept the built-in Codex/Pi/learning modes and
-`standard_plain` alias, persist compiler artifacts, and render diagnostics plus
-inspectable compiled-plan fields including effective `thinking_level` without
-invoking runtime execution behavior. The committed compiler parity fixture is
-pinned to Python `0.17.4` and covers `default_codex`, `default_pi`,
-`learning_codex`, `learning_pi`, and `standard_plain`, including learning
-no-op terminal classes and success-to-Analyst trigger behavior.
+`millrace compile validate`, `millrace compile show`, and `millrace compile
+graph` commands require an initialized workspace, accept the built-in
+Codex/Pi/learning modes and `standard_plain` alias, persist compiler artifacts,
+and render diagnostics, inspectable compiled-plan fields, or stable
+compiled-stage-graph text/JSON output including selected-plane and output-file
+behavior without invoking runtime execution behavior. The committed compiler
+parity fixture is
+pinned to the Python `v0.17.4..v0.18.0` source range and covers
+`default_codex`, `default_pi`, `learning_codex`, `learning_pi`, and
+`standard_plain`, including learning no-op terminal classes,
+success-to-Analyst trigger behavior, and Python graph-export source
+references. Focused contract and materialization tests cover the
+`compiled_stage_graph` JSON contract, stable selected-plane export ordering,
+learning-plane inclusion, source refs, skills, allowed result-class mappings,
+and missing-plane errors.
 
 The workspace layer currently covers canonical `<workspace>/millrace-agents/`
 path resolution and idempotent initialization defaults for the directory tree,
@@ -475,8 +511,8 @@ Python runtime.
 The historical public proof package for the v0.1.0 autonomous port campaign
 lives in
 [`tim-osterhus/millrace-rs-port-docs`](https://github.com/tim-osterhus/millrace-rs-port-docs).
-The crate-local `0.2.1` release evidence lives in `CHANGELOG.md` and
-`tests/fixtures/cli_parity/auto_port_v0_17_4_release_parity_evidence.json`.
+The crate-local `0.3.0` release evidence lives in `CHANGELOG.md` and
+`tests/fixtures/cli_parity/auto_port_v0_18_0_release_parity_evidence.json`.
 
 ## License
 

@@ -2,6 +2,8 @@
 
 mod enums;
 mod error;
+mod graph_exports;
+mod run_trace;
 mod runtime_json;
 mod stage_metadata;
 mod work_documents;
@@ -14,6 +16,14 @@ pub use enums::{
     WorkItemKind,
 };
 pub use error::{ContractError, IdentifierErrorReason};
+pub use graph_exports::{
+    CompiledStageGraphExport, GraphExportContract, GraphExportContractError, GraphExportEdge,
+    GraphExportEntry, GraphExportNode, GraphExportTerminalState,
+};
+pub use run_trace::{
+    RunTraceArtifactRef, RunTraceEdge, RunTraceGraph, RunTraceNode, RunTraceSpawnedWorkKind,
+    RunTraceSpawnedWorkRef, RunTraceStatus,
+};
 pub use runtime_json::{
     ActiveRunRequestKind, ActiveRunState, CompileDiagnostics, MailboxAddIdeaPayload,
     MailboxAddSpecPayload, MailboxAddTaskPayload, MailboxCommandEnvelope, PauseSource,

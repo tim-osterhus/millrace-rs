@@ -13,9 +13,9 @@ https://github.com/tim-osterhus/millrace-rs-port-docs
 
 ## Current Parity Target
 
-The Rust `0.2.1` release target is Python `v0.17.4` at commit
-`304e537964ff772c815689b87e4c1e3b805c656c`, ported from the previous Rust
-parity baseline of Python `v0.17.3`.
+The Rust `0.3.0` release target is Python `v0.18.0` at commit
+`e4ccf099c8345a8b8708cdaa1ac510bdc7851387`, ported from the previous Rust
+parity baseline of Python `v0.17.4`.
 
 The stable surface for parity is operator-visible behavior:
 
@@ -23,6 +23,8 @@ The stable surface for parity is operator-visible behavior:
 - `millrace-agents/` workspace layout
 - canonical task/spec/incident/learning markdown documents
 - runtime JSON artifacts
+- compiled-stage-graph export artifacts and read-only graph CLI output
+- run-trace artifacts and read-only trace CLI output
 - compiled-plan semantics and currentness fingerprints
 - daemon locking, mailbox intake, watcher intake, pause/resume/stop/reload
 - serial tick and daemon scheduling behavior
@@ -44,33 +46,38 @@ is the CLI plus the on-disk workspace format.
 
 ## Release Evidence
 
-- `CHANGELOG.md` records the Rust `0.2.1` release-facing summary.
+- `CHANGELOG.md` records the Rust `0.3.0` release-facing summary.
 - `ROADMAP.md` records the crate-level current release target and explicit
   gaps.
-- `docs/runtime/` records Rust runtime docs for learning no-op outcomes,
-  trigger destination safety, and runtime inspection boundaries.
+- `docs/runtime/` records Rust runtime docs for graph exports, run traces,
+  learning no-op outcomes, trigger destination safety, and runtime inspection
+  boundaries.
 - `docs/source-package-map.md` records source ownership, package include rules,
   and the intentional absence of a Rust web-dashboard package.
-- `tests/fixtures/cli_parity/auto_port_v0_17_4_parity_evidence.json` ties the
-  Python `v0.17.3..v0.17.4` behavior delta to Rust tests and fixtures.
-- `tests/fixtures/cli_parity/auto_port_v0_17_4_release_parity_evidence.json`
-  ties the Python `v0.17.3..v0.17.4` source/test/docs/package changes to Rust
-  tests, docs, package metadata, managed assets, and release-readiness
-  commands.
+- `tests/fixtures/cli_parity/auto_port_v0_18_0_parity_evidence.json` ties the
+  Python `v0.17.4..v0.18.0` behavior delta to Rust tests and fixtures.
+- `tests/fixtures/cli_parity/auto_port_v0_18_0_release_parity_evidence.json`
+  ties the Python `v0.17.4..v0.18.0` source/test/docs/package changes to Rust
+  tests, docs, package metadata, graph/trace CLI evidence, package readiness,
+  and release-readiness commands.
 - `tests/parity_cli.rs` rejects missing, malformed, unknown, stale, or omitted
   Rust test references in the final auto-port fixtures.
 
 ## Explicit Parity Gaps
 
 - Python v0.17.3 added the optional `packages/millrace-web` read-only
-  dashboard, and Python v0.17.4 only syncs that package's version and
-  `millrace-ai>=0.17.4` dependency. The Rust crate does not currently implement
-  a web server, static dashboard shell, SSE event stream, or separate dashboard
-  package. Its deferred reader evidence names the workspace registry, summary
-  DTO, queue, run, snapshot, baseline, compiled-plan, Arbiter, and
-  usage-governance readers. The accepted Rust inspection target remains local
-  read-only CLI commands over initialized workspaces, so the dashboard is
-  recorded as an intentional Arbiter-visible unsupported gap in
+  dashboard, Python v0.17.4 synced that package's version and
+  `millrace-ai>=0.17.4` dependency, and Python v0.18.0 adds compiled graph
+  exports, run-trace summaries, recent-trace Flow overlays, trace outcome
+  labels, and version/dependency sync for that package. The Rust crate does not
+  currently implement a web server, static dashboard shell, SSE event stream,
+  dashboard HTTP API, or separate dashboard package. Its deferred reader
+  evidence names the workspace registry, summary DTO, queue, run, snapshot,
+  baseline, compiled-plan, Arbiter, usage-governance, graph, and trace reader
+  surfaces. The accepted Rust inspection target remains local read-only CLI
+  commands over initialized workspaces, including `millrace compile graph` and
+  `millrace runs trace <run_id>`, so the dashboard is recorded as an
+  intentional Arbiter-visible unsupported gap in
   `tests/fixtures/cli_parity/web_dashboard_parity_decision.json`.
 
 ## Deferred Or Preview Areas
@@ -83,5 +90,5 @@ is the CLI plus the on-disk workspace format.
   Pi RPC CLI.
 
 For proof of the historical v0.1.0 autonomous port campaign, see
-`tim-osterhus/millrace-rs-port-docs`. For the crate-local `0.2.1` release
+`tim-osterhus/millrace-rs-port-docs`. For the crate-local `0.3.0` release
 parity pass, use the fixture and changelog paths listed above.

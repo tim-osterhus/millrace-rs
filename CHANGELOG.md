@@ -3,6 +3,37 @@
 All notable user-facing changes to the experimental Rust `millrace-ai` crate
 are documented in this file.
 
+## [0.3.0] - 2026-05-05
+
+### Added
+
+- Added Python `v0.17.4..v0.18.0` release evidence for compiled-stage-graph
+  exports, run-trace persistence and inspection, read-only graph/trace CLI
+  commands, runtime docs, package include readiness, and the optional
+  `millrace-web` graph/trace unsupported-gap surface.
+- Added Rust runtime docs for compiled stage graph exports and per-run
+  `run_trace.json` inspection, including fallback behavior for older or
+  malformed run directories and the distinction between compiled topology
+  authority and historical trace evidence.
+
+### Changed
+
+- Bumped the Rust crate, lockfile package metadata, and version-visible CLI
+  output from `0.2.1` to `0.3.0`.
+- Updated README, roadmap, source-package map, outline, fixture docs, and
+  release evidence to target Python `v0.18.0` at
+  `e4ccf099c8345a8b8708cdaa1ac510bdc7851387`.
+
+### Known Gaps
+
+- The optional Python `packages/millrace-web` `v0.18.0` graph/trace changes
+  are represented as explicit unsupported-gap and shadow-CLI evidence for the
+  existing Rust CLI/workspace boundary. Rust still does not ship a web server,
+  static dashboard shell, SSE stream, dashboard HTTP API, or separate
+  `millrace-web` package.
+- Native filesystem watcher integration, live subscription-quota provider
+  polling, and live Codex/Pi smoke runs remain opt-in or preview-only.
+
 ## [0.2.1] - 2026-05-03
 
 ### Added

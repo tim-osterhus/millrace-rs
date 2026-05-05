@@ -7,17 +7,20 @@ use millrace_ai::{
         CompileInputFingerprint, CompileOutcome, CompiledGraphCompletionEntryPlan,
         CompiledGraphEntryPlan, CompiledGraphResumePolicyPlan, CompiledGraphThresholdPolicyPlan,
         CompiledGraphTransitionPlan, CompiledPlanCurrentness, CompiledPlanCurrentnessState,
-        CompiledRunPlan, CompilerContract, CompilerContractError, FrozenGraphPlanePlan,
-        GraphLoopCompletionBehaviorDefinition, GraphLoopCounterName, GraphLoopDefinition,
-        GraphLoopDynamicPoliciesDefinition, GraphLoopEntryDefinition, GraphLoopEntryKey,
-        GraphLoopNodeDefinition, GraphLoopTerminalClass, GraphLoopTerminalStateDefinition,
-        LearningTriggerRuleDefinition, MaterializedGraphNodePlan, ModeDefinition,
-        PlaneConcurrencyPolicyDefinition, RecoveryRole, RegisteredStageKindDefinition,
-        ResolvedAssetRef, StageIdempotencePolicy, validate_graph_stage_kind_references,
+        CompiledRunPlan, CompilerContract, CompilerContractError, CompilerGraphExportError,
+        FrozenGraphPlanePlan, GraphLoopCompletionBehaviorDefinition, GraphLoopCounterName,
+        GraphLoopDefinition, GraphLoopDynamicPoliciesDefinition, GraphLoopEntryDefinition,
+        GraphLoopEntryKey, GraphLoopNodeDefinition, GraphLoopTerminalClass,
+        GraphLoopTerminalStateDefinition, LearningTriggerRuleDefinition, MaterializedGraphNodePlan,
+        ModeDefinition, PlaneConcurrencyPolicyDefinition, RecoveryRole,
+        RegisteredStageKindDefinition, ResolvedAssetRef, StageIdempotencePolicy,
+        export_compiled_stage_graph, export_compiled_stage_graph_at, export_compiled_stage_graphs,
+        export_compiled_stage_graphs_at, validate_graph_stage_kind_references,
     },
     contracts::{
-        CompileDiagnostics, LearningRequestAction, LearningStageName, LoopEdgeKind, Plane,
-        ResultClass,
+        CompileDiagnostics, CompiledStageGraphExport, GraphExportContractError, GraphExportEdge,
+        GraphExportEntry, GraphExportNode, GraphExportTerminalState, LearningRequestAction,
+        LearningStageName, LoopEdgeKind, Plane, ResultClass, Timestamp,
     },
 };
 
@@ -47,6 +50,7 @@ fn public_compiler_contract_exports_remain_importable() {
         type_name::<CompileInputFingerprint>(),
         type_name::<CompileOutcome>(),
         type_name::<CompilerContractError>(),
+        type_name::<CompilerGraphExportError>(),
         type_name::<FrozenGraphPlanePlan>(),
         type_name::<GraphLoopCompletionBehaviorDefinition>(),
         type_name::<GraphLoopCounterName>(),
@@ -75,6 +79,30 @@ fn public_compiler_contract_exports_remain_importable() {
     );
     assert_eq!(GraphLoopTerminalClass::NoOp.as_str(), "no_op");
     assert_eq!(CompiledPlanCurrentnessState::Unknown.as_str(), "unknown");
+    let _graph_exporter: fn(
+        &CompiledRunPlan,
+    )
+        -> Result<Vec<CompiledStageGraphExport>, CompilerGraphExportError> =
+        export_compiled_stage_graphs;
+    let _graph_exporter_at: fn(
+        &CompiledRunPlan,
+        Timestamp,
+    )
+        -> Result<Vec<CompiledStageGraphExport>, CompilerGraphExportError> =
+        export_compiled_stage_graphs_at;
+    let _single_graph_exporter: fn(
+        &CompiledRunPlan,
+        Plane,
+    )
+        -> Result<CompiledStageGraphExport, CompilerGraphExportError> = export_compiled_stage_graph;
+    let _single_graph_exporter_at: fn(
+        &CompiledRunPlan,
+        Plane,
+        Timestamp,
+    ) -> Result<
+        CompiledStageGraphExport,
+        CompilerGraphExportError,
+    > = export_compiled_stage_graph_at;
 }
 
 #[test]
@@ -288,6 +316,204 @@ fn compiled_run_plan_fixture_validates_aliases_completion_and_currentness() {
 }
 
 #[test]
+fn compiled_stage_graph_export_contract_matches_python_public_shape() {
+    let export = CompiledStageGraphExport {
+        schema_version: "1.0".to_owned(),
+        kind: "compiled_stage_graph".to_owned(),
+        compiled_plan_id: "plan-default_codex-test".to_owned(),
+        mode_id: "default_codex".to_owned(),
+        loop_id: "execution.standard".to_owned(),
+        plane: Plane::Execution,
+        nodes: vec![GraphExportNode {
+            node_id: "builder".to_owned(),
+            plane: Plane::Execution,
+            stage_kind_id: "builder".to_owned(),
+            entrypoint_path: "entrypoints/execution/builder.md".to_owned(),
+            entrypoint_contract_id: Some("builder.contract.v1".to_owned()),
+            running_status_marker: "BUILDER_RUNNING".to_owned(),
+            required_skill_paths: vec!["skills/stage/execution/builder-core/SKILL.md".to_owned()],
+            attached_skill_additions: Vec::new(),
+            runner_name: Some("codex_cli".to_owned()),
+            model_name: None,
+            thinking_level: Some("medium".to_owned()),
+            model_reasoning_effort: Some("medium".to_owned()),
+            timeout_seconds: 3600,
+            allowed_result_classes_by_outcome: HashMap::from([(
+                "BUILDER_COMPLETE".to_owned(),
+                vec![ResultClass::Success],
+            )]),
+            declared_output_artifacts: vec!["stage_result".to_owned(), "report".to_owned()],
+        }],
+        edges: vec![GraphExportEdge {
+            edge_id: "builder-complete-to-checker".to_owned(),
+            source_node_id: "builder".to_owned(),
+            outcome: "BUILDER_COMPLETE".to_owned(),
+            target_node_id: Some("checker".to_owned()),
+            terminal_state_id: None,
+            kind: "normal".to_owned(),
+            priority: 0,
+            max_attempts: None,
+        }],
+        entries: vec![GraphExportEntry {
+            entry_key: "task".to_owned(),
+            node_id: "builder".to_owned(),
+            stage_kind_id: "builder".to_owned(),
+            plane: Plane::Execution,
+        }],
+        terminal_states: vec![GraphExportTerminalState {
+            terminal_state_id: "update_complete".to_owned(),
+            terminal_class: "success".to_owned(),
+            writes_status: "UPDATER_COMPLETE".to_owned(),
+            emits_artifacts: Vec::new(),
+            ends_plane_run: true,
+        }],
+        source_refs: vec![
+            "mode:default_codex".to_owned(),
+            "graph_loop:execution.standard".to_owned(),
+        ],
+        exported_at: Timestamp::parse("exported_at", "2026-05-05T12:00:00Z").unwrap(),
+    };
+
+    export.validate().unwrap();
+    let value = serde_json::to_value(&export).unwrap();
+    assert_eq!(value["schema_version"], json!("1.0"));
+    assert_eq!(value["kind"], json!("compiled_stage_graph"));
+    assert_eq!(
+        object_keys(&value),
+        vec![
+            "compiled_plan_id",
+            "edges",
+            "entries",
+            "exported_at",
+            "kind",
+            "loop_id",
+            "mode_id",
+            "nodes",
+            "plane",
+            "schema_version",
+            "source_refs",
+            "terminal_states",
+        ]
+    );
+    assert_eq!(
+        object_keys(&value["nodes"][0]),
+        vec![
+            "allowed_result_classes_by_outcome",
+            "attached_skill_additions",
+            "declared_output_artifacts",
+            "entrypoint_contract_id",
+            "entrypoint_path",
+            "model_name",
+            "model_reasoning_effort",
+            "node_id",
+            "plane",
+            "required_skill_paths",
+            "runner_name",
+            "running_status_marker",
+            "stage_kind_id",
+            "thinking_level",
+            "timeout_seconds",
+        ]
+    );
+    assert_eq!(
+        object_keys(&value["edges"][0]),
+        vec![
+            "edge_id",
+            "kind",
+            "max_attempts",
+            "outcome",
+            "priority",
+            "source_node_id",
+            "target_node_id",
+            "terminal_state_id",
+        ]
+    );
+
+    let decoded = CompiledStageGraphExport::from_json_value(value).unwrap();
+    assert_eq!(decoded, export);
+}
+
+#[test]
+fn compiled_stage_graph_export_rejects_literal_and_plane_drift() {
+    let mut bad_kind = json!({
+        "schema_version": "1.0",
+        "kind": "compiled_graph",
+        "compiled_plan_id": "plan-default_codex-test",
+        "mode_id": "default_codex",
+        "loop_id": "execution.standard",
+        "plane": "execution",
+        "nodes": [
+            {
+                "node_id": "builder",
+                "plane": "execution",
+                "stage_kind_id": "builder",
+                "entrypoint_path": "entrypoints/execution/builder.md",
+                "entrypoint_contract_id": "builder.contract.v1",
+                "running_status_marker": "BUILDER_RUNNING",
+                "required_skill_paths": ["skills/stage/execution/builder-core/SKILL.md"],
+                "attached_skill_additions": [],
+                "runner_name": "codex_cli",
+                "model_name": null,
+                "thinking_level": null,
+                "model_reasoning_effort": null,
+                "timeout_seconds": 3600,
+                "allowed_result_classes_by_outcome": {"BUILDER_COMPLETE": ["success"]},
+                "declared_output_artifacts": ["stage_result"]
+            }
+        ],
+        "edges": [
+            {
+                "edge_id": "builder-complete-to-checker",
+                "source_node_id": "builder",
+                "outcome": "BUILDER_COMPLETE",
+                "target_node_id": "checker",
+                "terminal_state_id": null,
+                "kind": "normal",
+                "priority": 0,
+                "max_attempts": null
+            }
+        ],
+        "entries": [
+            {
+                "entry_key": "task",
+                "node_id": "builder",
+                "stage_kind_id": "builder",
+                "plane": "execution"
+            }
+        ],
+        "terminal_states": [
+            {
+                "terminal_state_id": "update_complete",
+                "terminal_class": "success",
+                "writes_status": "UPDATER_COMPLETE",
+                "emits_artifacts": [],
+                "ends_plane_run": true
+            }
+        ],
+        "source_refs": ["mode:default_codex"],
+        "exported_at": "2026-05-05T12:00:00Z"
+    });
+    let error = CompiledStageGraphExport::from_json_value(bad_kind.clone()).unwrap_err();
+    assert!(matches!(
+        error,
+        GraphExportContractError::InvalidLiteral {
+            field_name: "kind",
+            expected: "compiled_stage_graph",
+            ..
+        }
+    ));
+
+    bad_kind["kind"] = json!("compiled_stage_graph");
+    bad_kind["nodes"][0]["plane"] = json!("planning");
+    let error = CompiledStageGraphExport::from_json_value(bad_kind).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("nodes must belong to graph plane")
+    );
+}
+
+#[test]
 fn mode_and_graph_contracts_accept_runner_neutral_thinking_bindings() {
     let mode: ModeDefinition = parse_contract(
         r#"{
@@ -321,6 +547,17 @@ fn mode_and_graph_contracts_accept_runner_neutral_thinking_bindings() {
     graph_value["nodes"][0]["thinking_level"] = json!("medium");
     let graph = GraphLoopDefinition::from_json_value(graph_value).unwrap();
     assert_eq!(graph.nodes[0].thinking_level.as_deref(), Some("medium"));
+}
+
+fn object_keys(value: &Value) -> Vec<&str> {
+    let mut keys: Vec<_> = value
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort_unstable();
+    keys
 }
 
 #[test]

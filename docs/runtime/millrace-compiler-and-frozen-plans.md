@@ -16,6 +16,15 @@ unless one of those destination fields is present. Generic or vague success
 evidence should target Analyst so the learning plane can research, no-op, or
 escalate without asking Curator to infer a mutation destination.
 
-The committed compiler parity fixture is pinned to Python `v0.17.4` and covers
-`default_codex`, `default_pi`, `learning_codex`, `learning_pi`, and the
-`standard_plain` compatibility alias.
+The committed compiler parity fixture is pinned to the Python
+`v0.17.4..v0.18.0` source range and covers `default_codex`, `default_pi`,
+`learning_codex`, `learning_pi`, and the `standard_plain` compatibility alias.
+
+For Python `v0.18.0` parity, Rust also projects compiled-stage-graph exports
+from the frozen `CompiledRunPlan.graphs_by_plane` data instead of reparsing
+managed graph assets. `millrace compile graph` can render all selected planes
+in stable order, filter to one plane, emit JSON, or write output to a file. The
+exported graph names source refs, entries, nodes, edges, terminal states,
+legal outcome result-class mappings, skills, runner/model/thinking metadata,
+timeouts, and declared output artifacts. It remains inspection evidence only;
+`compiled_plan.json` is still the runtime routing authority.

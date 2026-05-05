@@ -16,11 +16,11 @@ use crate::{
         inspect_workspace_plan_currentness_for_paths,
     },
     contracts::{
-        ClosureTargetState, PauseSource, Plane, RuntimeSnapshot, StageResultEnvelope,
-        SubscriptionQuotaTelemetryState, TokenUsage, UsageGovernanceBlockerSource, WorkItemKind,
-        validate_safe_identifier,
+        ClosureTargetState, PauseSource, Plane, RunTraceGraph, RuntimeSnapshot,
+        StageResultEnvelope, SubscriptionQuotaTelemetryState, TokenUsage,
+        UsageGovernanceBlockerSource, WorkItemKind, validate_safe_identifier,
     },
-    runtime::{StageRunRequest, load_runtime_startup_config},
+    runtime::{StageRunRequest, inspect_run_trace_id, load_runtime_startup_config},
     workspace::{
         QueueInspectionEntry, QueueStore, WorkspacePaths, inspect_runtime_ownership_lock,
         list_deferred_root_spec_ids, load_baseline_manifest, load_snapshot,
@@ -301,6 +301,14 @@ pub fn runs_tail_payload(paths: &WorkspacePaths, run_id: &str) -> Result<String,
     let artifact_path = resolve_run_artifact_path(&summary.run_dir, &artifact);
     fs::read_to_string(&artifact_path)
         .map_err(|error| format!("failed to read tailable artifact {artifact}: {error}"))
+}
+
+pub fn runs_trace_graph(paths: &WorkspacePaths, run_id: &str) -> Result<RunTraceGraph, String> {
+    let Some(trace) = inspect_run_trace_id(paths, run_id).map_err(|error| error.to_string())?
+    else {
+        return Err(format!("run not found: {run_id}"));
+    };
+    Ok(trace)
 }
 
 pub fn modes_list_lines() -> Result<Vec<String>, String> {

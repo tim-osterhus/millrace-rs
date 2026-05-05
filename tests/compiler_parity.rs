@@ -87,39 +87,85 @@ fn rust_compiler_matches_python_normalized_plan_and_cli_fixtures() {
 }
 
 #[test]
+fn rust_compile_graph_cli_exports_python_v0_18_0_graph_shape() {
+    let temp_dir = TempDir::new().expect("create compile graph workspace");
+    let root = temp_dir.path().join("workspace");
+    init_workspace(&root);
+
+    let output = run_rust_millrace([
+        "compile",
+        "graph",
+        "--workspace",
+        root.to_str().unwrap(),
+        "--mode",
+        "learning_codex",
+        "--format",
+        "json",
+    ])
+    .expect("run Rust compile graph");
+    output.assert_success();
+    assert_eq!(output.stderr, "");
+
+    let graphs: Vec<Value> = serde_json::from_str(&output.stdout).expect("parse graph JSON");
+    assert_eq!(graphs.len(), 3);
+    assert_eq!(graphs[0]["kind"], "compiled_stage_graph");
+    assert_eq!(graphs[0]["plane"], "execution");
+    assert_eq!(graphs[1]["plane"], "learning");
+    assert_eq!(graphs[2]["plane"], "planning");
+    assert_eq!(graphs[0]["nodes"][0]["node_id"], "builder");
+    assert_eq!(graphs[1]["nodes"][0]["node_id"], "analyst");
+    assert_eq!(graphs[2]["nodes"][0]["node_id"], "planner");
+    assert!(graphs[0]["edges"].as_array().unwrap().iter().any(|edge| {
+        edge["source_node_id"] == "builder"
+            && edge["outcome"] == "BUILDER_COMPLETE"
+            && edge["target_node_id"] == "checker"
+    }));
+}
+
+#[test]
 fn compiler_parity_fixture_documents_regeneration_surface() {
     let fixture: Value = serde_json::from_str(
         &read_fixture("compiler_parity/python_compiler_parity.json")
             .expect("read compiler parity fixture"),
     )
     .expect("parse compiler parity fixture");
-    assert_eq!(fixture["source"]["previous_version"], "0.17.3");
-    assert_eq!(fixture["source"]["target_version"], "0.17.4");
-    assert_eq!(fixture["source"]["version"], "0.17.4");
-    assert_eq!(fixture["source"]["previous_tag"], "v0.17.3");
-    assert_eq!(fixture["source"]["target_tag"], "v0.17.4");
+    assert_eq!(fixture["source"]["previous_version"], "0.17.4");
+    assert_eq!(fixture["source"]["target_version"], "0.18.0");
+    assert_eq!(fixture["source"]["version"], "0.18.0");
+    assert_eq!(fixture["source"]["previous_tag"], "v0.17.4");
     assert_eq!(
-        fixture["source"]["target_commit"],
+        fixture["source"]["previous_commit"],
         "304e537964ff772c815689b87e4c1e3b805c656c"
     );
-    assert_eq!(fixture["source"]["diff_range"], "v0.17.3..v0.17.4");
+    assert_eq!(fixture["source"]["target_tag"], "v0.18.0");
+    assert_eq!(
+        fixture["source"]["target_commit"],
+        "e4ccf099c8345a8b8708cdaa1ac510bdc7851387"
+    );
+    assert_eq!(fixture["source"]["diff_range"], "v0.17.4..v0.18.0");
     assert_ne!(
         fixture["source"]["target_version"], fixture["source"]["previous_version"],
-        "compiler parity fixture is still pinned to the previous Python baseline",
+        "compiler parity fixture is still pinned to the previous Python baseline as target",
     );
     for source_path in [
         "src/millrace_ai/config/models.py",
         "src/millrace_ai/contracts/modes.py",
         "src/millrace_ai/contracts/stage_metadata.py",
         "src/millrace_ai/architecture/loop_graphs.py",
+        "src/millrace_ai/cli/commands/compile.py",
+        "src/millrace_ai/cli/formatting.py",
+        "src/millrace_ai/compilation/graph_exports.py",
         "src/millrace_ai/compilation/learning_triggers.py",
         "src/millrace_ai/compilation/node_materialization.py",
         "src/millrace_ai/cli/compile_view.py",
+        "src/millrace_ai/contracts/graph_exports.py",
         "tests/config/test_config.py",
+        "tests/cli/test_graph_trace_cli.py",
         "tests/assets/test_loop_graphs.py",
         "tests/assets/test_modes.py",
         "tests/assets/test_stage_kinds.py",
         "tests/integration/test_compiler.py",
+        "tests/integration/test_graph_exports.py",
     ] {
         assert!(
             fixture["source"]["contract_sources"]

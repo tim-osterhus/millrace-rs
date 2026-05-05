@@ -15,6 +15,7 @@ use crate::contracts::{
 };
 
 mod monitor;
+mod run_traces;
 mod startup;
 mod supervisor;
 mod tick;
@@ -23,6 +24,11 @@ mod usage_governance;
 pub use monitor::{
     BasicMonitorRenderer, BasicTerminalMonitor, NullRuntimeMonitorSink, RuntimeMonitorEvent,
     RuntimeMonitorFanout, RuntimeMonitorSink, runtime_monitor_events_from_jsonl,
+};
+pub use run_traces::{
+    RunTraceError, RunTraceResult, derive_run_trace_from_stage_results, inspect_run_trace,
+    inspect_run_trace_id, record_router_decision_trace, spawned_work_ref_from_path,
+    trace_path_for_run_dir, upsert_stage_result_trace_node,
 };
 pub use startup::{
     RuntimeFileFingerprint, RuntimePollWatcherState, RuntimeReconciliationSignal,

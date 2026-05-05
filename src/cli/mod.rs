@@ -95,18 +95,19 @@ fn dispatch(mut args: Vec<String>) -> CliOutput {
 
 fn run_compile(mut args: Vec<String>) -> CliOutput {
     if args.is_empty() {
-        return CliOutput::parse_error("missing compile command `validate` or `show`");
+        return CliOutput::parse_error("missing compile command `validate`, `show`, or `graph`");
     }
     let command = args.remove(0);
     match command.as_str() {
         "validate" => run_compile_command(CompileCliCommand::Validate, args),
         "show" => run_compile_command(CompileCliCommand::Show, args),
+        "graph" => run_compile_graph(args),
         _ => CliOutput::parse_error(format!("unknown compile command `{command}`")),
     }
 }
 
 fn run_compile_command(command: CompileCliCommand, args: Vec<String>) -> CliOutput {
-    let parsed = match parse_or_output(args, &[workspace_spec(), mode_spec()]) {
+    let parsed = match parse_or_output(args, &[workspace_spec(), mode_spec(), config_spec()]) {
         Ok(parsed) => parsed,
         Err(output) => return output,
     };
@@ -116,6 +117,7 @@ fn run_compile_command(command: CompileCliCommand, args: Vec<String>) -> CliOutp
     let options = CompileCliOptions {
         workspace: parsed.value("--workspace").unwrap_or(".").to_owned(),
         mode: parsed.value("--mode").map(ToOwned::to_owned),
+        config_path: parsed.value("--config").map(PathBuf::from),
     };
     let paths = match require_workspace(&options.workspace) {
         Ok(paths) => paths,
@@ -123,6 +125,7 @@ fn run_compile_command(command: CompileCliCommand, args: Vec<String>) -> CliOutp
     };
     let compiler_options = CompileWorkspaceOptions {
         requested_mode_id: options.mode,
+        config_path: options.config_path,
         ..CompileWorkspaceOptions::default()
     };
 
@@ -135,6 +138,79 @@ fn run_compile_command(command: CompileCliCommand, args: Vec<String>) -> CliOutp
             CliOutput::with_exit_code(lines, compile_exit_code(&outcome))
         }
         Err(error) => CliOutput::stdout_failure(error.to_string()),
+    }
+}
+
+fn run_compile_graph(args: Vec<String>) -> CliOutput {
+    let parsed = match parse_or_output(
+        args,
+        &[
+            workspace_spec(),
+            mode_spec(),
+            config_spec(),
+            value_spec("--plane", EmptyValue::NonBlank),
+            value_spec("--format", EmptyValue::NonBlank),
+            value_spec("--output", EmptyValue::NonEmpty),
+        ],
+    ) {
+        Ok(parsed) => parsed,
+        Err(output) => return output,
+    };
+    if let Err(output) = reject_positionals(&parsed) {
+        return output;
+    }
+
+    let paths = match require_default_workspace(&parsed) {
+        Ok(paths) => paths,
+        Err(output) => return output,
+    };
+    let compiler_options = CompileWorkspaceOptions {
+        requested_mode_id: parsed.value("--mode").map(ToOwned::to_owned),
+        config_path: parsed.value("--config").map(PathBuf::from),
+        ..CompileWorkspaceOptions::default()
+    };
+    let outcome = match crate::compiler::compile_and_persist_workspace_plan_for_paths(
+        &paths,
+        compiler_options,
+    ) {
+        Ok(outcome) => outcome,
+        Err(error) => return CliOutput::stdout_failure(error.to_string()),
+    };
+    let Some(plan) = outcome.active_plan.as_ref() else {
+        return CliOutput::with_exit_code(
+            render_compile_diagnostics_lines(&outcome),
+            compile_exit_code(&outcome),
+        );
+    };
+
+    let selected_graphs = if let Some(plane) = parsed.value("--plane") {
+        let plane = match Plane::from_value(plane) {
+            Ok(plane) => plane,
+            Err(error) => return CliOutput::stdout_failure(error.to_string()),
+        };
+        match crate::compiler::export_compiled_stage_graph(plan, plane) {
+            Ok(graph) => vec![graph],
+            Err(error) => return CliOutput::stdout_failure(error.to_string()),
+        }
+    } else {
+        match crate::compiler::export_compiled_stage_graphs(plan) {
+            Ok(graphs) => graphs,
+            Err(error) => return CliOutput::stdout_failure(error.to_string()),
+        }
+    };
+
+    match render_format(parsed.value("--format").unwrap_or("text")) {
+        Ok(GraphTraceOutputFormat::Text) => write_or_print_rendered(
+            render::compiled_graph_lines(&selected_graphs).join("\n"),
+            &parsed,
+        ),
+        Ok(GraphTraceOutputFormat::Json) => match serde_json::to_string_pretty(&selected_graphs) {
+            Ok(rendered) => write_or_print_rendered(rendered, &parsed),
+            Err(error) => {
+                CliOutput::stdout_failure(format!("failed to render graph JSON: {error}"))
+            }
+        },
+        Err(output) => output,
     }
 }
 
@@ -864,17 +940,26 @@ fn run_status_group(args: Vec<String>) -> CliOutput {
 
 fn run_runs_group(mut args: Vec<String>) -> CliOutput {
     if args.is_empty() {
-        return CliOutput::parse_error("missing runs command `ls`, `show`, or `tail`");
+        return CliOutput::parse_error("missing runs command `ls`, `show`, `tail`, or `trace`");
     }
     let command = args.remove(0);
-    if !matches!(command.as_str(), "ls" | "show" | "tail") {
+    if !matches!(command.as_str(), "ls" | "show" | "tail" | "trace") {
         return CliOutput::parse_error(format!("unknown runs command `{command}`"));
     }
-    let parsed = match parse_or_output(args, &[workspace_spec()]) {
+    let specs = if command == "trace" {
+        vec![
+            workspace_spec(),
+            value_spec("--format", EmptyValue::NonBlank),
+            value_spec("--output", EmptyValue::NonEmpty),
+        ]
+    } else {
+        vec![workspace_spec()]
+    };
+    let parsed = match parse_or_output(args, &specs) {
         Ok(parsed) => parsed,
         Err(output) => return output,
     };
-    if matches!(command.as_str(), "show" | "tail") {
+    if matches!(command.as_str(), "show" | "tail" | "trace") {
         if let Err(output) = require_one_positional(&parsed, "RUN_ID") {
             return output;
         }
@@ -898,7 +983,30 @@ fn run_runs_group(mut args: Vec<String>) -> CliOutput {
         "tail" => read_only::runs_tail_payload(&paths, &parsed.positionals[0])
             .map(|payload| CliOutput::success(vec![payload]))
             .unwrap_or_else(CliOutput::stdout_failure),
+        "trace" => run_runs_trace(&paths, &parsed),
         _ => unreachable!("runs command validated above"),
+    }
+}
+
+fn run_runs_trace(paths: &WorkspacePaths, parsed: &ParsedArgs) -> CliOutput {
+    let format = match render_format(parsed.value("--format").unwrap_or("text")) {
+        Ok(format) => format,
+        Err(output) => return output,
+    };
+    let trace = match read_only::runs_trace_graph(paths, &parsed.positionals[0]) {
+        Ok(trace) => trace,
+        Err(error) => return CliOutput::stdout_failure(error),
+    };
+    match format {
+        GraphTraceOutputFormat::Text => {
+            write_or_print_rendered(render::run_trace_lines(&trace).join("\n"), parsed)
+        }
+        GraphTraceOutputFormat::Json => match serde_json::to_string_pretty(&trace) {
+            Ok(rendered) => write_or_print_rendered(rendered, parsed),
+            Err(error) => {
+                CliOutput::stdout_failure(format!("failed to render trace JSON: {error}"))
+            }
+        },
     }
 }
 
@@ -1429,6 +1537,33 @@ enum CompileCliCommand {
 struct CompileCliOptions {
     workspace: String,
     mode: Option<String>,
+    config_path: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GraphTraceOutputFormat {
+    Text,
+    Json,
+}
+
+fn render_format(value: &str) -> Result<GraphTraceOutputFormat, CliOutput> {
+    match value {
+        "text" => Ok(GraphTraceOutputFormat::Text),
+        "json" => Ok(GraphTraceOutputFormat::Json),
+        _ => Err(CliOutput::stdout_failure("--format must be text or json")),
+    }
+}
+
+fn write_or_print_rendered(rendered: String, parsed: &ParsedArgs) -> CliOutput {
+    let Some(output) = parsed.value("--output") else {
+        return CliOutput::success(vec![rendered]);
+    };
+    match fs::write(output, format!("{rendered}\n")) {
+        Ok(()) => CliOutput::success(Vec::new()),
+        Err(error) => {
+            CliOutput::stdout_failure(format!("failed to write output {output}: {error}"))
+        }
+    }
 }
 
 fn parse_or_output(args: Vec<String>, specs: &[OptionSpec]) -> Result<ParsedArgs, CliOutput> {

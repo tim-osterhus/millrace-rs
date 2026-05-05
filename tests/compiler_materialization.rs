@@ -2,9 +2,10 @@ use std::{collections::HashMap, fs};
 
 use millrace_ai::{
     compiler::{
-        CompilerMaterializationError, GraphLoopTerminalClass, MISSING_ASSET_TOKEN,
-        build_compiled_plan_id, compile_compiled_run_plan, materialize_graph_plane_plan,
-        resolve_compile_assets,
+        CompilerGraphExportError, CompilerMaterializationError, GraphLoopTerminalClass,
+        MISSING_ASSET_TOKEN, build_compiled_plan_id, compile_compiled_run_plan,
+        export_compiled_stage_graph_at, export_compiled_stage_graphs_at,
+        materialize_graph_plane_plan, resolve_compile_assets,
     },
     contracts::{LearningStageName, Plane, ResultClass, Timestamp},
     workspace::initialize_workspace,
@@ -235,6 +236,222 @@ fn learning_modes_materialize_learning_graph_triggers_and_concurrency_policy() {
             "graph_loop:planning.standard".to_owned(),
             "graph_completion_behavior:planning.standard".to_owned(),
         ]
+    );
+}
+
+#[test]
+fn default_mode_graph_exports_project_execution_and_planning_from_compiled_plan() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+
+    let plan =
+        compile_compiled_run_plan(&paths, Some("default_codex"), fixed_compiled_at()).unwrap();
+    let exports = export_compiled_stage_graphs_at(&plan, fixed_compiled_at()).unwrap();
+
+    assert_eq!(
+        exports
+            .iter()
+            .map(|export| export.plane)
+            .collect::<Vec<_>>(),
+        vec![Plane::Execution, Plane::Planning]
+    );
+    let execution = exports
+        .iter()
+        .find(|export| export.plane == Plane::Execution)
+        .unwrap();
+    assert_eq!(execution.kind, "compiled_stage_graph");
+    assert_eq!(execution.schema_version, "1.0");
+    assert_eq!(execution.compiled_plan_id, plan.compiled_plan_id);
+    assert_eq!(execution.mode_id, "default_codex");
+    assert_eq!(execution.loop_id, "execution.standard");
+    assert_eq!(
+        execution
+            .entries
+            .iter()
+            .map(|entry| (entry.entry_key.as_str(), entry.node_id.as_str()))
+            .collect::<Vec<_>>(),
+        vec![("task", "builder")]
+    );
+
+    let builder = execution
+        .nodes
+        .iter()
+        .find(|node| node.node_id == "builder")
+        .unwrap();
+    assert_eq!(builder.plane, Plane::Execution);
+    assert_eq!(builder.entrypoint_path, "entrypoints/execution/builder.md");
+    assert_eq!(
+        builder.entrypoint_contract_id.as_deref(),
+        Some("builder.contract.v1")
+    );
+    assert_eq!(builder.running_status_marker, "BUILDER_RUNNING");
+    assert_eq!(
+        builder.required_skill_paths,
+        ["skills/stage/execution/builder-core/SKILL.md".to_owned()]
+    );
+    assert_eq!(builder.runner_name.as_deref(), Some("codex_cli"));
+    assert_eq!(builder.model_reasoning_effort, None);
+    assert_eq!(builder.timeout_seconds, 3600);
+    assert_eq!(
+        builder.allowed_result_classes_by_outcome["BLOCKED"],
+        vec![ResultClass::Blocked, ResultClass::RecoverableFailure]
+    );
+    assert_eq!(
+        builder.declared_output_artifacts,
+        vec!["stage_result".to_owned(), "report".to_owned()]
+    );
+    assert!(
+        execution
+            .edges
+            .iter()
+            .any(|edge| edge.source_node_id == "builder"
+                && edge.outcome == "BUILDER_COMPLETE"
+                && edge.target_node_id.as_deref() == Some("checker")
+                && edge.kind == "normal")
+    );
+    assert!(
+        execution
+            .terminal_states
+            .iter()
+            .any(|state| state.terminal_state_id == "update_complete"
+                && state.terminal_class == "success"
+                && state.writes_status == "UPDATE_COMPLETE")
+    );
+    assert_eq!(execution.source_refs, plan.source_refs);
+
+    let planning = exports
+        .iter()
+        .find(|export| export.plane == Plane::Planning)
+        .unwrap();
+    assert_eq!(planning.loop_id, "planning.standard");
+    assert_eq!(
+        planning
+            .entries
+            .iter()
+            .map(|entry| (entry.entry_key.as_str(), entry.node_id.as_str()))
+            .collect::<Vec<_>>(),
+        vec![("spec", "planner"), ("incident", "auditor")]
+    );
+    assert!(
+        planning
+            .edges
+            .iter()
+            .any(|edge| edge.source_node_id == "mechanic"
+                && edge.outcome == "BLOCKED"
+                && edge.target_node_id.as_deref() == Some("mechanic"))
+    );
+    assert!(
+        planning
+            .terminal_states
+            .iter()
+            .any(|state| state.terminal_state_id == "remediation_needed"
+                && state.terminal_class == "followup_needed"
+                && state.writes_status == "REMEDIATION_NEEDED")
+    );
+
+    let round_tripped = millrace_ai::contracts::CompiledStageGraphExport::from_json_value(
+        serde_json::to_value(execution).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(&round_tripped, execution);
+}
+
+#[test]
+fn learning_mode_graph_exports_use_stable_plane_order_and_learning_edges() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+
+    let plan =
+        compile_compiled_run_plan(&paths, Some("learning_codex"), fixed_compiled_at()).unwrap();
+    let exports = export_compiled_stage_graphs_at(&plan, fixed_compiled_at()).unwrap();
+
+    assert_eq!(
+        exports
+            .iter()
+            .map(|export| export.plane)
+            .collect::<Vec<_>>(),
+        vec![Plane::Execution, Plane::Learning, Plane::Planning]
+    );
+    let learning = exports
+        .iter()
+        .find(|export| export.plane == Plane::Learning)
+        .unwrap();
+    assert!(
+        exports
+            .iter()
+            .find(|export| export.plane == Plane::Execution)
+            .unwrap()
+            .entries
+            .iter()
+            .any(|entry| entry.entry_key == "task" && entry.node_id == "builder")
+    );
+    assert!(
+        exports
+            .iter()
+            .find(|export| export.plane == Plane::Planning)
+            .unwrap()
+            .entries
+            .iter()
+            .any(|entry| entry.entry_key == "spec" && entry.node_id == "planner")
+    );
+    assert_eq!(learning.loop_id, "learning.standard");
+    assert_eq!(
+        learning
+            .entries
+            .iter()
+            .map(|entry| (entry.entry_key.as_str(), entry.node_id.as_str()))
+            .collect::<Vec<_>>(),
+        vec![("learning_request", "analyst")]
+    );
+    assert!(
+        learning
+            .edges
+            .iter()
+            .any(|edge| edge.source_node_id == "analyst"
+                && edge.outcome == "ANALYST_COMPLETE"
+                && edge.target_node_id.as_deref() == Some("professor"))
+    );
+    assert!(
+        learning
+            .edges
+            .iter()
+            .any(|edge| edge.outcome == "CURATOR_NOOP"
+                && edge.terminal_state_id.as_deref() == Some("curator_noop"))
+    );
+    assert!(
+        learning
+            .terminal_states
+            .iter()
+            .any(|state| state.terminal_state_id == "analyst_noop"
+                && state.terminal_class == "no_op"
+                && state.writes_status == "ANALYST_NOOP")
+    );
+    assert!(
+        learning
+            .source_refs
+            .contains(&"graph_loop:learning.standard".to_owned())
+    );
+}
+
+#[test]
+fn graph_export_requested_plane_reports_clear_missing_plane_error() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+
+    let plan =
+        compile_compiled_run_plan(&paths, Some("default_codex"), fixed_compiled_at()).unwrap();
+    let error =
+        export_compiled_stage_graph_at(&plan, Plane::Learning, fixed_compiled_at()).unwrap_err();
+
+    assert!(matches!(
+        error,
+        CompilerGraphExportError::MissingPlane {
+            plane: Plane::Learning
+        }
+    ));
+    assert_eq!(
+        error.to_string(),
+        "compiled plan does not include plane: learning"
     );
 }
 

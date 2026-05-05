@@ -7,20 +7,23 @@ Rust crate owns the `millrace` CLI, typed contracts, and local
 
 ## Current Release Target
 
-The current Rust release target is `0.2.1`, aligned to Python `v0.17.4` at
-commit `304e537964ff772c815689b87e4c1e3b805c656c`.
+The current Rust release target is `0.3.0`, aligned to Python `v0.18.0` at
+commit `e4ccf099c8345a8b8708cdaa1ac510bdc7851387`.
 
-The `0.2.1` patch release closes the Python `v0.17.3..v0.17.4` parity delta:
+The `0.3.0` release closes the Python `v0.17.4..v0.18.0` parity delta:
 
-- learning stages support first-class no-op terminal outcomes for Analyst,
-  Professor, and Curator
-- `no_op` is preserved as a non-success result class in contracts, runtime
-  JSON, run inspection, and parity fixtures
-- generic success-triggered learning starts at Analyst
-- direct Curator learning triggers require `target_skill_id` or
-  `preferred_output_paths`
-- optional Python `millrace-web` `v0.17.4` changes are recorded as version and
-  dependency sync evidence for the existing unsupported Rust dashboard gap
+- compiled-stage-graph exports expose selected compiled-plan topology by plane
+  without becoming routing authority
+- `run_trace.json` artifacts preserve historical stage-result nodes,
+  router-decision edges, artifact refs, spawned work, and trace status
+- `millrace compile graph` and `millrace runs trace <run_id>` provide
+  read-only text/JSON inspection plus output-file support
+- older or malformed runs remain inspectable through read-only fallback trace
+  rendering
+- optional Python `millrace-web` `v0.18.0` graph/trace API, Flow overlay,
+  trace outcome label, version/dependency sync, and read-only/no-lock changes
+  are recorded as unsupported-gap and shadow-CLI evidence for the existing Rust
+  boundary
 
 ## Active Parity Boundary
 
@@ -45,13 +48,15 @@ compatible.
 - `docs/source-package-map.md` records package include rules and ownership.
 - `docs/runtime/` records Rust runtime contract notes for operator and
   maintainer surfaces.
-- `tests/fixtures/cli_parity/auto_port_v0_17_4_release_parity_evidence.json`
-  records the final Rust `0.2.1` release evidence.
+- `tests/fixtures/cli_parity/auto_port_v0_18_0_release_parity_evidence.json`
+  records the final Rust `0.3.0` release evidence.
 
 ## Explicit Gaps
 
 Rust still does not ship a `millrace-web` package, HTTP dashboard, static shell,
-or SSE stream. The accepted Rust inspection surface remains local read-only CLI
-commands over initialized workspaces. Native filesystem watcher integration,
-live subscription-quota provider polling, and live Codex/Pi smoke runs remain
-preview-only or opt-in surfaces.
+SSE stream, or dashboard API route. The accepted Rust inspection surface
+remains local read-only CLI commands over initialized workspaces, including
+`millrace compile graph` and `millrace runs trace <run_id>` as graph/trace
+shadow surfaces. Native filesystem watcher integration, live subscription-quota
+provider polling, and live Codex/Pi smoke runs remain preview-only or opt-in
+surfaces.

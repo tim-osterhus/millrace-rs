@@ -18,3 +18,9 @@ or workspace-installed mutation was warranted.
 Built-in generic Doublechecker success learning routes to Analyst first. Direct
 Curator trigger rules are valid only when the compiled mode includes a safe
 destination through `target_skill_id` or `preferred_output_paths`.
+
+Rust `0.3.0` can also export the selected mode's compiled graph topology for
+execution, planning, and learning planes through `millrace compile graph`.
+Those exports intentionally preserve recovery cycles and terminal-state labels;
+they are legal-topology inspection data, not DAG assertions and not a second
+routing authority.
