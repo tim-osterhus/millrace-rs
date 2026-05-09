@@ -9,13 +9,13 @@ use tempfile::TempDir;
 
 use millrace_ai::contracts::{
     ClosureTargetState, IncidentDecision, IncidentDocument, LearningRequestAction,
-    LearningRequestDocument, Plane, RecoveryCounterEntry, RecoveryCounters, SpecDocument,
-    SpecSourceType, StageName, TaskDocument, Timestamp, WorkItemKind,
+    LearningRequestDocument, Plane, ProbeDocument, RecoveryCounterEntry, RecoveryCounters,
+    SpecDocument, SpecSourceType, StageName, TaskDocument, Timestamp, WorkItemKind,
 };
 use millrace_ai::work_documents::{
     parse_incident_document, parse_learning_request_document, parse_task_document,
-    render_incident_document, render_learning_request_document, render_spec_document,
-    render_task_document,
+    render_incident_document, render_learning_request_document, render_probe_document,
+    render_spec_document, render_task_document,
 };
 use millrace_ai::workspace::{
     LineageRepairError, QueueStore, QueueStoreError, RuntimeOwnershipLockOptions, StateStore,
@@ -37,6 +37,8 @@ fn task_document(task_id: &str, created_at: &str) -> TaskDocument {
         summary: "queue test".to_owned(),
         root_idea_id: Some("idea-001".to_owned()),
         root_spec_id: Some("spec-root-001".to_owned()),
+        root_intake_kind: None,
+        root_intake_id: None,
         spec_id: Some("spec-root-001".to_owned()),
         parent_task_id: None,
         incident_id: None,
@@ -65,6 +67,8 @@ fn spec_document(spec_id: &str, created_at: &str) -> SpecDocument {
         parent_spec_id: None,
         root_idea_id: Some("idea-001".to_owned()),
         root_spec_id: Some("spec-root-001".to_owned()),
+        root_intake_kind: None,
+        root_intake_id: None,
         goals: vec!["define implementation plan".to_owned()],
         non_goals: Vec::new(),
         scope: Vec::new(),
@@ -83,6 +87,25 @@ fn spec_document(spec_id: &str, created_at: &str) -> SpecDocument {
     }
 }
 
+fn probe_document(probe_id: &str, created_at: &str) -> ProbeDocument {
+    ProbeDocument {
+        probe_id: probe_id.to_owned(),
+        title: format!("Probe {probe_id}"),
+        summary: "ambiguous repo-facing request".to_owned(),
+        request: "Research the codebase and route the smallest safe change.".to_owned(),
+        target_paths: vec!["src/example/parser.rs".to_owned()],
+        constraints: vec!["Do not implement during recon.".to_owned()],
+        acceptance: vec!["Recon routes the probe with a durable packet.".to_owned()],
+        risk_notes: vec!["Parser changes can regress adjacent behavior.".to_owned()],
+        references: vec!["operator request".to_owned()],
+        tags: vec!["probe".to_owned()],
+        status_hint: None,
+        created_at: timestamp(created_at),
+        created_by: "tests".to_owned(),
+        updated_at: None,
+    }
+}
+
 fn incident_document(incident_id: &str, opened_at: &str) -> IncidentDocument {
     IncidentDocument {
         incident_id: incident_id.to_owned(),
@@ -90,6 +113,8 @@ fn incident_document(incident_id: &str, opened_at: &str) -> IncidentDocument {
         summary: "execution recovery".to_owned(),
         root_idea_id: Some("idea-001".to_owned()),
         root_spec_id: Some("spec-root-001".to_owned()),
+        root_intake_kind: None,
+        root_intake_id: None,
         source_task_id: None,
         source_spec_id: Some("spec-root-001".to_owned()),
         source_stage: StageName::Consultant,
@@ -149,6 +174,8 @@ fn closure_target_state(root_spec_id: &str, root_idea_id: &str) -> ClosureTarget
         kind: "closure_target_state".to_owned(),
         root_spec_id: root_spec_id.to_owned(),
         root_idea_id: root_idea_id.to_owned(),
+        root_intake_kind: None,
+        root_intake_id: None,
         root_spec_path: format!("millrace-agents/arbiter/contracts/root-specs/{root_spec_id}.md"),
         root_idea_path: format!("millrace-agents/arbiter/contracts/ideas/{root_idea_id}.md"),
         rubric_path: format!("millrace-agents/arbiter/rubrics/{root_spec_id}.md"),
@@ -854,6 +881,92 @@ fn planning_and_learning_lifecycles_move_across_the_expected_surfaces() {
         paths
             .learning_requests_blocked_dir
             .join("learn-002.md")
+            .is_file()
+    );
+}
+
+#[test]
+fn probe_queue_lifecycle_claims_oldest_probe_or_spec_after_incidents() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+    let store = QueueStore::from_paths(paths.clone());
+
+    store
+        .enqueue_spec(&spec_document("spec-001", "2026-04-15T00:05:00Z"))
+        .unwrap();
+    store
+        .enqueue_probe(&probe_document("probe-001", "2026-04-15T00:01:00Z"))
+        .unwrap();
+    store
+        .enqueue_incident(&incident_document("inc-001", "2026-04-15T00:02:00Z"))
+        .unwrap();
+
+    let incident = store.claim_next_planning_item(None).unwrap().unwrap();
+    assert_eq!(incident.work_item_kind, WorkItemKind::Incident);
+    assert_eq!(incident.work_item_id, "inc-001");
+    store.mark_incident_resolved("inc-001").unwrap();
+
+    let probe = store.claim_next_planning_item(None).unwrap().unwrap();
+    assert_eq!(probe.work_item_kind, WorkItemKind::Probe);
+    assert_eq!(probe.work_item_id, "probe-001");
+    assert_eq!(probe.path, paths.probes_active_dir.join("probe-001.md"));
+
+    let raw = fs::read_to_string(&probe.path).unwrap();
+    assert_eq!(
+        render_probe_document(&probe_document("probe-001", "2026-04-15T00:01:00Z")),
+        raw
+    );
+
+    store
+        .requeue_probe("probe-001", "operator requested another recon pass")
+        .unwrap();
+    assert!(paths.probes_queue_dir.join("probe-001.md").is_file());
+    let requeue_log = read_json_lines(&paths.probes_queue_dir.join("probe-001.requeue.jsonl"));
+    assert_eq!(requeue_log[0]["kind"], "probe");
+    assert_eq!(
+        requeue_log[0]["reason"],
+        "operator requested another recon pass"
+    );
+
+    let probe = store.claim_next_planning_item(None).unwrap().unwrap();
+    assert_eq!(probe.work_item_kind, WorkItemKind::Probe);
+    store.mark_probe_done("probe-001").unwrap();
+    assert!(paths.probes_done_dir.join("probe-001.md").is_file());
+
+    let duplicate = store
+        .enqueue_probe(&probe_document("probe-001", "2026-04-15T00:03:00Z"))
+        .unwrap_err();
+    assert!(duplicate.to_string().contains("already exists"));
+
+    let spec = store.claim_next_planning_item(None).unwrap().unwrap();
+    assert_eq!(spec.work_item_kind, WorkItemKind::Spec);
+    assert_eq!(spec.work_item_id, "spec-001");
+}
+
+#[test]
+fn closure_scoped_planning_claims_skip_root_intake_probes() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+    let store = QueueStore::from_paths(paths.clone());
+
+    store
+        .enqueue_probe(&probe_document("probe-root-intake", "2026-04-15T00:00:00Z"))
+        .unwrap();
+    let mut same_root_spec = spec_document("spec-same-root", "2026-04-15T00:01:00Z");
+    same_root_spec.root_spec_id = Some("spec-root-001".to_owned());
+    store.enqueue_spec(&same_root_spec).unwrap();
+
+    let claim = store
+        .claim_next_planning_item(Some("spec-root-001"))
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(claim.work_item_kind, WorkItemKind::Spec);
+    assert_eq!(claim.work_item_id, "spec-same-root");
+    assert!(
+        paths
+            .probes_queue_dir
+            .join("probe-root-intake.md")
             .is_file()
     );
 }

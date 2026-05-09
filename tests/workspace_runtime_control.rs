@@ -7,8 +7,8 @@ use tempfile::TempDir;
 
 use millrace_ai::contracts::{
     ActiveRunRequestKind, ActiveRunState, MailboxCommand, MailboxCommandEnvelope, Plane,
-    RuntimeJsonContract, SpecDocument, SpecSourceType, StageName, TaskDocument, Timestamp,
-    WorkItemKind,
+    ProbeDocument, RuntimeJsonContract, SpecDocument, SpecSourceType, StageName, TaskDocument,
+    Timestamp, WorkItemKind,
 };
 use millrace_ai::workspace::{
     RuntimeControl, RuntimeControlMode, RuntimeOwnershipLockOptions,
@@ -28,6 +28,8 @@ fn task_document(task_id: &str) -> TaskDocument {
         summary: "runtime control test".to_owned(),
         root_idea_id: Some("idea-001".to_owned()),
         root_spec_id: Some("spec-root-001".to_owned()),
+        root_intake_kind: None,
+        root_intake_id: None,
         spec_id: Some("spec-root-001".to_owned()),
         parent_task_id: None,
         incident_id: None,
@@ -56,6 +58,8 @@ fn spec_document(spec_id: &str) -> SpecDocument {
         parent_spec_id: None,
         root_idea_id: Some("idea-001".to_owned()),
         root_spec_id: Some(spec_id.to_owned()),
+        root_intake_kind: None,
+        root_intake_id: None,
         goals: vec!["route planning intake through mailbox".to_owned()],
         non_goals: Vec::new(),
         scope: vec!["runtime control".to_owned()],
@@ -68,6 +72,25 @@ fn spec_document(spec_id: &str) -> SpecDocument {
         decomposition_hints: Vec::new(),
         acceptance: vec!["mailbox payload is deterministic".to_owned()],
         references: vec!["../millrace-py/src/millrace_ai/runtime/control.py".to_owned()],
+        created_at: timestamp(NOW),
+        created_by: "tests".to_owned(),
+        updated_at: None,
+    }
+}
+
+fn probe_document(probe_id: &str) -> ProbeDocument {
+    ProbeDocument {
+        probe_id: probe_id.to_owned(),
+        title: format!("Probe {probe_id}"),
+        summary: "runtime control probe intake test".to_owned(),
+        request: "Research the codebase and route the smallest safe change.".to_owned(),
+        target_paths: vec!["src/workspace/runtime_control.rs".to_owned()],
+        constraints: vec!["Do not implement during recon.".to_owned()],
+        acceptance: vec!["probe intake updates planning depth".to_owned()],
+        risk_notes: vec!["mailbox contract drift".to_owned()],
+        references: vec!["../millrace-py/src/millrace_ai/runtime/control.py".to_owned()],
+        tags: vec!["runtime-control".to_owned()],
+        status_hint: None,
         created_at: timestamp(NOW),
         created_by: "tests".to_owned(),
         updated_at: None,
@@ -168,6 +191,22 @@ fn direct_offline_pause_and_task_intake_mutate_workspace_state_without_mailbox()
         Some(&1)
     );
     assert!(mailbox_json_paths(&paths.mailbox_incoming_dir).is_empty());
+
+    let probe = probe_document("probe-runtime-control");
+    let add_probe = control.add_probe(&probe).unwrap();
+    assert_eq!(add_probe.mode, RuntimeControlMode::Direct);
+    assert_eq!(add_probe.action, MailboxCommand::AddProbe);
+    assert_eq!(
+        add_probe.artifact_path,
+        Some(paths.probes_queue_dir.join("probe-runtime-control.md"))
+    );
+
+    let snapshot = load_snapshot(&paths).unwrap();
+    assert_eq!(snapshot.queue_depth_planning, 1);
+    assert_eq!(
+        snapshot.queue_depths_by_plane.get(&Plane::Planning),
+        Some(&1)
+    );
 }
 
 #[test]
@@ -272,6 +311,23 @@ fn active_daemon_lock_routes_control_and_queue_intake_to_mailbox_envelopes() {
             .join("task-mailbox-routed.md")
             .exists()
     );
+
+    let probe = probe_document("probe-mailbox-routed");
+    let add_probe = control.add_probe(&probe).unwrap();
+    assert_eq!(add_probe.mode, RuntimeControlMode::Mailbox);
+    let add_probe_envelope = read_mailbox(add_probe.mailbox_path.as_ref().unwrap());
+    assert_eq!(add_probe_envelope.command, MailboxCommand::AddProbe);
+    assert_eq!(
+        add_probe_envelope.payload["document"]["probe_id"],
+        Value::String("probe-mailbox-routed".to_owned())
+    );
+    assert!(
+        !paths
+            .probes_queue_dir
+            .join("probe-mailbox-routed.md")
+            .exists()
+    );
+
     assert!(
         paths
             .mailbox_processed_dir
@@ -329,6 +385,13 @@ fn active_daemon_lock_routes_remaining_control_commands_to_mailbox_envelopes() {
     );
     assert_eq!(
         control
+            .add_probe(&probe_document("probe-mailbox-routed"))
+            .unwrap()
+            .mode,
+        RuntimeControlMode::Mailbox
+    );
+    assert_eq!(
+        control
             .add_spec(&spec_document("spec-mailbox-routed"))
             .unwrap()
             .mode,
@@ -351,6 +414,7 @@ fn active_daemon_lock_routes_remaining_control_commands_to_mailbox_envelopes() {
         commands,
         vec![
             MailboxCommand::AddIdea,
+            MailboxCommand::AddProbe,
             MailboxCommand::AddSpec,
             MailboxCommand::ClearStaleState,
             MailboxCommand::ReloadConfig,
@@ -369,6 +433,14 @@ fn active_daemon_lock_routes_remaining_control_commands_to_mailbox_envelopes() {
     assert_eq!(
         envelopes
             .iter()
+            .find(|envelope| envelope.command == MailboxCommand::AddProbe)
+            .unwrap()
+            .payload["document"]["probe_id"],
+        "probe-mailbox-routed"
+    );
+    assert_eq!(
+        envelopes
+            .iter()
             .find(|envelope| envelope.command == MailboxCommand::AddSpec)
             .unwrap()
             .payload["document"]["spec_id"],
@@ -381,6 +453,12 @@ fn active_daemon_lock_routes_remaining_control_commands_to_mailbox_envelopes() {
             .unwrap()
             .payload["source_name"],
         "idea-mailbox-routed.md"
+    );
+    assert!(
+        !paths
+            .probes_queue_dir
+            .join("probe-mailbox-routed.md")
+            .exists()
     );
     assert!(
         !paths

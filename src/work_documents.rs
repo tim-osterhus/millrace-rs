@@ -9,9 +9,9 @@ use serde_json::{Map, Value};
 
 use crate::contracts::{
     IncidentDecision, IncidentDocument, IncidentSeverity, LearningRequestAction,
-    LearningRequestDocument, LearningStageName, Plane, SpecDocument, SpecSourceType, StageName,
-    TaskDocument, TaskStatusHint, Timestamp, WORK_DOCUMENT_SCHEMA_VERSION, WorkDocument,
-    WorkDocumentError, WorkItemKind,
+    LearningRequestDocument, LearningStageName, Plane, ProbeDocument, ProbeStatusHint,
+    RootIntakeKind, SpecDocument, SpecSourceType, StageName, TaskDocument, TaskStatusHint,
+    Timestamp, WORK_DOCUMENT_SCHEMA_VERSION, WorkDocument, WorkDocumentError, WorkItemKind,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -23,6 +23,7 @@ enum FieldKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DocumentModel {
     Task,
+    Probe,
     Spec,
     Incident,
     LearningRequest,
@@ -53,6 +54,7 @@ pub fn parse_work_document_with_source(
     let (heading_title, fields) = parse_markdown_fields(raw, source_name)?;
     match infer_model(&fields, source_name)? {
         DocumentModel::Task => parse_task_from_fields(&heading_title, &fields).map(Into::into),
+        DocumentModel::Probe => parse_probe_from_fields(&heading_title, &fields).map(Into::into),
         DocumentModel::Spec => parse_spec_from_fields(&heading_title, &fields).map(Into::into),
         DocumentModel::Incident => {
             parse_incident_from_fields(&heading_title, &fields).map(Into::into)
@@ -76,6 +78,21 @@ pub fn parse_task_document_with_source(
     let (heading_title, fields) = parse_markdown_fields(raw, source_name)?;
     ensure_model(&fields, DocumentModel::Task, source_name)?;
     parse_task_from_fields(&heading_title, &fields)
+}
+
+/// Parse a markdown probe document and reject other document kinds.
+pub fn parse_probe_document(raw: &str) -> Result<ProbeDocument, WorkDocumentError> {
+    parse_probe_document_with_source(raw, "<memory>")
+}
+
+/// Parse a markdown probe document with source context in errors.
+pub fn parse_probe_document_with_source(
+    raw: &str,
+    source_name: &str,
+) -> Result<ProbeDocument, WorkDocumentError> {
+    let (heading_title, fields) = parse_markdown_fields(raw, source_name)?;
+    ensure_model(&fields, DocumentModel::Probe, source_name)?;
+    parse_probe_from_fields(&heading_title, &fields)
 }
 
 /// Parse a markdown spec document and reject other document kinds.
@@ -154,6 +171,25 @@ pub fn read_task_import_document(
     }
 }
 
+/// Parse a probe import payload from headed markdown or JSON.
+pub fn read_probe_import_document(
+    path: impl AsRef<Path>,
+) -> Result<ProbeDocument, WorkDocumentError> {
+    let path = path.as_ref();
+    let raw = fs::read_to_string(path).map_err(|error| WorkDocumentError::Io {
+        path: path.display().to_string(),
+        message: error.to_string(),
+    })?;
+    let source_name = source_name_for_path(path);
+    match path.extension().and_then(|value| value.to_str()) {
+        Some("md") => parse_probe_document_with_source(&raw, &source_name),
+        Some("json") => parse_probe_json_import_with_source(&raw, &source_name),
+        _ => Err(WorkDocumentError::InvalidDocument {
+            message: "probe import path must end with .md or .json".to_owned(),
+        }),
+    }
+}
+
 /// Parse a spec import payload from headed markdown or JSON.
 pub fn read_spec_import_document(
     path: impl AsRef<Path>,
@@ -188,6 +224,22 @@ pub fn parse_task_json_import_with_source(
     Ok(document)
 }
 
+/// Parse an explicit probe JSON import payload.
+pub fn parse_probe_json_import(raw: &str) -> Result<ProbeDocument, WorkDocumentError> {
+    parse_probe_json_import_with_source(raw, "<memory>")
+}
+
+/// Parse an explicit probe JSON import payload with source context in errors.
+pub fn parse_probe_json_import_with_source(
+    raw: &str,
+    source_name: &str,
+) -> Result<ProbeDocument, WorkDocumentError> {
+    let document: ProbeDocument =
+        parse_json_import(raw, source_name, WorkItemKind::Probe.as_str())?;
+    document.validate()?;
+    Ok(document)
+}
+
 /// Parse an explicit spec JSON import payload.
 pub fn parse_spec_json_import(raw: &str) -> Result<SpecDocument, WorkDocumentError> {
     parse_spec_json_import_with_source(raw, "<memory>")
@@ -208,6 +260,7 @@ pub fn parse_spec_json_import_with_source(
 pub fn render_work_document(document: &WorkDocument) -> String {
     match document {
         WorkDocument::Task(document) => render_task_document(document),
+        WorkDocument::Probe(document) => render_probe_document(document),
         WorkDocument::Spec(document) => render_spec_document(document),
         WorkDocument::Incident(document) => render_incident_document(document),
         WorkDocument::LearningRequest(document) => render_learning_request_document(document),
@@ -224,6 +277,14 @@ pub fn render_task_document(document: &TaskDocument) -> String {
     push_optional_non_empty_scalar(&mut lines, "Summary", &document.summary);
     push_optional_scalar(&mut lines, "Root-Idea-ID", document.root_idea_id.as_deref());
     push_optional_scalar(&mut lines, "Root-Spec-ID", document.root_spec_id.as_deref());
+    if let Some(root_intake_kind) = document.root_intake_kind {
+        push_scalar(&mut lines, "Root-Intake-Kind", root_intake_kind.as_str());
+    }
+    push_optional_scalar(
+        &mut lines,
+        "Root-Intake-ID",
+        document.root_intake_id.as_deref(),
+    );
     push_optional_scalar(&mut lines, "Spec-ID", document.spec_id.as_deref());
     push_optional_scalar(
         &mut lines,
@@ -252,6 +313,34 @@ pub fn render_task_document(document: &TaskDocument) -> String {
     finish_lines(lines)
 }
 
+/// Render a canonical probe markdown document.
+#[must_use]
+pub fn render_probe_document(document: &ProbeDocument) -> String {
+    let mut lines = heading_lines(&document.title);
+
+    push_scalar(&mut lines, "Probe-ID", &document.probe_id);
+    push_scalar(&mut lines, "Title", &document.title);
+    push_optional_non_empty_scalar(&mut lines, "Summary", &document.summary);
+    push_scalar(&mut lines, "Request", &document.request);
+    if let Some(status_hint) = document.status_hint {
+        push_scalar(&mut lines, "Status-Hint", status_hint.as_str());
+    }
+    push_scalar(&mut lines, "Created-At", document.created_at.as_str());
+    push_scalar(&mut lines, "Created-By", &document.created_by);
+    if let Some(updated_at) = &document.updated_at {
+        push_scalar(&mut lines, "Updated-At", updated_at.as_str());
+    }
+
+    push_list(&mut lines, "Target-Paths", &document.target_paths);
+    push_list(&mut lines, "Constraints", &document.constraints);
+    push_list(&mut lines, "Acceptance", &document.acceptance);
+    push_list(&mut lines, "Risk-Notes", &document.risk_notes);
+    push_list(&mut lines, "References", &document.references);
+    push_list(&mut lines, "Tags", &document.tags);
+
+    finish_lines(lines)
+}
+
 /// Render a canonical spec markdown document.
 #[must_use]
 pub fn render_spec_document(document: &SpecDocument) -> String {
@@ -269,6 +358,14 @@ pub fn render_spec_document(document: &SpecDocument) -> String {
     );
     push_optional_scalar(&mut lines, "Root-Idea-ID", document.root_idea_id.as_deref());
     push_optional_scalar(&mut lines, "Root-Spec-ID", document.root_spec_id.as_deref());
+    if let Some(root_intake_kind) = document.root_intake_kind {
+        push_scalar(&mut lines, "Root-Intake-Kind", root_intake_kind.as_str());
+    }
+    push_optional_scalar(
+        &mut lines,
+        "Root-Intake-ID",
+        document.root_intake_id.as_deref(),
+    );
     push_scalar(&mut lines, "Created-At", document.created_at.as_str());
     push_scalar(&mut lines, "Created-By", &document.created_by);
     if let Some(updated_at) = &document.updated_at {
@@ -305,6 +402,14 @@ pub fn render_incident_document(document: &IncidentDocument) -> String {
     push_scalar(&mut lines, "Summary", &document.summary);
     push_optional_scalar(&mut lines, "Root-Idea-ID", document.root_idea_id.as_deref());
     push_optional_scalar(&mut lines, "Root-Spec-ID", document.root_spec_id.as_deref());
+    if let Some(root_intake_kind) = document.root_intake_kind {
+        push_scalar(&mut lines, "Root-Intake-Kind", root_intake_kind.as_str());
+    }
+    push_optional_scalar(
+        &mut lines,
+        "Root-Intake-ID",
+        document.root_intake_id.as_deref(),
+    );
     push_optional_scalar(
         &mut lines,
         "Source-Task-ID",
@@ -596,6 +701,8 @@ fn infer_model(
 ) -> Result<DocumentModel, WorkDocumentError> {
     if fields.scalars.contains_key("task_id") {
         Ok(DocumentModel::Task)
+    } else if fields.scalars.contains_key("probe_id") {
+        Ok(DocumentModel::Probe)
     } else if fields.scalars.contains_key("learning_request_id") {
         Ok(DocumentModel::LearningRequest)
     } else if fields.scalars.contains_key("incident_id") {
@@ -640,6 +747,8 @@ fn parse_task_from_fields(
         summary: optional_scalar(fields, "summary").unwrap_or_default(),
         root_idea_id: optional_scalar(fields, "root_idea_id"),
         root_spec_id: optional_scalar(fields, "root_spec_id"),
+        root_intake_kind: optional_enum(fields, "root_intake_kind", RootIntakeKind::from_value)?,
+        root_intake_id: optional_scalar(fields, "root_intake_id"),
         spec_id: optional_scalar(fields, "spec_id"),
         parent_task_id: optional_scalar(fields, "parent_task_id"),
         incident_id: optional_scalar(fields, "incident_id"),
@@ -652,6 +761,30 @@ fn parse_task_from_fields(
         blocks: optional_list(fields, "blocks"),
         tags: optional_list(fields, "tags"),
         status_hint: optional_enum(fields, "status_hint", TaskStatusHint::from_value)?,
+        created_at: required_timestamp(fields, "created_at")?,
+        created_by: required_scalar(fields, "created_by")?,
+        updated_at: optional_timestamp(fields, "updated_at")?,
+    };
+    document.validate()?;
+    Ok(document)
+}
+
+fn parse_probe_from_fields(
+    heading_title: &str,
+    fields: &ParsedFields,
+) -> Result<ProbeDocument, WorkDocumentError> {
+    let document = ProbeDocument {
+        probe_id: required_scalar(fields, "probe_id")?,
+        title: required_title(fields, heading_title)?,
+        summary: optional_scalar(fields, "summary").unwrap_or_default(),
+        request: required_scalar(fields, "request")?,
+        target_paths: optional_list(fields, "target_paths"),
+        constraints: optional_list(fields, "constraints"),
+        acceptance: optional_list(fields, "acceptance"),
+        risk_notes: optional_list(fields, "risk_notes"),
+        references: optional_list(fields, "references"),
+        tags: optional_list(fields, "tags"),
+        status_hint: optional_enum(fields, "status_hint", ProbeStatusHint::from_value)?,
         created_at: required_timestamp(fields, "created_at")?,
         created_by: required_scalar(fields, "created_by")?,
         updated_at: optional_timestamp(fields, "updated_at")?,
@@ -673,6 +806,8 @@ fn parse_spec_from_fields(
         parent_spec_id: optional_scalar(fields, "parent_spec_id"),
         root_idea_id: optional_scalar(fields, "root_idea_id"),
         root_spec_id: optional_scalar(fields, "root_spec_id"),
+        root_intake_kind: optional_enum(fields, "root_intake_kind", RootIntakeKind::from_value)?,
+        root_intake_id: optional_scalar(fields, "root_intake_id"),
         goals: required_list(fields, "goals")?,
         non_goals: optional_list(fields, "non_goals"),
         scope: optional_list(fields, "scope"),
@@ -703,6 +838,8 @@ fn parse_incident_from_fields(
         summary: required_scalar(fields, "summary")?,
         root_idea_id: optional_scalar(fields, "root_idea_id"),
         root_spec_id: optional_scalar(fields, "root_spec_id"),
+        root_intake_kind: optional_enum(fields, "root_intake_kind", RootIntakeKind::from_value)?,
+        root_intake_id: optional_scalar(fields, "root_intake_id"),
         source_task_id: optional_scalar(fields, "source_task_id"),
         source_spec_id: optional_scalar(fields, "source_spec_id"),
         source_stage: required_enum(fields, "source_stage", StageName::from_value)?,
@@ -880,13 +1017,17 @@ fn optional_trigger_metadata(fields: &ParsedFields) -> Result<Value, WorkDocumen
 fn field_spec_by_label(label: &str) -> Option<FieldSpec> {
     let (field_name, kind) = match label {
         "Task-ID" => ("task_id", FieldKind::Scalar),
+        "Probe-ID" => ("probe_id", FieldKind::Scalar),
         "Spec-ID" => ("spec_id", FieldKind::Scalar),
         "Incident-ID" => ("incident_id", FieldKind::Scalar),
         "Learning-Request-ID" => ("learning_request_id", FieldKind::Scalar),
         "Title" => ("title", FieldKind::Scalar),
         "Summary" => ("summary", FieldKind::Scalar),
+        "Request" => ("request", FieldKind::Scalar),
         "Root-Idea-ID" => ("root_idea_id", FieldKind::Scalar),
         "Root-Spec-ID" => ("root_spec_id", FieldKind::Scalar),
+        "Root-Intake-Kind" => ("root_intake_kind", FieldKind::Scalar),
+        "Root-Intake-ID" => ("root_intake_id", FieldKind::Scalar),
         "Parent-Task-ID" => ("parent_task_id", FieldKind::Scalar),
         "Status-Hint" => ("status_hint", FieldKind::Scalar),
         "Created-At" => ("created_at", FieldKind::Scalar),
@@ -924,6 +1065,7 @@ fn field_spec_by_label(label: &str) -> Option<FieldSpec> {
         "Constraints" => ("constraints", FieldKind::List),
         "Assumptions" => ("assumptions", FieldKind::List),
         "Risks" => ("risks", FieldKind::List),
+        "Risk-Notes" => ("risk_notes", FieldKind::List),
         "Entrypoints" => ("entrypoints", FieldKind::List),
         "Required-Skills" => ("required_skills", FieldKind::List),
         "Decomposition-Hints" => ("decomposition_hints", FieldKind::List),
@@ -1050,6 +1192,7 @@ fn validate_json_import_metadata(
 fn model_name(model: DocumentModel) -> &'static str {
     match model {
         DocumentModel::Task => WorkItemKind::Task.as_str(),
+        DocumentModel::Probe => WorkItemKind::Probe.as_str(),
         DocumentModel::Spec => WorkItemKind::Spec.as_str(),
         DocumentModel::Incident => WorkItemKind::Incident.as_str(),
         DocumentModel::LearningRequest => WorkItemKind::LearningRequest.as_str(),

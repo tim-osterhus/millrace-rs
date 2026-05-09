@@ -10,10 +10,10 @@ use serde_json::{Map, Value};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 use super::{
-    ContractError, MailboxCommand, Plane, ReloadOutcome, ResultClass, RuntimeErrorCode,
-    RuntimeMode, SpecDocument, StageName, TaskDocument, TerminalResult, Timestamp, WatcherMode,
-    WorkItemKind, parse_terminal_marker_for_plane, stage_plane, terminal_result_for_plane,
-    validate_safe_identifier,
+    ContractError, MailboxCommand, Plane, ProbeDocument, ReloadOutcome, ResultClass,
+    RuntimeErrorCode, RuntimeMode, SpecDocument, StageName, TaskDocument, TerminalResult,
+    Timestamp, WatcherMode, WorkItemKind, parse_terminal_marker_for_plane, stage_plane,
+    terminal_result_for_plane, validate_safe_identifier,
 };
 
 const SCHEMA_VERSION: &str = "1.0";
@@ -840,6 +840,31 @@ impl MailboxAddTaskPayload {
     }
 
     /// Validates the embedded task document shape.
+    pub fn validate(&mut self) -> Result<(), RuntimeJsonError> {
+        self.document
+            .validate()
+            .map_err(|source| RuntimeJsonError::InvalidDocument {
+                message: source.to_string(),
+            })
+    }
+}
+
+/// Payload shape for `add_probe` mailbox commands.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MailboxAddProbePayload {
+    pub document: ProbeDocument,
+}
+
+impl MailboxAddProbePayload {
+    /// Deserializes and validates an add-probe payload JSON value.
+    pub fn from_json_value(value: Value) -> Result<Self, RuntimeJsonError> {
+        let mut decoded: Self = decode_json("mailbox_add_probe_payload", value)?;
+        decoded.validate()?;
+        Ok(decoded)
+    }
+
+    /// Validates the embedded probe document shape.
     pub fn validate(&mut self) -> Result<(), RuntimeJsonError> {
         self.document
             .validate()

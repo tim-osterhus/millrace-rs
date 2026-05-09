@@ -38,6 +38,7 @@ pub const PRIMARY_COMMAND_GROUPS: &[&str] = &[
 
 pub const COMPATIBILITY_ALIASES: &[&str] = &[
     "add-task",
+    "add-probe",
     "add-spec",
     "add-idea",
     "pause",
@@ -81,6 +82,7 @@ fn dispatch(mut args: Vec<String>) -> CliOutput {
         "skills" => run_skills_group(args),
         "upgrade" => run_upgrade_group(args),
         "add-task" => run_queue_alias("add-task", "add-task", args),
+        "add-probe" => run_queue_alias("add-probe", "add-probe", args),
         "add-spec" => run_queue_alias("add-spec", "add-spec", args),
         "add-idea" => run_queue_alias("add-idea", "add-idea", args),
         "pause" => run_control_alias("pause", args),
@@ -1013,7 +1015,7 @@ fn run_runs_trace(paths: &WorkspacePaths, parsed: &ParsedArgs) -> CliOutput {
 fn run_queue_group(mut args: Vec<String>) -> CliOutput {
     if args.is_empty() {
         return CliOutput::parse_error(
-            "missing queue command `ls`, `show`, `add-task`, `add-spec`, `add-idea`, or `repair-lineage`",
+            "missing queue command `ls`, `show`, `add-task`, `add-probe`, `add-spec`, `add-idea`, or `repair-lineage`",
         );
     }
     let command = args.remove(0);
@@ -1023,7 +1025,7 @@ fn run_queue_group(mut args: Vec<String>) -> CliOutput {
 fn run_queue_alias(alias_context: &str, command: &str, args: Vec<String>) -> CliOutput {
     if !matches!(
         command,
-        "ls" | "show" | "add-task" | "add-spec" | "add-idea" | "repair-lineage"
+        "ls" | "show" | "add-task" | "add-probe" | "add-spec" | "add-idea" | "repair-lineage"
     ) {
         return CliOutput::parse_error(format!("unknown queue command `{command}`"));
     }
@@ -1054,6 +1056,11 @@ fn run_queue_alias(alias_context: &str, command: &str, args: Vec<String>) -> Cli
         }
         "add-task" => {
             if let Err(output) = require_one_positional(&parsed, "TASK_PATH") {
+                return output;
+            }
+        }
+        "add-probe" => {
+            if let Err(output) = require_one_positional(&parsed, "PROBE_PATH") {
                 return output;
             }
         }
@@ -1108,6 +1115,15 @@ fn run_queue_alias(alias_context: &str, command: &str, args: Vec<String>) -> Cli
                 .positionals
                 .first()
                 .expect("queue add-task has one positional"),
+        )
+        .map(CliOutput::success)
+        .unwrap_or_else(CliOutput::stdout_failure),
+        "add-probe" => intake::add_probe_lines(
+            &paths,
+            parsed
+                .positionals
+                .first()
+                .expect("queue add-probe has one positional"),
         )
         .map(CliOutput::success)
         .unwrap_or_else(CliOutput::stdout_failure),

@@ -8,21 +8,24 @@ use millrace_ai::contracts::{
     GraphExportContractError, GraphExportEdge, GraphExportEntry, GraphExportNode,
     GraphExportTerminalState, IdentifierErrorReason, IncidentDecision, IncidentDocument,
     IncidentSeverity, LearningRequestAction, LearningRequestDocument, LearningStageName,
-    LearningTerminalResult, LoopEdgeKind, MailboxAddIdeaPayload, MailboxCommand,
-    MailboxCommandEnvelope, OutcomeResultClasses, PauseSource, Plane, PlanningStageName,
-    PlanningTerminalResult, RecoveryCounterEntry, RecoveryCounters, ReloadOutcome, ResultClass,
-    RuntimeErrorCode, RuntimeErrorContext, RuntimeJsonContract, RuntimeJsonError, RuntimeMode,
-    RuntimeSnapshot, SAFE_ID_PATTERN_DESCRIPTION, STAGE_LEGAL_TERMINAL_RESULTS,
-    STAGE_METADATA_BY_VALUE, STAGE_NAME_BY_VALUE, STAGE_TO_PLANE, SpecDocument, SpecSourceType,
-    StageMetadata, StageName, StageResultEnvelope, TaskDocument, TaskStatusHint, TerminalResult,
-    Timestamp, TokenUsage, WORK_DOCUMENT_SCHEMA_VERSION, WatcherMode, WorkDocument,
-    WorkDocumentError, WorkItemKind, allowed_result_classes_by_outcome, blocked_terminal_for_plane,
-    known_stage_values, known_stage_values_for_plane, legal_terminal_markers,
-    legal_terminal_results, parse_terminal_marker_for_plane, running_status_marker, stage_metadata,
-    stage_metadata_for_value, stage_name_for_plane, stage_name_for_value, stage_plane,
-    terminal_result_for_plane, validate_safe_identifier, validate_stage_result_class,
-    validate_terminal_marker_for_stage,
+    LearningTerminalResult, LoopEdgeKind, MailboxAddIdeaPayload, MailboxAddProbePayload,
+    MailboxCommand, MailboxCommandEnvelope, OutcomeResultClasses, PauseSource, Plane,
+    PlanningStageName, PlanningTerminalResult, ProbeDocument, ProbeStatusHint, ReconConfidence,
+    ReconDecision, ReconHandoffTarget, ReconPacketDocument, ReconPacketError, ReconPathFinding,
+    ReconRiskLevel, ReconVerificationPlan, RecoveryCounterEntry, RecoveryCounters, ReloadOutcome,
+    ResultClass, RootIntakeKind, RuntimeErrorCode, RuntimeErrorContext, RuntimeJsonContract,
+    RuntimeJsonError, RuntimeMode, RuntimeSnapshot, SAFE_ID_PATTERN_DESCRIPTION,
+    STAGE_LEGAL_TERMINAL_RESULTS, STAGE_METADATA_BY_VALUE, STAGE_NAME_BY_VALUE, STAGE_TO_PLANE,
+    SpecDocument, SpecSourceType, StageMetadata, StageName, StageResultEnvelope, TaskDocument,
+    TaskStatusHint, TerminalResult, Timestamp, TokenUsage, WORK_DOCUMENT_SCHEMA_VERSION,
+    WatcherMode, WorkDocument, WorkDocumentError, WorkItemKind, allowed_result_classes_by_outcome,
+    blocked_terminal_for_plane, known_stage_values, known_stage_values_for_plane,
+    legal_terminal_markers, legal_terminal_results, parse_terminal_marker_for_plane,
+    running_status_marker, stage_metadata, stage_metadata_for_value, stage_name_for_plane,
+    stage_name_for_value, stage_plane, terminal_result_for_plane, validate_safe_identifier,
+    validate_stage_result_class, validate_terminal_marker_for_stage,
 };
+use millrace_ai::recon_packets::{parse_recon_packet, read_recon_packet, render_recon_packet};
 use millrace_ai::work_documents::{
     parse_task_document, parse_work_document_with_source, render_task_document,
     render_work_document,
@@ -90,6 +93,7 @@ fn public_contract_exports_remain_importable() {
         type_name::<LearningTerminalResult>(),
         type_name::<LoopEdgeKind>(),
         type_name::<MailboxAddIdeaPayload>(),
+        type_name::<MailboxAddProbePayload>(),
         type_name::<MailboxCommand>(),
         type_name::<MailboxCommandEnvelope>(),
         type_name::<OutcomeResultClasses>(),
@@ -97,10 +101,21 @@ fn public_contract_exports_remain_importable() {
         type_name::<Plane>(),
         type_name::<PlanningStageName>(),
         type_name::<PlanningTerminalResult>(),
+        type_name::<ProbeDocument>(),
+        type_name::<ProbeStatusHint>(),
         type_name::<RecoveryCounterEntry>(),
         type_name::<RecoveryCounters>(),
+        type_name::<ReconConfidence>(),
+        type_name::<ReconDecision>(),
+        type_name::<ReconHandoffTarget>(),
+        type_name::<ReconPacketDocument>(),
+        type_name::<ReconPacketError>(),
+        type_name::<ReconPathFinding>(),
+        type_name::<ReconRiskLevel>(),
+        type_name::<ReconVerificationPlan>(),
         type_name::<ReloadOutcome>(),
         type_name::<ResultClass>(),
+        type_name::<RootIntakeKind>(),
         type_name::<RuntimeErrorCode>(),
         type_name::<RuntimeErrorContext>(),
         type_name::<RuntimeJsonError>(),
@@ -237,6 +252,11 @@ fn public_contract_exports_remain_importable() {
         should_persist_event_log;
     let _pi_stats_tokens: fn(Option<&serde_json::Value>) -> Option<TokenUsage> =
         token_usage_from_stats_payload;
+    let _recon_parser: fn(&str) -> Result<ReconPacketDocument, ReconPacketError> =
+        parse_recon_packet;
+    let _recon_reader: fn(&std::path::Path) -> Result<ReconPacketDocument, ReconPacketError> =
+        read_recon_packet;
+    let _recon_renderer: fn(&ReconPacketDocument) -> String = render_recon_packet;
 
     let root = std::env::temp_dir().join("millrace-public-export-paths");
     assert_eq!(
@@ -292,7 +312,14 @@ fn public_metadata_helpers_expose_the_stage_contract_boundary() {
         known_stage_values_for_plane(Plane::Learning),
         ["analyst", "professor", "curator"]
     );
+    assert_eq!(
+        known_stage_values_for_plane(Plane::Planning),
+        [
+            "recon", "planner", "manager", "mechanic", "auditor", "arbiter"
+        ]
+    );
     assert!(known_stage_values().contains(&"builder"));
+    assert!(known_stage_values().contains(&"recon"));
     assert_eq!(
         terminal_result_for_plane(Plane::Learning, "BLOCKED").unwrap(),
         blocked_terminal_for_plane(Plane::Learning)
@@ -300,6 +327,10 @@ fn public_metadata_helpers_expose_the_stage_contract_boundary() {
     assert_eq!(
         terminal_result_for_plane(Plane::Learning, "ANALYST_NOOP").unwrap(),
         TerminalResult::Learning(LearningTerminalResult::AnalystNoop)
+    );
+    assert_eq!(
+        terminal_result_for_plane(Plane::Planning, "RECON_NOOP").unwrap(),
+        TerminalResult::Planning(PlanningTerminalResult::ReconNoop)
     );
     assert_eq!(
         parse_terminal_marker_for_plane(Plane::Execution, "### BLOCKED").unwrap(),
@@ -318,6 +349,12 @@ fn public_metadata_helpers_expose_the_stage_contract_boundary() {
     validate_stage_result_class(
         StageName::Analyst,
         TerminalResult::Learning(LearningTerminalResult::AnalystNoop),
+        ResultClass::NoOp,
+    )
+    .unwrap();
+    validate_stage_result_class(
+        StageName::Recon,
+        TerminalResult::Planning(PlanningTerminalResult::ReconNoop),
         ResultClass::NoOp,
     )
     .unwrap();

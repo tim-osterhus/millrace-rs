@@ -24,6 +24,8 @@ fn task_document(task_id: &str) -> TaskDocument {
         summary: "doctor queue artifact".to_owned(),
         root_idea_id: Some("idea-001".to_owned()),
         root_spec_id: Some("spec-root-001".to_owned()),
+        root_intake_kind: None,
+        root_intake_id: None,
         spec_id: Some("spec-root-001".to_owned()),
         parent_task_id: None,
         incident_id: None,

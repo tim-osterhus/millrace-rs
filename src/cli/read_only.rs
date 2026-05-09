@@ -18,9 +18,10 @@ use crate::{
     contracts::{
         ClosureTargetState, PauseSource, Plane, RunTraceGraph, RuntimeSnapshot,
         StageResultEnvelope, SubscriptionQuotaTelemetryState, TokenUsage,
-        UsageGovernanceBlockerSource, WorkItemKind, validate_safe_identifier,
+        UsageGovernanceBlockerSource, WorkDocument, WorkItemKind, validate_safe_identifier,
     },
     runtime::{StageRunRequest, inspect_run_trace_id, load_runtime_startup_config},
+    work_documents::read_work_document,
     workspace::{
         QueueInspectionEntry, QueueStore, WorkspacePaths, inspect_runtime_ownership_lock,
         list_deferred_root_spec_ids, load_baseline_manifest, load_snapshot,
@@ -124,18 +125,27 @@ pub fn queue_ls_lines(paths: &WorkspacePaths) -> Result<Vec<String>, String> {
     }
 
     let execution_queue_depth = count_kind_state(&counts, "task", "queue");
-    let planning_queue_depth = count_kind_state(&counts, "spec", "queue")
-        + count_kind_state(&counts, "incident", "incoming");
+    let probe_queue_depth = count_kind_state(&counts, "probe", "queue");
+    let spec_queue_depth = count_kind_state(&counts, "spec", "queue");
+    let incident_queue_depth = count_kind_state(&counts, "incident", "incoming");
+    let planning_queue_depth =
+        probe_queue_depth + spec_queue_depth + count_kind_state(&counts, "incident", "incoming");
     let learning_queue_depth = count_kind_state(&counts, "learning_request", "queue");
     let execution_active = count_kind_state(&counts, "task", "active");
-    let planning_active = count_kind_state(&counts, "spec", "active")
-        + count_kind_state(&counts, "incident", "active");
+    let probe_active = count_kind_state(&counts, "probe", "active");
+    let spec_active = count_kind_state(&counts, "spec", "active");
+    let incident_active = count_kind_state(&counts, "incident", "active");
+    let planning_active =
+        probe_active + spec_active + count_kind_state(&counts, "incident", "active");
     let learning_active = count_kind_state(&counts, "learning_request", "active");
 
     let mut lines = vec![
         format!("execution_queue_depth: {execution_queue_depth}"),
         format!("planning_queue_depth: {planning_queue_depth}"),
         format!("learning_queue_depth: {learning_queue_depth}"),
+        format!("probe_queue_depth: {probe_queue_depth}"),
+        format!("spec_queue_depth: {spec_queue_depth}"),
+        format!("incident_queue_depth: {incident_queue_depth}"),
         format!("execution_active: {execution_active}"),
         format!("planning_active: {planning_active}"),
         format!("learning_active: {learning_active}"),
@@ -143,14 +153,9 @@ pub fn queue_ls_lines(paths: &WorkspacePaths) -> Result<Vec<String>, String> {
             "active_task_count: {}",
             count_kind_state(&counts, "task", "active")
         ),
-        format!(
-            "active_spec_count: {}",
-            count_kind_state(&counts, "spec", "active")
-        ),
-        format!(
-            "active_incident_count: {}",
-            count_kind_state(&counts, "incident", "active")
-        ),
+        format!("active_probe_count: {probe_active}"),
+        format!("active_spec_count: {spec_active}"),
+        format!("active_incident_count: {incident_active}"),
         format!("active_learning_request_count: {learning_active}"),
         format!(
             "task_queue_count: {}",
@@ -163,6 +168,15 @@ pub fn queue_ls_lines(paths: &WorkspacePaths) -> Result<Vec<String>, String> {
         format!(
             "task_blocked_count: {}",
             count_kind_state(&counts, "task", "blocked")
+        ),
+        format!("probe_queue_count: {probe_queue_depth}"),
+        format!(
+            "probe_done_count: {}",
+            count_kind_state(&counts, "probe", "done")
+        ),
+        format!(
+            "probe_blocked_count: {}",
+            count_kind_state(&counts, "probe", "blocked")
         ),
         format!(
             "spec_queue_count: {}",
@@ -219,13 +233,17 @@ pub fn queue_show_lines(paths: &WorkspacePaths, work_item_id: &str) -> Result<Ve
         return Err(format!("work item not found: {work_item_id}"));
     };
 
-    Ok(vec![
+    let document = read_work_document(&entry.path)
+        .map_err(|error| format!("queue document error at {}: {error}", entry.path.display()))?;
+    let mut lines = vec![
         format!("work_item_id: {}", entry.work_item_id),
         format!("work_item_kind: {}", entry.work_item_kind.as_str()),
         format!("work_item_state: {}", entry.work_item_state),
         format!("path: {}", entry.path.display()),
         format!("title: {}", entry.title),
-    ])
+    ];
+    lines.extend(render_queue_document_fields(&document));
+    Ok(lines)
 }
 
 pub fn status_lines(paths: &WorkspacePaths) -> Result<Vec<String>, String> {
@@ -1652,6 +1670,220 @@ fn render_queue_entry(entry: &QueueInspectionEntry) -> String {
         entry.work_item_id,
         entry.path.display()
     )
+}
+
+fn render_queue_document_fields(document: &WorkDocument) -> Vec<String> {
+    let mut lines = Vec::new();
+    match document {
+        WorkDocument::Task(document) => {
+            push_non_empty_field(&mut lines, "summary", &document.summary);
+            push_optional_field(&mut lines, "root_idea_id", document.root_idea_id.as_deref());
+            push_optional_field(&mut lines, "root_spec_id", document.root_spec_id.as_deref());
+            if let Some(root_intake_kind) = document.root_intake_kind {
+                lines.push(format!("root_intake_kind: {}", root_intake_kind.as_str()));
+            }
+            push_optional_field(
+                &mut lines,
+                "root_intake_id",
+                document.root_intake_id.as_deref(),
+            );
+            push_optional_field(&mut lines, "spec_id", document.spec_id.as_deref());
+            push_optional_field(
+                &mut lines,
+                "parent_task_id",
+                document.parent_task_id.as_deref(),
+            );
+            push_optional_field(&mut lines, "incident_id", document.incident_id.as_deref());
+            if let Some(status_hint) = document.status_hint {
+                lines.push(format!("status_hint: {}", status_hint.as_str()));
+            }
+            lines.push(format!("created_at: {}", document.created_at.as_str()));
+            lines.push(format!("created_by: {}", document.created_by));
+            push_optional_field(
+                &mut lines,
+                "updated_at",
+                document.updated_at.as_ref().map(|value| value.as_str()),
+            );
+            push_list_field(&mut lines, "depends_on", &document.depends_on);
+            push_list_field(&mut lines, "blocks", &document.blocks);
+            push_list_field(&mut lines, "tags", &document.tags);
+            push_list_field(&mut lines, "target_paths", &document.target_paths);
+            push_list_field(&mut lines, "acceptance", &document.acceptance);
+            push_list_field(&mut lines, "required_checks", &document.required_checks);
+            push_list_field(&mut lines, "references", &document.references);
+            push_list_field(&mut lines, "risk", &document.risk);
+        }
+        WorkDocument::Probe(document) => {
+            push_non_empty_field(&mut lines, "summary", &document.summary);
+            lines.push(format!("request: {}", document.request));
+            if let Some(status_hint) = document.status_hint {
+                lines.push(format!("status_hint: {}", status_hint.as_str()));
+            }
+            lines.push(format!("created_at: {}", document.created_at.as_str()));
+            lines.push(format!("created_by: {}", document.created_by));
+            push_optional_field(
+                &mut lines,
+                "updated_at",
+                document.updated_at.as_ref().map(|value| value.as_str()),
+            );
+            push_list_field(&mut lines, "target_paths", &document.target_paths);
+            push_list_field(&mut lines, "constraints", &document.constraints);
+            push_list_field(&mut lines, "acceptance", &document.acceptance);
+            push_list_field(&mut lines, "risk_notes", &document.risk_notes);
+            push_list_field(&mut lines, "references", &document.references);
+            push_list_field(&mut lines, "tags", &document.tags);
+        }
+        WorkDocument::Spec(document) => {
+            lines.push(format!("summary: {}", document.summary));
+            lines.push(format!("source_type: {}", document.source_type.as_str()));
+            push_optional_field(&mut lines, "source_id", document.source_id.as_deref());
+            push_optional_field(
+                &mut lines,
+                "parent_spec_id",
+                document.parent_spec_id.as_deref(),
+            );
+            push_optional_field(&mut lines, "root_idea_id", document.root_idea_id.as_deref());
+            push_optional_field(&mut lines, "root_spec_id", document.root_spec_id.as_deref());
+            if let Some(root_intake_kind) = document.root_intake_kind {
+                lines.push(format!("root_intake_kind: {}", root_intake_kind.as_str()));
+            }
+            push_optional_field(
+                &mut lines,
+                "root_intake_id",
+                document.root_intake_id.as_deref(),
+            );
+            lines.push(format!("created_at: {}", document.created_at.as_str()));
+            lines.push(format!("created_by: {}", document.created_by));
+            push_optional_field(
+                &mut lines,
+                "updated_at",
+                document.updated_at.as_ref().map(|value| value.as_str()),
+            );
+            push_list_field(&mut lines, "goals", &document.goals);
+            push_list_field(&mut lines, "non_goals", &document.non_goals);
+            push_list_field(&mut lines, "scope", &document.scope);
+            push_list_field(&mut lines, "constraints", &document.constraints);
+            push_list_field(&mut lines, "assumptions", &document.assumptions);
+            push_list_field(&mut lines, "risks", &document.risks);
+            push_list_field(&mut lines, "target_paths", &document.target_paths);
+            push_list_field(&mut lines, "entrypoints", &document.entrypoints);
+            push_list_field(&mut lines, "required_skills", &document.required_skills);
+            push_list_field(
+                &mut lines,
+                "decomposition_hints",
+                &document.decomposition_hints,
+            );
+            push_list_field(&mut lines, "acceptance", &document.acceptance);
+            push_list_field(&mut lines, "references", &document.references);
+        }
+        WorkDocument::Incident(document) => {
+            lines.push(format!("summary: {}", document.summary));
+            push_optional_field(&mut lines, "root_idea_id", document.root_idea_id.as_deref());
+            push_optional_field(&mut lines, "root_spec_id", document.root_spec_id.as_deref());
+            if let Some(root_intake_kind) = document.root_intake_kind {
+                lines.push(format!("root_intake_kind: {}", root_intake_kind.as_str()));
+            }
+            push_optional_field(
+                &mut lines,
+                "root_intake_id",
+                document.root_intake_id.as_deref(),
+            );
+            push_optional_field(
+                &mut lines,
+                "source_task_id",
+                document.source_task_id.as_deref(),
+            );
+            push_optional_field(
+                &mut lines,
+                "source_spec_id",
+                document.source_spec_id.as_deref(),
+            );
+            lines.push(format!("source_stage: {}", document.source_stage.as_str()));
+            lines.push(format!("source_plane: {}", document.source_plane.as_str()));
+            lines.push(format!("failure_class: {}", document.failure_class));
+            lines.push(format!("severity: {}", document.severity.as_str()));
+            lines.push(format!(
+                "needs_planning: {}",
+                bool_text(document.needs_planning)
+            ));
+            lines.push(format!("trigger_reason: {}", document.trigger_reason));
+            lines.push(format!(
+                "consultant_decision: {}",
+                document.consultant_decision.as_str()
+            ));
+            lines.push(format!("opened_at: {}", document.opened_at.as_str()));
+            lines.push(format!("opened_by: {}", document.opened_by));
+            push_optional_field(
+                &mut lines,
+                "updated_at",
+                document.updated_at.as_ref().map(|value| value.as_str()),
+            );
+            push_list_field(&mut lines, "observed_symptoms", &document.observed_symptoms);
+            push_list_field(&mut lines, "failed_attempts", &document.failed_attempts);
+            push_list_field(&mut lines, "evidence_paths", &document.evidence_paths);
+            push_list_field(&mut lines, "related_run_ids", &document.related_run_ids);
+            push_list_field(
+                &mut lines,
+                "related_stage_results",
+                &document.related_stage_results,
+            );
+            push_list_field(&mut lines, "references", &document.references);
+        }
+        WorkDocument::LearningRequest(document) => {
+            push_non_empty_field(&mut lines, "summary", &document.summary);
+            lines.push(format!(
+                "requested_action: {}",
+                document.requested_action.as_str()
+            ));
+            push_optional_field(
+                &mut lines,
+                "target_skill_id",
+                document.target_skill_id.as_deref(),
+            );
+            if let Some(target_stage) = document.target_stage {
+                lines.push(format!("target_stage: {}", target_stage.as_str()));
+            }
+            lines.push(format!("trigger_metadata: {}", document.trigger_metadata));
+            lines.push(format!("created_at: {}", document.created_at.as_str()));
+            lines.push(format!("created_by: {}", document.created_by));
+            push_optional_field(
+                &mut lines,
+                "updated_at",
+                document.updated_at.as_ref().map(|value| value.as_str()),
+            );
+            push_list_field(&mut lines, "source_refs", &document.source_refs);
+            push_list_field(
+                &mut lines,
+                "preferred_output_paths",
+                &document.preferred_output_paths,
+            );
+            push_list_field(
+                &mut lines,
+                "originating_run_ids",
+                &document.originating_run_ids,
+            );
+            push_list_field(&mut lines, "artifact_paths", &document.artifact_paths);
+            push_list_field(&mut lines, "references", &document.references);
+        }
+    }
+    lines
+}
+
+fn push_non_empty_field(lines: &mut Vec<String>, name: &str, value: &str) {
+    if !value.is_empty() {
+        lines.push(format!("{name}: {value}"));
+    }
+}
+
+fn push_optional_field(lines: &mut Vec<String>, name: &str, value: Option<&str>) {
+    if let Some(value) = value {
+        lines.push(format!("{name}: {value}"));
+    }
+}
+
+fn push_list_field(lines: &mut Vec<String>, name: &str, values: &[String]) {
+    let rendered = serde_json::to_string(values).unwrap_or_else(|_| "[]".to_owned());
+    lines.push(format!("{name}: {rendered}"));
 }
 
 fn count_kind_state(counts: &BTreeMap<(String, String), usize>, kind: &str, state: &str) -> usize {

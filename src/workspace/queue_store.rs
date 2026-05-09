@@ -10,13 +10,15 @@ use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 use crate::{
     contracts::{
-        IncidentDocument, LearningRequestDocument, SpecDocument, SpecSourceType, TaskDocument,
-        WorkDocumentError, WorkItemKind,
+        IncidentDocument, LearningRequestDocument, ProbeDocument, SpecDocument, SpecSourceType,
+        TaskDocument, WorkDocumentError, WorkItemKind,
     },
     work_documents::{
         parse_incident_document_with_source, parse_learning_request_document_with_source,
-        parse_spec_document_with_source, parse_task_document_with_source, render_incident_document,
-        render_learning_request_document, render_spec_document, render_task_document,
+        parse_probe_document_with_source, parse_spec_document_with_source,
+        parse_task_document_with_source, render_incident_document,
+        render_learning_request_document, render_probe_document, render_spec_document,
+        render_task_document,
     },
 };
 
@@ -170,6 +172,11 @@ impl QueueStore {
         enqueue_spec(&self.paths, document)
     }
 
+    /// Enqueue a probe document.
+    pub fn enqueue_probe(&self, document: &ProbeDocument) -> QueueStoreResult<PathBuf> {
+        enqueue_probe(&self.paths, document)
+    }
+
     /// Enqueue an incident document.
     pub fn enqueue_incident(&self, document: &IncidentDocument) -> QueueStoreResult<PathBuf> {
         enqueue_incident(&self.paths, document)
@@ -224,6 +231,16 @@ impl QueueStore {
         mark_spec_blocked(&self.paths, spec_id)
     }
 
+    /// Mark an active probe done.
+    pub fn mark_probe_done(&self, probe_id: &str) -> QueueStoreResult<PathBuf> {
+        mark_probe_done(&self.paths, probe_id)
+    }
+
+    /// Mark an active probe blocked.
+    pub fn mark_probe_blocked(&self, probe_id: &str) -> QueueStoreResult<PathBuf> {
+        mark_probe_blocked(&self.paths, probe_id)
+    }
+
     /// Mark an active incident resolved.
     pub fn mark_incident_resolved(&self, incident_id: &str) -> QueueStoreResult<PathBuf> {
         mark_incident_resolved(&self.paths, incident_id)
@@ -258,6 +275,11 @@ impl QueueStore {
     /// Requeue an active spec and record the reason.
     pub fn requeue_spec(&self, spec_id: &str, reason: &str) -> QueueStoreResult<PathBuf> {
         requeue_spec(&self.paths, spec_id, reason)
+    }
+
+    /// Requeue an active probe and record the reason.
+    pub fn requeue_probe(&self, probe_id: &str, reason: &str) -> QueueStoreResult<PathBuf> {
+        requeue_probe(&self.paths, probe_id, reason)
     }
 
     /// Requeue an active incident and record the reason.
@@ -334,6 +356,11 @@ pub fn inspect_queue_items(paths: &WorkspacePaths) -> QueueStoreResult<Vec<Queue
     push_spec_entries(&mut entries, &paths.specs_active_dir, "active")?;
     push_spec_entries(&mut entries, &paths.specs_done_dir, "done")?;
     push_spec_entries(&mut entries, &paths.specs_blocked_dir, "blocked")?;
+
+    push_probe_entries(&mut entries, &paths.probes_queue_dir, "queue")?;
+    push_probe_entries(&mut entries, &paths.probes_active_dir, "active")?;
+    push_probe_entries(&mut entries, &paths.probes_done_dir, "done")?;
+    push_probe_entries(&mut entries, &paths.probes_blocked_dir, "blocked")?;
 
     push_incident_entries(&mut entries, &paths.incidents_incoming_dir, "incoming")?;
     push_incident_entries(&mut entries, &paths.incidents_active_dir, "active")?;
@@ -451,6 +478,32 @@ pub fn enqueue_spec(paths: &WorkspacePaths, document: &SpecDocument) -> QueueSto
     Ok(destination)
 }
 
+/// Enqueue a probe document in the planning probe queue.
+pub fn enqueue_probe(
+    paths: &WorkspacePaths,
+    document: &ProbeDocument,
+) -> QueueStoreResult<PathBuf> {
+    document.validate().map_err(|source| {
+        QueueStoreError::work_document(
+            probe_path(&paths.probes_queue_dir, &document.probe_id),
+            source,
+        )
+    })?;
+    ensure_unique_id(
+        &document.probe_id,
+        &[
+            &paths.probes_queue_dir,
+            &paths.probes_active_dir,
+            &paths.probes_done_dir,
+            &paths.probes_blocked_dir,
+        ],
+        WorkItemKind::Probe,
+    )?;
+    let destination = probe_path(&paths.probes_queue_dir, &document.probe_id);
+    write_document(&destination, &render_probe_document(document))?;
+    Ok(destination)
+}
+
 /// Enqueue an incident document in the planning incoming queue.
 pub fn enqueue_incident(
     paths: &WorkspacePaths,
@@ -553,13 +606,14 @@ pub fn claim_next_planning_item(
     root_spec_id: Option<&str>,
 ) -> QueueStoreResult<Option<QueueClaim>> {
     let active_specs = list_markdown_files(&paths.specs_active_dir)?;
+    let active_probes = list_markdown_files(&paths.probes_active_dir)?;
     let active_incidents = list_markdown_files(&paths.incidents_active_dir)?;
-    if active_specs.len() + active_incidents.len() > 1 {
+    if active_specs.len() + active_probes.len() + active_incidents.len() > 1 {
         return Err(QueueStoreError::invalid_state(
             "multiple active planning items found",
         ));
     }
-    if !active_specs.is_empty() || !active_incidents.is_empty() {
+    if !active_specs.is_empty() || !active_probes.is_empty() || !active_incidents.is_empty() {
         return Ok(None);
     }
 
@@ -585,20 +639,28 @@ pub fn claim_next_planning_item(
             }
         }
 
-        let Some((spec_id, source)) = select_oldest_spec(&paths.specs_queue_dir, root_spec_id)?
+        let Some((work_item_kind, item_id, source)) =
+            select_oldest_probe_or_spec(paths, root_spec_id)?
         else {
             return Ok(None);
         };
-        let destination = paths
-            .specs_active_dir
-            .join(source.file_name().ok_or_else(|| {
-                QueueStoreError::invalid_state("queued spec path is missing a filename")
-            })?);
+        let destination_dir = match work_item_kind {
+            WorkItemKind::Probe => &paths.probes_active_dir,
+            WorkItemKind::Spec => &paths.specs_active_dir,
+            _ => {
+                return Err(QueueStoreError::invalid_state(
+                    "planning probe/spec selector returned unsupported work item kind",
+                ));
+            }
+        };
+        let destination = destination_dir.join(source.file_name().ok_or_else(|| {
+            QueueStoreError::invalid_state("queued planning path is missing a filename")
+        })?);
         match fs::rename(&source, &destination) {
             Ok(()) => {
                 return Ok(Some(QueueClaim {
-                    work_item_kind: WorkItemKind::Spec,
-                    work_item_id: spec_id,
+                    work_item_kind,
+                    work_item_id: item_id,
                     path: destination,
                 }));
             }
@@ -687,6 +749,26 @@ pub fn mark_spec_blocked(paths: &WorkspacePaths, spec_id: &str) -> QueueStoreRes
     )
 }
 
+/// Mark an active probe done.
+pub fn mark_probe_done(paths: &WorkspacePaths, probe_id: &str) -> QueueStoreResult<PathBuf> {
+    move_item(
+        &paths.probes_active_dir,
+        &paths.probes_done_dir,
+        probe_id,
+        WorkItemKind::Probe,
+    )
+}
+
+/// Mark an active probe blocked.
+pub fn mark_probe_blocked(paths: &WorkspacePaths, probe_id: &str) -> QueueStoreResult<PathBuf> {
+    move_item(
+        &paths.probes_active_dir,
+        &paths.probes_blocked_dir,
+        probe_id,
+        WorkItemKind::Probe,
+    )
+}
+
 /// Mark an active incident resolved.
 pub fn mark_incident_resolved(
     paths: &WorkspacePaths,
@@ -768,6 +850,27 @@ pub fn requeue_spec(
         WorkItemKind::Spec,
     )?;
     append_requeue_reason(&paths.specs_queue_dir, spec_id, WorkItemKind::Spec, reason)?;
+    Ok(destination)
+}
+
+/// Move an active probe back to the planning probe queue and record the reason.
+pub fn requeue_probe(
+    paths: &WorkspacePaths,
+    probe_id: &str,
+    reason: &str,
+) -> QueueStoreResult<PathBuf> {
+    let destination = move_item(
+        &paths.probes_active_dir,
+        &paths.probes_queue_dir,
+        probe_id,
+        WorkItemKind::Probe,
+    )?;
+    append_requeue_reason(
+        &paths.probes_queue_dir,
+        probe_id,
+        WorkItemKind::Probe,
+        reason,
+    )?;
     Ok(destination)
 }
 
@@ -854,14 +957,20 @@ pub fn detect_planning_stale_state(
         ));
     }
     if let Some(kind) = snapshot_active_kind {
-        if !matches!(kind, WorkItemKind::Spec | WorkItemKind::Incident) {
+        if !matches!(
+            kind,
+            WorkItemKind::Probe | WorkItemKind::Spec | WorkItemKind::Incident
+        ) {
             return Err(QueueStoreError::invalid_state(
-                "planning stale-state checks only support spec and incident kinds",
+                "planning stale-state checks only support probe, spec, and incident kinds",
             ));
         }
     }
 
     let mut active_items = Vec::new();
+    for item_id in ids_in_directory(&paths.probes_active_dir)? {
+        active_items.push((WorkItemKind::Probe, item_id));
+    }
     for item_id in ids_in_directory(&paths.specs_active_dir)? {
         active_items.push((WorkItemKind::Spec, item_id));
     }
@@ -878,6 +987,7 @@ pub fn detect_planning_stale_state(
     }
     if let (Some(kind), Some(item_id)) = (snapshot_active_kind, snapshot_active_item_id) {
         let queued_ids = match kind {
+            WorkItemKind::Probe => ids_in_directory(&paths.probes_queue_dir)?,
             WorkItemKind::Spec => ids_in_directory(&paths.specs_queue_dir)?,
             WorkItemKind::Incident => ids_in_directory(&paths.incidents_incoming_dir)?,
             WorkItemKind::Task | WorkItemKind::LearningRequest => Vec::new(),
@@ -1027,6 +1137,27 @@ fn push_spec_entries(
     Ok(())
 }
 
+fn push_probe_entries(
+    entries: &mut Vec<QueueInspectionEntry>,
+    directory: &Path,
+    state: &str,
+) -> QueueStoreResult<()> {
+    for path in list_markdown_files(directory)? {
+        let raw = fs::read_to_string(&path).map_err(|error| QueueStoreError::io(&path, error))?;
+        let document = parse_probe_document_with_source(&raw, &path.display().to_string())
+            .map_err(|error| QueueStoreError::work_document(&path, error))?;
+        ensure_filename_matches(&path, "probe_id", &document.probe_id)?;
+        entries.push(QueueInspectionEntry {
+            work_item_kind: WorkItemKind::Probe,
+            work_item_state: state.to_owned(),
+            work_item_id: document.probe_id,
+            title: document.title,
+            path,
+        });
+    }
+    Ok(())
+}
+
 fn push_incident_entries(
     entries: &mut Vec<QueueInspectionEntry>,
     directory: &Path,
@@ -1084,10 +1215,36 @@ fn ensure_filename_matches(
     )))
 }
 
-fn select_oldest_spec(
+fn select_oldest_probe_or_spec(
+    paths: &WorkspacePaths,
+    root_spec_id: Option<&str>,
+) -> QueueStoreResult<Option<(WorkItemKind, String, PathBuf)>> {
+    let mut candidates = Vec::new();
+    if root_spec_id.is_none() {
+        if let Some((timestamp, item_id, path)) =
+            select_oldest_probe_candidate(&paths.probes_queue_dir)?
+        {
+            candidates.push((timestamp, WorkItemKind::Probe, item_id, path));
+        }
+    }
+    if let Some((timestamp, item_id, path)) =
+        select_oldest_spec_candidate(&paths.specs_queue_dir, root_spec_id)?
+    {
+        candidates.push((timestamp, WorkItemKind::Spec, item_id, path));
+    }
+    candidates.sort_by(|left, right| {
+        (&left.0, left.1.as_str(), &left.2).cmp(&(&right.0, right.1.as_str(), &right.2))
+    });
+    Ok(candidates
+        .into_iter()
+        .next()
+        .map(|(_timestamp, kind, item_id, path)| (kind, item_id, path)))
+}
+
+fn select_oldest_spec_candidate(
     directory: &Path,
     root_spec_id: Option<&str>,
-) -> QueueStoreResult<Option<(String, PathBuf)>> {
+) -> QueueStoreResult<Option<(String, String, PathBuf)>> {
     let mut candidates = Vec::new();
     for path in list_markdown_files(directory)? {
         let raw = match fs::read_to_string(&path) {
@@ -1126,10 +1283,46 @@ fn select_oldest_spec(
         ));
     }
     candidates.sort_by(|left, right| (&left.0, &left.1).cmp(&(&right.0, &right.1)));
-    Ok(candidates
-        .into_iter()
-        .next()
-        .map(|(_timestamp, item_id, path)| (item_id, path)))
+    Ok(candidates.into_iter().next())
+}
+
+fn select_oldest_probe_candidate(
+    directory: &Path,
+) -> QueueStoreResult<Option<(String, String, PathBuf)>> {
+    let mut candidates = Vec::new();
+    for path in list_markdown_files(directory)? {
+        let raw = match fs::read_to_string(&path) {
+            Ok(raw) => raw,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(QueueStoreError::io(&path, error)),
+        };
+        let document = match parse_probe_document_with_source(&raw, &path.display().to_string()) {
+            Ok(document) => document,
+            Err(error) => {
+                quarantine_invalid_artifact(directory, &path, &error.to_string())?;
+                continue;
+            }
+        };
+        if path_stem(&path)? != document.probe_id {
+            quarantine_invalid_artifact(
+                directory,
+                &path,
+                &format!(
+                    "filename stem does not match probe_id: expected {}, found {}",
+                    document.probe_id,
+                    path_stem(&path)?
+                ),
+            )?;
+            continue;
+        }
+        candidates.push((
+            document.created_at.as_str().to_owned(),
+            document.probe_id.clone(),
+            path,
+        ));
+    }
+    candidates.sort_by(|left, right| (&left.0, &left.1).cmp(&(&right.0, &right.1)));
+    Ok(candidates.into_iter().next())
 }
 
 fn select_oldest_incident(
@@ -1404,6 +1597,10 @@ fn task_path(directory: &Path, task_id: &str) -> PathBuf {
 
 fn spec_path(directory: &Path, spec_id: &str) -> PathBuf {
     directory.join(format!("{spec_id}.md"))
+}
+
+fn probe_path(directory: &Path, probe_id: &str) -> PathBuf {
+    directory.join(format!("{probe_id}.md"))
 }
 
 fn incident_path(directory: &Path, incident_id: &str) -> PathBuf {

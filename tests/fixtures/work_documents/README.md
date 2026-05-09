@@ -1,5 +1,9 @@
 Work-document fixtures in this directory are committed outputs from the adjacent
-Python reference work-document renderer under `../millrace-py/src`.
+Python reference work-document renderer under `../millrace-py/src`, including
+task, probe, spec, incident, and learning-request documents.
+The probe fixture is part of the Python `v0.18.1` release evidence carried into
+Rust `0.3.1` and is included by the crate package boundary through
+`/tests/fixtures/**/*`.
 
 Regenerate them from the repository root with:
 

@@ -2,13 +2,14 @@ use millrace_ai::contracts::{
     ContractError, ExecutionStageName, ExecutionTerminalResult, IdentifierErrorReason,
     IncidentDecision, IncidentSeverity, LearningRequestAction, LearningStageName,
     LearningTerminalResult, LoopEdgeKind, MailboxCommand, Plane, PlanningStageName,
-    PlanningTerminalResult, ReloadOutcome, ResultClass, RuntimeErrorCode, RuntimeMode, StageName,
-    TaskStatusHint, TerminalResult, WatcherMode, WorkItemKind, allowed_result_classes_by_outcome,
-    blocked_terminal_for_plane, known_stage_values, known_stage_values_for_plane,
-    legal_terminal_markers, legal_terminal_results, parse_terminal_marker_for_plane,
-    running_status_marker, stage_metadata, stage_metadata_for_value, stage_name_for_plane,
-    stage_name_for_value, stage_plane, terminal_result_for_plane, validate_safe_identifier,
-    validate_stage_result_class, validate_terminal_marker_for_stage,
+    PlanningTerminalResult, ProbeStatusHint, ReloadOutcome, ResultClass, RootIntakeKind,
+    RuntimeErrorCode, RuntimeMode, StageName, TaskStatusHint, TerminalResult, WatcherMode,
+    WorkItemKind, allowed_result_classes_by_outcome, blocked_terminal_for_plane,
+    known_stage_values, known_stage_values_for_plane, legal_terminal_markers,
+    legal_terminal_results, parse_terminal_marker_for_plane, running_status_marker, stage_metadata,
+    stage_metadata_for_value, stage_name_for_plane, stage_name_for_value, stage_plane,
+    terminal_result_for_plane, validate_safe_identifier, validate_stage_result_class,
+    validate_terminal_marker_for_stage,
 };
 
 fn values<T: Copy>(items: &'static [T], as_str: impl Fn(T) -> &'static str) -> Vec<&'static str> {
@@ -35,7 +36,9 @@ fn enum_values_match_python_reference_contracts() {
     );
     assert_eq!(
         values(PlanningStageName::ALL, PlanningStageName::as_str),
-        ["planner", "manager", "mechanic", "auditor", "arbiter"]
+        [
+            "recon", "planner", "manager", "mechanic", "auditor", "arbiter"
+        ]
     );
     assert_eq!(
         values(LearningStageName::ALL, LearningStageName::as_str),
@@ -62,6 +65,10 @@ fn enum_values_match_python_reference_contracts() {
     assert_eq!(
         values(PlanningTerminalResult::ALL, PlanningTerminalResult::as_str),
         [
+            "RECON_TO_EXECUTION",
+            "RECON_TO_PLANNING",
+            "RECON_BLOCKED",
+            "RECON_NOOP",
             "PLANNER_COMPLETE",
             "MANAGER_COMPLETE",
             "MECHANIC_COMPLETE",
@@ -96,7 +103,7 @@ fn enum_values_match_python_reference_contracts() {
     );
     assert_eq!(
         values(WorkItemKind::ALL, WorkItemKind::as_str),
-        ["task", "spec", "incident", "learning_request"]
+        ["task", "probe", "spec", "incident", "learning_request"]
     );
     assert_eq!(
         values(LearningRequestAction::ALL, LearningRequestAction::as_str),
@@ -105,6 +112,14 @@ fn enum_values_match_python_reference_contracts() {
     assert_eq!(
         values(TaskStatusHint::ALL, TaskStatusHint::as_str),
         ["queued", "active", "blocked", "done"]
+    );
+    assert_eq!(
+        values(ProbeStatusHint::ALL, ProbeStatusHint::as_str),
+        ["queued", "active", "blocked", "done"]
+    );
+    assert_eq!(
+        values(RootIntakeKind::ALL, RootIntakeKind::as_str),
+        ["idea", "probe", "manual", "incident", "derived_spec"]
     );
     assert_eq!(
         values(IncidentSeverity::ALL, IncidentSeverity::as_str),
@@ -143,6 +158,7 @@ fn enum_values_match_python_reference_contracts() {
             "resume",
             "reload_config",
             "add_task",
+            "add_probe",
             "add_spec",
             "add_idea",
             "retry_active",
@@ -205,7 +221,9 @@ fn every_stage_has_metadata_and_plane() {
     );
     assert_eq!(
         known_stage_values_for_plane(Plane::Planning),
-        ["planner", "manager", "mechanic", "auditor", "arbiter"]
+        [
+            "recon", "planner", "manager", "mechanic", "auditor", "arbiter"
+        ]
     );
     assert_eq!(
         known_stage_values_for_plane(Plane::Learning),
@@ -237,6 +255,16 @@ fn legal_markers_and_running_markers_derive_from_metadata() {
             "### BLOCKED".to_owned()
         ]
     );
+    assert_eq!(
+        legal_terminal_markers(StageName::Recon),
+        vec![
+            "### RECON_TO_EXECUTION".to_owned(),
+            "### RECON_TO_PLANNING".to_owned(),
+            "### RECON_NOOP".to_owned(),
+            "### RECON_BLOCKED".to_owned(),
+            "### BLOCKED".to_owned()
+        ]
+    );
 
     for stage in StageName::ALL.iter().copied() {
         let metadata = stage_metadata(stage);
@@ -259,6 +287,10 @@ fn terminal_result_lookup_is_plane_specific() {
     assert_eq!(
         terminal_result_for_plane(Plane::Planning, "BLOCKED").unwrap(),
         TerminalResult::Planning(PlanningTerminalResult::Blocked)
+    );
+    assert_eq!(
+        terminal_result_for_plane(Plane::Planning, "RECON_TO_EXECUTION").unwrap(),
+        TerminalResult::Planning(PlanningTerminalResult::ReconToExecution)
     );
     assert_eq!(
         terminal_result_for_plane(Plane::Learning, "CURATOR_COMPLETE").unwrap(),
@@ -366,6 +398,30 @@ fn legal_stage_result_class_combinations_validate() {
         StageName::Arbiter,
         TerminalResult::Planning(PlanningTerminalResult::RemediationNeeded),
         ResultClass::FollowupNeeded,
+    )
+    .unwrap();
+    validate_stage_result_class(
+        StageName::Recon,
+        TerminalResult::Planning(PlanningTerminalResult::ReconToExecution),
+        ResultClass::Success,
+    )
+    .unwrap();
+    validate_stage_result_class(
+        StageName::Recon,
+        TerminalResult::Planning(PlanningTerminalResult::ReconToPlanning),
+        ResultClass::Success,
+    )
+    .unwrap();
+    validate_stage_result_class(
+        StageName::Recon,
+        TerminalResult::Planning(PlanningTerminalResult::ReconNoop),
+        ResultClass::NoOp,
+    )
+    .unwrap();
+    validate_stage_result_class(
+        StageName::Recon,
+        TerminalResult::Planning(PlanningTerminalResult::ReconBlocked),
+        ResultClass::Blocked,
     )
     .unwrap();
 

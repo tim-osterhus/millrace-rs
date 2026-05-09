@@ -5,7 +5,7 @@ use tempfile::TempDir;
 
 use millrace_ai::contracts::{
     ActiveRunRequestKind, ActiveRunState, LearningRequestAction, LearningRequestDocument,
-    MailboxCommand, MailboxCommandEnvelope, Plane, ReloadOutcome, RunTraceGraph,
+    MailboxCommand, MailboxCommandEnvelope, Plane, ProbeDocument, ReloadOutcome, RunTraceGraph,
     RuntimeJsonContract, RuntimeMode, SpecDocument, SpecSourceType, StageName, TaskDocument,
     Timestamp, TokenUsage, WatcherMode, WorkItemKind,
 };
@@ -54,6 +54,8 @@ fn task_document(task_id: &str) -> TaskDocument {
         summary: "daemon startup test".to_owned(),
         root_idea_id: Some("idea-daemon".to_owned()),
         root_spec_id: Some("spec-daemon".to_owned()),
+        root_intake_kind: None,
+        root_intake_id: None,
         spec_id: Some("spec-daemon".to_owned()),
         parent_task_id: None,
         incident_id: None,
@@ -72,6 +74,25 @@ fn task_document(task_id: &str) -> TaskDocument {
     }
 }
 
+fn probe_document(probe_id: &str) -> ProbeDocument {
+    ProbeDocument {
+        probe_id: probe_id.to_owned(),
+        title: format!("Probe {probe_id}"),
+        summary: "daemon supervisor probe test".to_owned(),
+        request: "Research the current codebase and route the smallest safe change.".to_owned(),
+        target_paths: vec!["src/runtime/".to_owned()],
+        constraints: vec!["Do not implement during recon.".to_owned()],
+        acceptance: vec!["recon routes the probe".to_owned()],
+        risk_notes: vec!["mailbox probe intake can drift".to_owned()],
+        references: vec!["../millrace-py/src/millrace_ai/runtime/mailbox_intake.py".to_owned()],
+        tags: vec!["probe".to_owned(), "daemon".to_owned()],
+        status_hint: None,
+        created_at: timestamp(STARTUP_NOW),
+        created_by: "tests".to_owned(),
+        updated_at: None,
+    }
+}
+
 fn spec_document(spec_id: &str) -> SpecDocument {
     SpecDocument {
         spec_id: spec_id.to_owned(),
@@ -82,6 +103,8 @@ fn spec_document(spec_id: &str) -> SpecDocument {
         parent_spec_id: None,
         root_idea_id: Some("idea-daemon".to_owned()),
         root_spec_id: Some(spec_id.to_owned()),
+        root_intake_kind: None,
+        root_intake_id: None,
         goals: vec!["plan daemon runtime work".to_owned()],
         non_goals: Vec::new(),
         scope: vec!["runtime supervisor".to_owned()],
@@ -1227,11 +1250,17 @@ fn daemon_mailbox_drains_control_and_intake_commands_into_processed_archives() {
     );
     enqueue_mailbox(
         &paths,
-        "05-add-idea",
+        "05-add-probe",
+        MailboxCommand::AddProbe,
+        json!({"document": probe_document("probe-mailbox-add")}),
+    );
+    enqueue_mailbox(
+        &paths,
+        "06-add-idea",
         MailboxCommand::AddIdea,
         json!({"source_name": "idea-mailbox-add.md", "markdown": "# Idea from mailbox\n"}),
     );
-    enqueue_mailbox(&paths, "06-stop", MailboxCommand::Stop, Value::Null);
+    enqueue_mailbox(&paths, "07-stop", MailboxCommand::Stop, Value::Null);
 
     let outcome = supervisor
         .run_cycle(&mut session, runtime_tick_options())
@@ -1241,8 +1270,14 @@ fn daemon_mailbox_drains_control_and_intake_commands_into_processed_archives() {
     assert!(session.snapshot.stop_requested);
     assert!(!session.snapshot.paused);
     assert_eq!(session.snapshot.queue_depth_execution, 1);
-    assert_eq!(session.snapshot.queue_depth_planning, 2);
+    assert_eq!(session.snapshot.queue_depth_planning, 3);
     assert!(paths.tasks_queue_dir.join("task-mailbox-add.md").is_file());
+    assert!(
+        paths
+            .probes_queue_dir
+            .join("probe-mailbox-add.md")
+            .is_file()
+    );
     assert!(paths.specs_queue_dir.join("spec-mailbox-add.md").is_file());
     assert!(paths.specs_queue_dir.join("idea-mailbox-add.md").is_file());
     assert!(paths.root.join("ideas/inbox/idea-mailbox-add.md").is_file());
@@ -1253,8 +1288,9 @@ fn daemon_mailbox_drains_control_and_intake_commands_into_processed_archives() {
             "02-resume",
             "03-add-task",
             "04-add-spec",
-            "05-add-idea",
-            "06-stop"
+            "05-add-probe",
+            "06-add-idea",
+            "07-stop"
         ]
     );
     assert!(archive_values(&paths.mailbox_failed_dir).is_empty());
@@ -1265,6 +1301,7 @@ fn daemon_mailbox_drains_control_and_intake_commands_into_processed_archives() {
         "mailbox_pause_applied",
         "mailbox_resume_applied",
         "mailbox_add_task_applied",
+        "mailbox_add_probe_applied",
         "mailbox_add_spec_applied",
         "mailbox_add_idea_applied",
         "mailbox_stop_applied",

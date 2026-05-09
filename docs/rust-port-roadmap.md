@@ -13,18 +13,19 @@ https://github.com/tim-osterhus/millrace-rs-port-docs
 
 ## Current Parity Target
 
-The Rust `0.3.0` release target is Python `v0.18.0` at commit
-`e4ccf099c8345a8b8708cdaa1ac510bdc7851387`, ported from the previous Rust
-parity baseline of Python `v0.17.4`.
+The Rust `0.3.1` release target is Python `v0.18.1` at commit
+`0396c7852793b212d31345862b38a7d6f3f02854`, ported from the previous Rust
+parity baseline of Python `v0.18.0`.
 
 The stable surface for parity is operator-visible behavior:
 
 - CLI command names, output shape, and exit behavior
 - `millrace-agents/` workspace layout
-- canonical task/spec/incident/learning markdown documents
+- canonical task/probe/spec/incident/learning markdown documents
 - runtime JSON artifacts
 - compiled-stage-graph export artifacts and read-only graph CLI output
 - run-trace artifacts and read-only trace CLI output
+- probe queue lifecycle and Recon packet handoff artifacts
 - compiled-plan semantics and currentness fingerprints
 - daemon locking, mailbox intake, watcher intake, pause/resume/stop/reload
 - serial tick and daemon scheduling behavior
@@ -46,7 +47,7 @@ is the CLI plus the on-disk workspace format.
 
 ## Release Evidence
 
-- `CHANGELOG.md` records the Rust `0.3.0` release-facing summary.
+- `CHANGELOG.md` records the Rust `0.3.1` release-facing summary.
 - `ROADMAP.md` records the crate-level current release target and explicit
   gaps.
 - `docs/runtime/` records Rust runtime docs for graph exports, run traces,
@@ -60,6 +61,14 @@ is the CLI plus the on-disk workspace format.
   ties the Python `v0.17.4..v0.18.0` source/test/docs/package changes to Rust
   tests, docs, package metadata, graph/trace CLI evidence, package readiness,
   and release-readiness commands.
+- `tests/fixtures/cli_parity/auto_port_v0_18_1_parity_evidence.json` ties the
+  Python `v0.18.0..v0.18.1` probe/Recon behavior delta to Rust tests and
+  fixtures.
+- `tests/fixtures/cli_parity/auto_port_v0_18_1_release_parity_evidence.json`
+  ties the Python `v0.18.0..v0.18.1` source/test/docs/package changes to Rust
+  tests, docs, package metadata, Recon/probe evidence, package readiness,
+  release-readiness commands, and explicit web package unsupported-gap
+  evidence.
 - `tests/parity_cli.rs` rejects missing, malformed, unknown, stale, or omitted
   Rust test references in the final auto-port fixtures.
 
@@ -67,11 +76,13 @@ is the CLI plus the on-disk workspace format.
 
 - Python v0.17.3 added the optional `packages/millrace-web` read-only
   dashboard, Python v0.17.4 synced that package's version and
-  `millrace-ai>=0.17.4` dependency, and Python v0.18.0 adds compiled graph
+  `millrace-ai>=0.17.4` dependency, Python v0.18.0 adds compiled graph
   exports, run-trace summaries, recent-trace Flow overlays, trace outcome
-  labels, and version/dependency sync for that package. The Rust crate does not
-  currently implement a web server, static dashboard shell, SSE event stream,
-  dashboard HTTP API, or separate dashboard package. Its deferred reader
+  labels, and version/dependency sync for that package, and Python v0.18.1
+  syncs the package version, `millrace-ai>=0.18.1` dependency floor, and FastAPI
+  application version. The Rust crate does not currently implement a web
+  server, static dashboard shell, SSE event stream, dashboard HTTP API, or
+  separate dashboard package. Its deferred reader
   evidence names the workspace registry, summary DTO, queue, run, snapshot,
   baseline, compiled-plan, Arbiter, usage-governance, graph, and trace reader
   surfaces. The accepted Rust inspection target remains local read-only CLI
@@ -90,5 +101,5 @@ is the CLI plus the on-disk workspace format.
   Pi RPC CLI.
 
 For proof of the historical v0.1.0 autonomous port campaign, see
-`tim-osterhus/millrace-rs-port-docs`. For the crate-local `0.3.0` release
+`tim-osterhus/millrace-rs-port-docs`. For the crate-local `0.3.1` release
 parity pass, use the fixture and changelog paths listed above.

@@ -24,6 +24,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PYTHON_ROOT = Path(os.environ.get("MILLRACE_PY_ROOT", REPO_ROOT / "../millrace-py")).resolve()
 PYTHON_SRC = PYTHON_ROOT / "src"
 FIXTURE_PATH = REPO_ROOT / "tests/fixtures/compiler_parity/python_compiler_parity.json"
+SCOUT_FIXTURE_PATH = (
+    REPO_ROOT
+    / "tests/fixtures/compiler_parity/auto_port_v0_18_1_compiler_contract_scout.json"
+)
 FIXED_COMPILED_AT = datetime(2026, 4, 28, 15, 30, 0, tzinfo=timezone.utc)
 MODES = (
     "default_codex",
@@ -52,22 +56,31 @@ def main() -> None:
         "source": {
             "package": "millrace-ai",
             "version": millrace_ai.__version__,
-            "previous_version": "0.17.4",
+            "previous_version": "0.18.0",
             "target_version": millrace_ai.__version__,
-            "previous_tag": "v0.17.4",
-            "previous_commit": "304e537964ff772c815689b87e4c1e3b805c656c",
-            "target_tag": "v0.18.0",
+            "previous_tag": "v0.18.0",
+            "previous_commit": "e4ccf099c8345a8b8708cdaa1ac510bdc7851387",
+            "target_tag": "v0.18.1",
             "target_commit": os.environ.get(
                 "MILLRACE_PY_TARGET_COMMIT",
-                "e4ccf099c8345a8b8708cdaa1ac510bdc7851387",
+                "0396c7852793b212d31345862b38a7d6f3f02854",
             ),
-            "diff_range": "v0.17.4..v0.18.0",
+            "diff_range": "v0.18.0..v0.18.1",
             "python_root": "../millrace-py",
             "contract_sources": [
                 "src/millrace_ai/config/models.py",
                 "src/millrace_ai/contracts/modes.py",
                 "src/millrace_ai/contracts/stage_metadata.py",
                 "src/millrace_ai/architecture/loop_graphs.py",
+                "src/millrace_ai/assets/entrypoints/planning/recon.md",
+                "src/millrace_ai/assets/graphs/planning/standard.json",
+                "src/millrace_ai/assets/modes/default_codex.json",
+                "src/millrace_ai/assets/modes/default_pi.json",
+                "src/millrace_ai/assets/modes/learning_codex.json",
+                "src/millrace_ai/assets/modes/learning_pi.json",
+                "src/millrace_ai/assets/registry/stage_kinds/planning/recon.json",
+                "src/millrace_ai/assets/skills/skills_index.md",
+                "src/millrace_ai/assets/skills/stage/planning/recon-core/SKILL.md",
                 "src/millrace_ai/architecture/materialization.py",
                 "src/millrace_ai/cli/commands/compile.py",
                 "src/millrace_ai/cli/formatting.py",
@@ -101,6 +114,12 @@ def main() -> None:
     FIXTURE_PATH.write_text(json.dumps(fixture, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"wrote {FIXTURE_PATH.relative_to(REPO_ROOT)}")
 
+    SCOUT_FIXTURE_PATH.write_text(
+        json.dumps(build_v0_18_1_compiler_scout(), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(f"wrote {SCOUT_FIXTURE_PATH.relative_to(REPO_ROOT)}")
+
 
 def build_case(requested_mode_id: str) -> dict[str, Any]:
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -128,6 +147,64 @@ def build_case(requested_mode_id: str) -> dict[str, Any]:
             "normalized_validate_output": normalize_cli_output(validate_lines),
             "normalized_show_output": normalize_cli_output(show_lines),
         }
+
+
+def build_v0_18_1_compiler_scout() -> dict[str, Any]:
+    return {
+        "schema_version": "1.0",
+        "kind": "auto_port_v0_18_1_compiler_contract_scout",
+        "python_reference": {
+            "previous_tag": "v0.18.0",
+            "previous_commit": "e4ccf099c8345a8b8708cdaa1ac510bdc7851387",
+            "target_tag": "v0.18.1",
+            "target_commit": "0396c7852793b212d31345862b38a7d6f3f02854",
+            "diff_range": "v0.18.0..v0.18.1",
+        },
+        "rust_reference": {
+            "current_repo_crate_version": "0.3.1",
+            "current_repo_version_role": "released_target_for_python_v0.18.1",
+            "previous_repo_crate_version": "0.3.0",
+            "previous_repo_version_role": "previous_baseline_for_python_v0.18.0",
+            "planned_crate_version": "0.3.1",
+            "planned_version_role": "target_release_for_python_v0.18.1",
+        },
+        "compiler_source_refs": [
+            "../millrace-py/src/millrace_ai/architecture/loop_graphs.py",
+            "../millrace-py/src/millrace_ai/assets/entrypoints/planning/recon.md",
+            "../millrace-py/src/millrace_ai/assets/graphs/planning/standard.json",
+            "../millrace-py/src/millrace_ai/assets/modes/default_codex.json",
+            "../millrace-py/src/millrace_ai/assets/modes/default_pi.json",
+            "../millrace-py/src/millrace_ai/assets/modes/learning_codex.json",
+            "../millrace-py/src/millrace_ai/assets/modes/learning_pi.json",
+            "../millrace-py/src/millrace_ai/assets/registry/stage_kinds/planning/recon.json",
+            "../millrace-py/src/millrace_ai/assets/skills/skills_index.md",
+            "../millrace-py/src/millrace_ai/assets/skills/stage/planning/recon-core/SKILL.md",
+            "../millrace-py/src/millrace_ai/compilation/node_materialization.py",
+            "../millrace-py/tests/assets/test_entrypoints.py",
+            "../millrace-py/tests/assets/test_loop_graphs.py",
+            "../millrace-py/tests/assets/test_stage_kinds.py",
+            "../millrace-py/tests/integration/test_compiler.py",
+            "../millrace-py/tests/integration/test_single_compiled_plan.py",
+        ],
+        "expected_rust_targets": [
+            "millrace-agents/entrypoints/planning/recon.md",
+            "millrace-agents/graphs/planning/standard.json",
+            "millrace-agents/registry/stage_kinds/planning/recon.json",
+            "millrace-agents/skills/skills_index.md",
+            "millrace-agents/skills/stage/planning/recon-core/SKILL.md",
+            "src/assets/baseline/entrypoints/planning/recon.md",
+            "src/assets/baseline/graphs/planning/standard.json",
+            "src/assets/baseline/registry/stage_kinds/planning/recon.json",
+            "src/assets/baseline/skills/skills_index.md",
+            "src/assets/baseline/skills/stage/planning/recon-core/SKILL.md",
+            "src/compiler/contracts.rs",
+            "src/compiler/materialization.rs",
+            "src/compiler/graph_exports.rs",
+            "tests/compiler_contracts.rs",
+            "tests/compiler_materialization.rs",
+            "tests/compiler_parity.rs",
+        ],
+    }
 
 
 def render_diagnostics_lines(outcome: Any) -> list[str]:

@@ -4,7 +4,9 @@ use std::{
 };
 
 use crate::{
-    work_documents::{read_spec_import_document, read_task_import_document},
+    work_documents::{
+        read_probe_import_document, read_spec_import_document, read_task_import_document,
+    },
     workspace::{RuntimeControl, RuntimeControlActionResult, RuntimeControlMode, WorkspacePaths},
 };
 
@@ -14,6 +16,11 @@ pub fn add_task_lines(paths: &WorkspacePaths, input_path: &str) -> Result<Vec<St
 
 pub fn add_spec_lines(paths: &WorkspacePaths, input_path: &str) -> Result<Vec<String>, String> {
     add_spec_lines_inner(paths, input_path).map_err(|error| format!("failed to add spec: {error}"))
+}
+
+pub fn add_probe_lines(paths: &WorkspacePaths, input_path: &str) -> Result<Vec<String>, String> {
+    add_probe_lines_inner(paths, input_path)
+        .map_err(|error| format!("failed to add probe: {error}"))
 }
 
 pub fn add_idea_lines(paths: &WorkspacePaths, input_path: &str) -> Result<Vec<String>, String> {
@@ -29,6 +36,17 @@ fn add_task_lines_inner(paths: &WorkspacePaths, input_path: &str) -> Result<Vec<
         .add_task(&document)
         .map_err(|error| error.to_string())?;
     render_intake_result(&result, "enqueued_task")
+}
+
+fn add_probe_lines_inner(paths: &WorkspacePaths, input_path: &str) -> Result<Vec<String>, String> {
+    let input_path = existing_file_path(input_path, "probe")?;
+    let document = read_probe_import_document(&input_path).map_err(|error| error.to_string())?;
+    ensure_filename_matches(&input_path, "probe_id", &document.probe_id)?;
+    let result = RuntimeControl::from_paths(paths.clone())
+        .map_err(|error| error.to_string())?
+        .add_probe(&document)
+        .map_err(|error| error.to_string())?;
+    render_intake_result(&result, "enqueued_probe")
 }
 
 fn add_spec_lines_inner(paths: &WorkspacePaths, input_path: &str) -> Result<Vec<String>, String> {

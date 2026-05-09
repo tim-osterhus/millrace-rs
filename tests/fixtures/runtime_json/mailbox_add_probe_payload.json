@@ -1,0 +1,32 @@
+{
+  "document": {
+    "schema_version": "1.0",
+    "kind": "probe",
+    "probe_id": "probe-001",
+    "title": "Probe mailbox payload",
+    "summary": "research before routing",
+    "request": "Research the repo surface and route this work safely.",
+    "target_paths": [
+      "src/example.rs"
+    ],
+    "constraints": [
+      "Do not implement during recon."
+    ],
+    "acceptance": [
+      "Recon packet is produced."
+    ],
+    "risk_notes": [
+      "Ambiguous scope can route to the wrong plane."
+    ],
+    "references": [
+      "operator request"
+    ],
+    "tags": [
+      "probe"
+    ],
+    "status_hint": "queued",
+    "created_at": "2026-04-15T00:00:00Z",
+    "created_by": "python-fixture",
+    "updated_at": null
+  }
+}

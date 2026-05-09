@@ -15,10 +15,19 @@ cargo fmt --all --check
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
 ```
 
-Run the published-package verification path:
+Run the published-package verification path on a clean release candidate:
 
 ```bash
 cargo publish --dry-run
+```
+
+During active Millrace Builder/Checker worktree validation, the `0.3.1`
+release fixture records the plain dry-run dirty-worktree limitation alongside
+the non-uploading substitutes:
+
+```bash
+cargo publish --dry-run --allow-dirty
+cargo package --allow-dirty --offline
 ```
 
 ## Test Surface
@@ -35,9 +44,9 @@ The test suite covers:
 - serial runtime and daemon runtime behavior
 - workspace paths, initialization, managed assets, doctor checks, queue/state
   stores, runtime control, and runtime locks
-- release fixtures for Rust `0.2.1` version metadata, docs, package include
-  rules, Python `v0.17.4` source references, and package dry-run command
-  evidence
+- release fixtures through Rust `0.3.1` version metadata, docs, package
+  include rules, Python `v0.18.1` source references, required release-check
+  results, package verification evidence, and explicit web-gap evidence
 
 Some live smoke tests are gated because they require real local credentials,
 network access, or provider CLIs:

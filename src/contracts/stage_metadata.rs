@@ -10,6 +10,7 @@ const SUCCESS_CLASSES: &[ResultClass] = &[ResultClass::Success];
 const NO_OP_CLASSES: &[ResultClass] = &[ResultClass::NoOp];
 const FOLLOWUP_CLASSES: &[ResultClass] = &[ResultClass::FollowupNeeded];
 const ESCALATE_PLANNING_CLASSES: &[ResultClass] = &[ResultClass::EscalatePlanning];
+const ONLY_BLOCKED_CLASSES: &[ResultClass] = &[ResultClass::Blocked];
 const BLOCKED_CLASSES: &[ResultClass] = &[ResultClass::Blocked, ResultClass::RecoverableFailure];
 
 const E_BUILDER_COMPLETE: TerminalResult =
@@ -33,6 +34,13 @@ const E_BLOCKED: TerminalResult = TerminalResult::Execution(ExecutionTerminalRes
 
 const P_PLANNER_COMPLETE: TerminalResult =
     TerminalResult::Planning(PlanningTerminalResult::PlannerComplete);
+const P_RECON_TO_EXECUTION: TerminalResult =
+    TerminalResult::Planning(PlanningTerminalResult::ReconToExecution);
+const P_RECON_TO_PLANNING: TerminalResult =
+    TerminalResult::Planning(PlanningTerminalResult::ReconToPlanning);
+const P_RECON_BLOCKED: TerminalResult =
+    TerminalResult::Planning(PlanningTerminalResult::ReconBlocked);
+const P_RECON_NOOP: TerminalResult = TerminalResult::Planning(PlanningTerminalResult::ReconNoop);
 const P_MANAGER_COMPLETE: TerminalResult =
     TerminalResult::Planning(PlanningTerminalResult::ManagerComplete);
 const P_MECHANIC_COMPLETE: TerminalResult =
@@ -210,6 +218,36 @@ const CONSULTANT_ALLOWED: &[OutcomeResultClasses] = &[
     },
 ];
 
+const RECON_LEGAL: &[TerminalResult] = &[
+    P_RECON_TO_EXECUTION,
+    P_RECON_TO_PLANNING,
+    P_RECON_NOOP,
+    P_RECON_BLOCKED,
+    P_BLOCKED,
+];
+const RECON_ALLOWED: &[OutcomeResultClasses] = &[
+    OutcomeResultClasses {
+        terminal_result: P_RECON_TO_EXECUTION,
+        result_classes: SUCCESS_CLASSES,
+    },
+    OutcomeResultClasses {
+        terminal_result: P_RECON_TO_PLANNING,
+        result_classes: SUCCESS_CLASSES,
+    },
+    OutcomeResultClasses {
+        terminal_result: P_RECON_NOOP,
+        result_classes: NO_OP_CLASSES,
+    },
+    OutcomeResultClasses {
+        terminal_result: P_RECON_BLOCKED,
+        result_classes: ONLY_BLOCKED_CLASSES,
+    },
+    OutcomeResultClasses {
+        terminal_result: P_BLOCKED,
+        result_classes: BLOCKED_CLASSES,
+    },
+];
+
 const PLANNER_LEGAL: &[TerminalResult] = &[P_PLANNER_COMPLETE, P_BLOCKED];
 const PLANNER_ALLOWED: &[OutcomeResultClasses] = &[
     OutcomeResultClasses {
@@ -364,6 +402,12 @@ const CONSULTANT_METADATA: StageMetadata = StageMetadata {
     legal_terminal_results: CONSULTANT_LEGAL,
     allowed_result_classes_by_outcome: CONSULTANT_ALLOWED,
 };
+const RECON_METADATA: StageMetadata = StageMetadata {
+    stage: StageName::Recon,
+    plane: Plane::Planning,
+    legal_terminal_results: RECON_LEGAL,
+    allowed_result_classes_by_outcome: RECON_ALLOWED,
+};
 const PLANNER_METADATA: StageMetadata = StageMetadata {
     stage: StageName::Planner,
     plane: Plane::Planning,
@@ -422,6 +466,7 @@ pub const STAGE_METADATA_BY_VALUE: &[StageMetadata] = &[
     UPDATER_METADATA,
     TROUBLESHOOTER_METADATA,
     CONSULTANT_METADATA,
+    RECON_METADATA,
     PLANNER_METADATA,
     MANAGER_METADATA,
     MECHANIC_METADATA,
@@ -441,6 +486,7 @@ pub const STAGE_NAME_BY_VALUE: &[StageName] = &[
     StageName::Updater,
     StageName::Troubleshooter,
     StageName::Consultant,
+    StageName::Recon,
     StageName::Planner,
     StageName::Manager,
     StageName::Mechanic,
@@ -460,6 +506,7 @@ pub const STAGE_TO_PLANE: &[(StageName, Plane)] = &[
     (StageName::Updater, Plane::Execution),
     (StageName::Troubleshooter, Plane::Execution),
     (StageName::Consultant, Plane::Execution),
+    (StageName::Recon, Plane::Planning),
     (StageName::Planner, Plane::Planning),
     (StageName::Manager, Plane::Planning),
     (StageName::Mechanic, Plane::Planning),
@@ -479,6 +526,7 @@ pub const STAGE_LEGAL_TERMINAL_RESULTS: &[(StageName, &[TerminalResult])] = &[
     (StageName::Updater, UPDATER_LEGAL),
     (StageName::Troubleshooter, TROUBLESHOOTER_LEGAL),
     (StageName::Consultant, CONSULTANT_LEGAL),
+    (StageName::Recon, RECON_LEGAL),
     (StageName::Planner, PLANNER_LEGAL),
     (StageName::Manager, MANAGER_LEGAL),
     (StageName::Mechanic, MECHANIC_LEGAL),
@@ -500,6 +548,7 @@ pub fn stage_metadata(stage: StageName) -> &'static StageMetadata {
         StageName::Updater => &UPDATER_METADATA,
         StageName::Troubleshooter => &TROUBLESHOOTER_METADATA,
         StageName::Consultant => &CONSULTANT_METADATA,
+        StageName::Recon => &RECON_METADATA,
         StageName::Planner => &PLANNER_METADATA,
         StageName::Manager => &MANAGER_METADATA,
         StageName::Mechanic => &MECHANIC_METADATA,
@@ -550,6 +599,7 @@ pub const fn running_status_marker(stage: StageName) -> &'static str {
         StageName::Updater => "UPDATER_RUNNING",
         StageName::Troubleshooter => "TROUBLESHOOTER_RUNNING",
         StageName::Consultant => "CONSULTANT_RUNNING",
+        StageName::Recon => "RECON_RUNNING",
         StageName::Planner => "PLANNER_RUNNING",
         StageName::Manager => "MANAGER_RUNNING",
         StageName::Mechanic => "MECHANIC_RUNNING",
@@ -577,6 +627,7 @@ pub fn stage_name_for_value(stage_value: &str) -> Result<StageName, ContractErro
         "updater" => Ok(StageName::Updater),
         "troubleshooter" => Ok(StageName::Troubleshooter),
         "consultant" => Ok(StageName::Consultant),
+        "recon" => Ok(StageName::Recon),
         "planner" => Ok(StageName::Planner),
         "manager" => Ok(StageName::Manager),
         "mechanic" => Ok(StageName::Mechanic),

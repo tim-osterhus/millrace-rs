@@ -1482,6 +1482,12 @@
             },
             "compiled_entries": [
               {
+                "entry_key": "probe",
+                "node_id": "recon",
+                "plane": "planning",
+                "stage_kind_id": "recon"
+              },
+              {
                 "entry_key": "spec",
                 "node_id": "planner",
                 "plane": "planning",
@@ -1534,6 +1540,56 @@
                 "source_node_id": "planner",
                 "target_node_id": "manager",
                 "terminal_state_id": null
+              },
+              {
+                "edge_id": "recon-to-execution-to-terminal-recon-to-execution",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "RECON_TO_EXECUTION",
+                "priority": 100,
+                "source_node_id": "recon",
+                "target_node_id": null,
+                "terminal_state_id": "recon_to_execution"
+              },
+              {
+                "edge_id": "recon-to-planning-to-terminal-recon-to-planning",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "RECON_TO_PLANNING",
+                "priority": 100,
+                "source_node_id": "recon",
+                "target_node_id": null,
+                "terminal_state_id": "recon_to_planning"
+              },
+              {
+                "edge_id": "recon-noop-to-terminal-recon-noop",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "RECON_NOOP",
+                "priority": 100,
+                "source_node_id": "recon",
+                "target_node_id": null,
+                "terminal_state_id": "recon_noop"
+              },
+              {
+                "edge_id": "recon-blocked-to-terminal-recon-blocked",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "RECON_BLOCKED",
+                "priority": 100,
+                "source_node_id": "recon",
+                "target_node_id": null,
+                "terminal_state_id": "recon_blocked"
+              },
+              {
+                "edge_id": "recon-generic-blocked-to-terminal-recon-blocked",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "BLOCKED",
+                "priority": 100,
+                "source_node_id": "recon",
+                "target_node_id": null,
+                "terminal_state_id": "recon_blocked"
               },
               {
                 "edge_id": "planner-blocked-to-mechanic",
@@ -1651,6 +1707,10 @@
             },
             "entry_nodes": [
               {
+                "entry_key": "probe",
+                "node_id": "recon"
+              },
+              {
                 "entry_key": "spec",
                 "node_id": "planner"
               },
@@ -1661,6 +1721,48 @@
             ],
             "loop_id": "planning.standard",
             "nodes": [
+              {
+                "allowed_result_classes_by_outcome": {
+                  "BLOCKED": [
+                    "blocked",
+                    "recoverable_failure"
+                  ],
+                  "RECON_BLOCKED": [
+                    "blocked"
+                  ],
+                  "RECON_NOOP": [
+                    "no_op"
+                  ],
+                  "RECON_TO_EXECUTION": [
+                    "success"
+                  ],
+                  "RECON_TO_PLANNING": [
+                    "success"
+                  ]
+                },
+                "attached_skill_additions": [],
+                "declared_output_artifacts": [
+                  "stage_result",
+                  "recon_packet",
+                  "task",
+                  "spec",
+                  "report"
+                ],
+                "entrypoint_contract_id": "recon.contract.v1",
+                "entrypoint_path": "entrypoints/planning/recon.md",
+                "model_name": null,
+                "model_reasoning_effort": null,
+                "node_id": "recon",
+                "plane": "planning",
+                "required_skill_paths": [
+                  "skills/stage/planning/recon-core/SKILL.md"
+                ],
+                "runner_name": "codex_cli",
+                "running_status_marker": "RECON_RUNNING",
+                "stage_kind_id": "recon",
+                "thinking_level": null,
+                "timeout_seconds": 3600
+              },
               {
                 "allowed_result_classes_by_outcome": {
                   "BLOCKED": [
@@ -1822,6 +1924,49 @@
               {
                 "emits_artifacts": [
                   "stage_result",
+                  "recon_packet",
+                  "task"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "success",
+                "terminal_state_id": "recon_to_execution",
+                "writes_status": "RECON_TO_EXECUTION"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
+                  "recon_packet",
+                  "spec"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "success",
+                "terminal_state_id": "recon_to_planning",
+                "writes_status": "RECON_TO_PLANNING"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
+                  "recon_packet"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "no_op",
+                "terminal_state_id": "recon_noop",
+                "writes_status": "RECON_NOOP"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
+                  "recon_packet",
+                  "report"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "blocked",
+                "terminal_state_id": "recon_blocked",
+                "writes_status": "RECON_BLOCKED"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
                   "task_cards"
                 ],
                 "ends_plane_run": true,
@@ -1876,6 +2021,71 @@
                 "priority": 100,
                 "terminal_state_id": null,
                 "to_node_id": "manager"
+              },
+              {
+                "description": null,
+                "edge_id": "recon-to-execution-to-terminal-recon-to-execution",
+                "from_node_id": "recon",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "RECON_TO_EXECUTION"
+                ],
+                "priority": 100,
+                "terminal_state_id": "recon_to_execution",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "recon-to-planning-to-terminal-recon-to-planning",
+                "from_node_id": "recon",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "RECON_TO_PLANNING"
+                ],
+                "priority": 100,
+                "terminal_state_id": "recon_to_planning",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "recon-noop-to-terminal-recon-noop",
+                "from_node_id": "recon",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "RECON_NOOP"
+                ],
+                "priority": 100,
+                "terminal_state_id": "recon_noop",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "recon-blocked-to-terminal-recon-blocked",
+                "from_node_id": "recon",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "RECON_BLOCKED"
+                ],
+                "priority": 100,
+                "terminal_state_id": "recon_blocked",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "recon-generic-blocked-to-terminal-recon-blocked",
+                "from_node_id": "recon",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "BLOCKED"
+                ],
+                "priority": 100,
+                "terminal_state_id": "recon_blocked",
+                "to_node_id": null
               },
               {
                 "description": null,
@@ -2038,6 +2248,12 @@
           },
           "compiled_entries": [
             {
+              "entry_key": "probe",
+              "node_id": "recon",
+              "plane": "planning",
+              "stage_kind_id": "recon"
+            },
+            {
               "entry_key": "spec",
               "node_id": "planner",
               "plane": "planning",
@@ -2090,6 +2306,56 @@
               "source_node_id": "planner",
               "target_node_id": "manager",
               "terminal_state_id": null
+            },
+            {
+              "edge_id": "recon-to-execution-to-terminal-recon-to-execution",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "RECON_TO_EXECUTION",
+              "priority": 100,
+              "source_node_id": "recon",
+              "target_node_id": null,
+              "terminal_state_id": "recon_to_execution"
+            },
+            {
+              "edge_id": "recon-to-planning-to-terminal-recon-to-planning",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "RECON_TO_PLANNING",
+              "priority": 100,
+              "source_node_id": "recon",
+              "target_node_id": null,
+              "terminal_state_id": "recon_to_planning"
+            },
+            {
+              "edge_id": "recon-noop-to-terminal-recon-noop",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "RECON_NOOP",
+              "priority": 100,
+              "source_node_id": "recon",
+              "target_node_id": null,
+              "terminal_state_id": "recon_noop"
+            },
+            {
+              "edge_id": "recon-blocked-to-terminal-recon-blocked",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "RECON_BLOCKED",
+              "priority": 100,
+              "source_node_id": "recon",
+              "target_node_id": null,
+              "terminal_state_id": "recon_blocked"
+            },
+            {
+              "edge_id": "recon-generic-blocked-to-terminal-recon-blocked",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "BLOCKED",
+              "priority": 100,
+              "source_node_id": "recon",
+              "target_node_id": null,
+              "terminal_state_id": "recon_blocked"
             },
             {
               "edge_id": "planner-blocked-to-mechanic",
@@ -2207,6 +2473,10 @@
           },
           "entry_nodes": [
             {
+              "entry_key": "probe",
+              "node_id": "recon"
+            },
+            {
               "entry_key": "spec",
               "node_id": "planner"
             },
@@ -2217,6 +2487,48 @@
           ],
           "loop_id": "planning.standard",
           "nodes": [
+            {
+              "allowed_result_classes_by_outcome": {
+                "BLOCKED": [
+                  "blocked",
+                  "recoverable_failure"
+                ],
+                "RECON_BLOCKED": [
+                  "blocked"
+                ],
+                "RECON_NOOP": [
+                  "no_op"
+                ],
+                "RECON_TO_EXECUTION": [
+                  "success"
+                ],
+                "RECON_TO_PLANNING": [
+                  "success"
+                ]
+              },
+              "attached_skill_additions": [],
+              "declared_output_artifacts": [
+                "stage_result",
+                "recon_packet",
+                "task",
+                "spec",
+                "report"
+              ],
+              "entrypoint_contract_id": "recon.contract.v1",
+              "entrypoint_path": "entrypoints/planning/recon.md",
+              "model_name": null,
+              "model_reasoning_effort": null,
+              "node_id": "recon",
+              "plane": "planning",
+              "required_skill_paths": [
+                "skills/stage/planning/recon-core/SKILL.md"
+              ],
+              "runner_name": "codex_cli",
+              "running_status_marker": "RECON_RUNNING",
+              "stage_kind_id": "recon",
+              "thinking_level": null,
+              "timeout_seconds": 3600
+            },
             {
               "allowed_result_classes_by_outcome": {
                 "BLOCKED": [
@@ -2378,6 +2690,49 @@
             {
               "emits_artifacts": [
                 "stage_result",
+                "recon_packet",
+                "task"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "success",
+              "terminal_state_id": "recon_to_execution",
+              "writes_status": "RECON_TO_EXECUTION"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
+                "recon_packet",
+                "spec"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "success",
+              "terminal_state_id": "recon_to_planning",
+              "writes_status": "RECON_TO_PLANNING"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
+                "recon_packet"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "no_op",
+              "terminal_state_id": "recon_noop",
+              "writes_status": "RECON_NOOP"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
+                "recon_packet",
+                "report"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "blocked",
+              "terminal_state_id": "recon_blocked",
+              "writes_status": "RECON_BLOCKED"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
                 "task_cards"
               ],
               "ends_plane_run": true,
@@ -2432,6 +2787,71 @@
               "priority": 100,
               "terminal_state_id": null,
               "to_node_id": "manager"
+            },
+            {
+              "description": null,
+              "edge_id": "recon-to-execution-to-terminal-recon-to-execution",
+              "from_node_id": "recon",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "RECON_TO_EXECUTION"
+              ],
+              "priority": 100,
+              "terminal_state_id": "recon_to_execution",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "recon-to-planning-to-terminal-recon-to-planning",
+              "from_node_id": "recon",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "RECON_TO_PLANNING"
+              ],
+              "priority": 100,
+              "terminal_state_id": "recon_to_planning",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "recon-noop-to-terminal-recon-noop",
+              "from_node_id": "recon",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "RECON_NOOP"
+              ],
+              "priority": 100,
+              "terminal_state_id": "recon_noop",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "recon-blocked-to-terminal-recon-blocked",
+              "from_node_id": "recon",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "RECON_BLOCKED"
+              ],
+              "priority": 100,
+              "terminal_state_id": "recon_blocked",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "recon-generic-blocked-to-terminal-recon-blocked",
+              "from_node_id": "recon",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "BLOCKED"
+              ],
+              "priority": 100,
+              "terminal_state_id": "recon_blocked",
+              "to_node_id": null
             },
             {
               "description": null,
@@ -2640,6 +3060,12 @@
             "logical_id": "entrypoint:entrypoints/planning/planner.md"
           },
           {
+            "asset_family": "entrypoint",
+            "compile_time_path": "entrypoints/planning/recon.md",
+            "content_sha256": "<content-sha256>",
+            "logical_id": "entrypoint:entrypoints/planning/recon.md"
+          },
+          {
             "asset_family": "graph_loop",
             "compile_time_path": "graphs/execution/standard.json",
             "content_sha256": "<content-sha256>",
@@ -2730,6 +3156,12 @@
             "logical_id": "skill:skills/stage/planning/planner-core/SKILL.md"
           },
           {
+            "asset_family": "skill",
+            "compile_time_path": "skills/stage/planning/recon-core/SKILL.md",
+            "content_sha256": "<content-sha256>",
+            "logical_id": "skill:skills/stage/planning/recon-core/SKILL.md"
+          },
+          {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/arbiter.json",
             "content_sha256": "<content-sha256>",
@@ -2791,6 +3223,12 @@
           },
           {
             "asset_family": "stage_kind",
+            "compile_time_path": "registry/stage_kinds/planning/recon.json",
+            "content_sha256": "<content-sha256>",
+            "logical_id": "stage_kind:recon"
+          },
+          {
+            "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/troubleshooter.json",
             "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:troubleshooter"
@@ -2843,6 +3281,7 @@
           "entries": [
             "entry: execution.task -> builder",
             "entry: planning.incident -> auditor",
+            "entry: planning.probe -> recon",
             "entry: planning.spec -> planner"
           ],
           "execution_loop_id": "execution.standard",
@@ -3016,6 +3455,20 @@
               "running_status_marker": "PLANNER_RUNNING",
               "stage": "planning.planner",
               "stage_kind_id": "planner",
+              "thinking_level": "none",
+              "timeout_seconds": "3600"
+            },
+            {
+              "attached_skills": "none",
+              "entrypoint_contract_id": "recon.contract.v1",
+              "entrypoint_path": "entrypoints/planning/recon.md",
+              "model_name": "none",
+              "model_reasoning_effort": "none",
+              "required_skills": "skills/stage/planning/recon-core/SKILL.md",
+              "runner_name": "codex_cli",
+              "running_status_marker": "RECON_RUNNING",
+              "stage": "planning.recon",
+              "stage_kind_id": "recon",
               "thinking_level": "none",
               "timeout_seconds": "3600"
             }
@@ -4516,6 +4969,12 @@
             },
             "compiled_entries": [
               {
+                "entry_key": "probe",
+                "node_id": "recon",
+                "plane": "planning",
+                "stage_kind_id": "recon"
+              },
+              {
                 "entry_key": "spec",
                 "node_id": "planner",
                 "plane": "planning",
@@ -4568,6 +5027,56 @@
                 "source_node_id": "planner",
                 "target_node_id": "manager",
                 "terminal_state_id": null
+              },
+              {
+                "edge_id": "recon-to-execution-to-terminal-recon-to-execution",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "RECON_TO_EXECUTION",
+                "priority": 100,
+                "source_node_id": "recon",
+                "target_node_id": null,
+                "terminal_state_id": "recon_to_execution"
+              },
+              {
+                "edge_id": "recon-to-planning-to-terminal-recon-to-planning",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "RECON_TO_PLANNING",
+                "priority": 100,
+                "source_node_id": "recon",
+                "target_node_id": null,
+                "terminal_state_id": "recon_to_planning"
+              },
+              {
+                "edge_id": "recon-noop-to-terminal-recon-noop",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "RECON_NOOP",
+                "priority": 100,
+                "source_node_id": "recon",
+                "target_node_id": null,
+                "terminal_state_id": "recon_noop"
+              },
+              {
+                "edge_id": "recon-blocked-to-terminal-recon-blocked",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "RECON_BLOCKED",
+                "priority": 100,
+                "source_node_id": "recon",
+                "target_node_id": null,
+                "terminal_state_id": "recon_blocked"
+              },
+              {
+                "edge_id": "recon-generic-blocked-to-terminal-recon-blocked",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "BLOCKED",
+                "priority": 100,
+                "source_node_id": "recon",
+                "target_node_id": null,
+                "terminal_state_id": "recon_blocked"
               },
               {
                 "edge_id": "planner-blocked-to-mechanic",
@@ -4685,6 +5194,10 @@
             },
             "entry_nodes": [
               {
+                "entry_key": "probe",
+                "node_id": "recon"
+              },
+              {
                 "entry_key": "spec",
                 "node_id": "planner"
               },
@@ -4695,6 +5208,48 @@
             ],
             "loop_id": "planning.standard",
             "nodes": [
+              {
+                "allowed_result_classes_by_outcome": {
+                  "BLOCKED": [
+                    "blocked",
+                    "recoverable_failure"
+                  ],
+                  "RECON_BLOCKED": [
+                    "blocked"
+                  ],
+                  "RECON_NOOP": [
+                    "no_op"
+                  ],
+                  "RECON_TO_EXECUTION": [
+                    "success"
+                  ],
+                  "RECON_TO_PLANNING": [
+                    "success"
+                  ]
+                },
+                "attached_skill_additions": [],
+                "declared_output_artifacts": [
+                  "stage_result",
+                  "recon_packet",
+                  "task",
+                  "spec",
+                  "report"
+                ],
+                "entrypoint_contract_id": "recon.contract.v1",
+                "entrypoint_path": "entrypoints/planning/recon.md",
+                "model_name": null,
+                "model_reasoning_effort": null,
+                "node_id": "recon",
+                "plane": "planning",
+                "required_skill_paths": [
+                  "skills/stage/planning/recon-core/SKILL.md"
+                ],
+                "runner_name": "pi_rpc",
+                "running_status_marker": "RECON_RUNNING",
+                "stage_kind_id": "recon",
+                "thinking_level": null,
+                "timeout_seconds": 3600
+              },
               {
                 "allowed_result_classes_by_outcome": {
                   "BLOCKED": [
@@ -4856,6 +5411,49 @@
               {
                 "emits_artifacts": [
                   "stage_result",
+                  "recon_packet",
+                  "task"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "success",
+                "terminal_state_id": "recon_to_execution",
+                "writes_status": "RECON_TO_EXECUTION"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
+                  "recon_packet",
+                  "spec"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "success",
+                "terminal_state_id": "recon_to_planning",
+                "writes_status": "RECON_TO_PLANNING"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
+                  "recon_packet"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "no_op",
+                "terminal_state_id": "recon_noop",
+                "writes_status": "RECON_NOOP"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
+                  "recon_packet",
+                  "report"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "blocked",
+                "terminal_state_id": "recon_blocked",
+                "writes_status": "RECON_BLOCKED"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
                   "task_cards"
                 ],
                 "ends_plane_run": true,
@@ -4910,6 +5508,71 @@
                 "priority": 100,
                 "terminal_state_id": null,
                 "to_node_id": "manager"
+              },
+              {
+                "description": null,
+                "edge_id": "recon-to-execution-to-terminal-recon-to-execution",
+                "from_node_id": "recon",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "RECON_TO_EXECUTION"
+                ],
+                "priority": 100,
+                "terminal_state_id": "recon_to_execution",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "recon-to-planning-to-terminal-recon-to-planning",
+                "from_node_id": "recon",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "RECON_TO_PLANNING"
+                ],
+                "priority": 100,
+                "terminal_state_id": "recon_to_planning",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "recon-noop-to-terminal-recon-noop",
+                "from_node_id": "recon",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "RECON_NOOP"
+                ],
+                "priority": 100,
+                "terminal_state_id": "recon_noop",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "recon-blocked-to-terminal-recon-blocked",
+                "from_node_id": "recon",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "RECON_BLOCKED"
+                ],
+                "priority": 100,
+                "terminal_state_id": "recon_blocked",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "recon-generic-blocked-to-terminal-recon-blocked",
+                "from_node_id": "recon",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "BLOCKED"
+                ],
+                "priority": 100,
+                "terminal_state_id": "recon_blocked",
+                "to_node_id": null
               },
               {
                 "description": null,
@@ -5072,6 +5735,12 @@
           },
           "compiled_entries": [
             {
+              "entry_key": "probe",
+              "node_id": "recon",
+              "plane": "planning",
+              "stage_kind_id": "recon"
+            },
+            {
               "entry_key": "spec",
               "node_id": "planner",
               "plane": "planning",
@@ -5124,6 +5793,56 @@
               "source_node_id": "planner",
               "target_node_id": "manager",
               "terminal_state_id": null
+            },
+            {
+              "edge_id": "recon-to-execution-to-terminal-recon-to-execution",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "RECON_TO_EXECUTION",
+              "priority": 100,
+              "source_node_id": "recon",
+              "target_node_id": null,
+              "terminal_state_id": "recon_to_execution"
+            },
+            {
+              "edge_id": "recon-to-planning-to-terminal-recon-to-planning",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "RECON_TO_PLANNING",
+              "priority": 100,
+              "source_node_id": "recon",
+              "target_node_id": null,
+              "terminal_state_id": "recon_to_planning"
+            },
+            {
+              "edge_id": "recon-noop-to-terminal-recon-noop",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "RECON_NOOP",
+              "priority": 100,
+              "source_node_id": "recon",
+              "target_node_id": null,
+              "terminal_state_id": "recon_noop"
+            },
+            {
+              "edge_id": "recon-blocked-to-terminal-recon-blocked",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "RECON_BLOCKED",
+              "priority": 100,
+              "source_node_id": "recon",
+              "target_node_id": null,
+              "terminal_state_id": "recon_blocked"
+            },
+            {
+              "edge_id": "recon-generic-blocked-to-terminal-recon-blocked",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "BLOCKED",
+              "priority": 100,
+              "source_node_id": "recon",
+              "target_node_id": null,
+              "terminal_state_id": "recon_blocked"
             },
             {
               "edge_id": "planner-blocked-to-mechanic",
@@ -5241,6 +5960,10 @@
           },
           "entry_nodes": [
             {
+              "entry_key": "probe",
+              "node_id": "recon"
+            },
+            {
               "entry_key": "spec",
               "node_id": "planner"
             },
@@ -5251,6 +5974,48 @@
           ],
           "loop_id": "planning.standard",
           "nodes": [
+            {
+              "allowed_result_classes_by_outcome": {
+                "BLOCKED": [
+                  "blocked",
+                  "recoverable_failure"
+                ],
+                "RECON_BLOCKED": [
+                  "blocked"
+                ],
+                "RECON_NOOP": [
+                  "no_op"
+                ],
+                "RECON_TO_EXECUTION": [
+                  "success"
+                ],
+                "RECON_TO_PLANNING": [
+                  "success"
+                ]
+              },
+              "attached_skill_additions": [],
+              "declared_output_artifacts": [
+                "stage_result",
+                "recon_packet",
+                "task",
+                "spec",
+                "report"
+              ],
+              "entrypoint_contract_id": "recon.contract.v1",
+              "entrypoint_path": "entrypoints/planning/recon.md",
+              "model_name": null,
+              "model_reasoning_effort": null,
+              "node_id": "recon",
+              "plane": "planning",
+              "required_skill_paths": [
+                "skills/stage/planning/recon-core/SKILL.md"
+              ],
+              "runner_name": "pi_rpc",
+              "running_status_marker": "RECON_RUNNING",
+              "stage_kind_id": "recon",
+              "thinking_level": null,
+              "timeout_seconds": 3600
+            },
             {
               "allowed_result_classes_by_outcome": {
                 "BLOCKED": [
@@ -5412,6 +6177,49 @@
             {
               "emits_artifacts": [
                 "stage_result",
+                "recon_packet",
+                "task"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "success",
+              "terminal_state_id": "recon_to_execution",
+              "writes_status": "RECON_TO_EXECUTION"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
+                "recon_packet",
+                "spec"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "success",
+              "terminal_state_id": "recon_to_planning",
+              "writes_status": "RECON_TO_PLANNING"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
+                "recon_packet"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "no_op",
+              "terminal_state_id": "recon_noop",
+              "writes_status": "RECON_NOOP"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
+                "recon_packet",
+                "report"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "blocked",
+              "terminal_state_id": "recon_blocked",
+              "writes_status": "RECON_BLOCKED"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
                 "task_cards"
               ],
               "ends_plane_run": true,
@@ -5466,6 +6274,71 @@
               "priority": 100,
               "terminal_state_id": null,
               "to_node_id": "manager"
+            },
+            {
+              "description": null,
+              "edge_id": "recon-to-execution-to-terminal-recon-to-execution",
+              "from_node_id": "recon",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "RECON_TO_EXECUTION"
+              ],
+              "priority": 100,
+              "terminal_state_id": "recon_to_execution",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "recon-to-planning-to-terminal-recon-to-planning",
+              "from_node_id": "recon",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "RECON_TO_PLANNING"
+              ],
+              "priority": 100,
+              "terminal_state_id": "recon_to_planning",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "recon-noop-to-terminal-recon-noop",
+              "from_node_id": "recon",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "RECON_NOOP"
+              ],
+              "priority": 100,
+              "terminal_state_id": "recon_noop",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "recon-blocked-to-terminal-recon-blocked",
+              "from_node_id": "recon",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "RECON_BLOCKED"
+              ],
+              "priority": 100,
+              "terminal_state_id": "recon_blocked",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "recon-generic-blocked-to-terminal-recon-blocked",
+              "from_node_id": "recon",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "BLOCKED"
+              ],
+              "priority": 100,
+              "terminal_state_id": "recon_blocked",
+              "to_node_id": null
             },
             {
               "description": null,
@@ -5674,6 +6547,12 @@
             "logical_id": "entrypoint:entrypoints/planning/planner.md"
           },
           {
+            "asset_family": "entrypoint",
+            "compile_time_path": "entrypoints/planning/recon.md",
+            "content_sha256": "<content-sha256>",
+            "logical_id": "entrypoint:entrypoints/planning/recon.md"
+          },
+          {
             "asset_family": "graph_loop",
             "compile_time_path": "graphs/execution/standard.json",
             "content_sha256": "<content-sha256>",
@@ -5764,6 +6643,12 @@
             "logical_id": "skill:skills/stage/planning/planner-core/SKILL.md"
           },
           {
+            "asset_family": "skill",
+            "compile_time_path": "skills/stage/planning/recon-core/SKILL.md",
+            "content_sha256": "<content-sha256>",
+            "logical_id": "skill:skills/stage/planning/recon-core/SKILL.md"
+          },
+          {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/arbiter.json",
             "content_sha256": "<content-sha256>",
@@ -5825,6 +6710,12 @@
           },
           {
             "asset_family": "stage_kind",
+            "compile_time_path": "registry/stage_kinds/planning/recon.json",
+            "content_sha256": "<content-sha256>",
+            "logical_id": "stage_kind:recon"
+          },
+          {
+            "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/troubleshooter.json",
             "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:troubleshooter"
@@ -5877,6 +6768,7 @@
           "entries": [
             "entry: execution.task -> builder",
             "entry: planning.incident -> auditor",
+            "entry: planning.probe -> recon",
             "entry: planning.spec -> planner"
           ],
           "execution_loop_id": "execution.standard",
@@ -6050,6 +6942,20 @@
               "running_status_marker": "PLANNER_RUNNING",
               "stage": "planning.planner",
               "stage_kind_id": "planner",
+              "thinking_level": "none",
+              "timeout_seconds": "3600"
+            },
+            {
+              "attached_skills": "none",
+              "entrypoint_contract_id": "recon.contract.v1",
+              "entrypoint_path": "entrypoints/planning/recon.md",
+              "model_name": "none",
+              "model_reasoning_effort": "none",
+              "required_skills": "skills/stage/planning/recon-core/SKILL.md",
+              "runner_name": "pi_rpc",
+              "running_status_marker": "RECON_RUNNING",
+              "stage": "planning.recon",
+              "stage_kind_id": "recon",
               "thinking_level": "none",
               "timeout_seconds": "3600"
             }
@@ -7953,6 +8859,12 @@
             },
             "compiled_entries": [
               {
+                "entry_key": "probe",
+                "node_id": "recon",
+                "plane": "planning",
+                "stage_kind_id": "recon"
+              },
+              {
                 "entry_key": "spec",
                 "node_id": "planner",
                 "plane": "planning",
@@ -8005,6 +8917,56 @@
                 "source_node_id": "planner",
                 "target_node_id": "manager",
                 "terminal_state_id": null
+              },
+              {
+                "edge_id": "recon-to-execution-to-terminal-recon-to-execution",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "RECON_TO_EXECUTION",
+                "priority": 100,
+                "source_node_id": "recon",
+                "target_node_id": null,
+                "terminal_state_id": "recon_to_execution"
+              },
+              {
+                "edge_id": "recon-to-planning-to-terminal-recon-to-planning",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "RECON_TO_PLANNING",
+                "priority": 100,
+                "source_node_id": "recon",
+                "target_node_id": null,
+                "terminal_state_id": "recon_to_planning"
+              },
+              {
+                "edge_id": "recon-noop-to-terminal-recon-noop",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "RECON_NOOP",
+                "priority": 100,
+                "source_node_id": "recon",
+                "target_node_id": null,
+                "terminal_state_id": "recon_noop"
+              },
+              {
+                "edge_id": "recon-blocked-to-terminal-recon-blocked",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "RECON_BLOCKED",
+                "priority": 100,
+                "source_node_id": "recon",
+                "target_node_id": null,
+                "terminal_state_id": "recon_blocked"
+              },
+              {
+                "edge_id": "recon-generic-blocked-to-terminal-recon-blocked",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "BLOCKED",
+                "priority": 100,
+                "source_node_id": "recon",
+                "target_node_id": null,
+                "terminal_state_id": "recon_blocked"
               },
               {
                 "edge_id": "planner-blocked-to-mechanic",
@@ -8122,6 +9084,10 @@
             },
             "entry_nodes": [
               {
+                "entry_key": "probe",
+                "node_id": "recon"
+              },
+              {
                 "entry_key": "spec",
                 "node_id": "planner"
               },
@@ -8132,6 +9098,48 @@
             ],
             "loop_id": "planning.standard",
             "nodes": [
+              {
+                "allowed_result_classes_by_outcome": {
+                  "BLOCKED": [
+                    "blocked",
+                    "recoverable_failure"
+                  ],
+                  "RECON_BLOCKED": [
+                    "blocked"
+                  ],
+                  "RECON_NOOP": [
+                    "no_op"
+                  ],
+                  "RECON_TO_EXECUTION": [
+                    "success"
+                  ],
+                  "RECON_TO_PLANNING": [
+                    "success"
+                  ]
+                },
+                "attached_skill_additions": [],
+                "declared_output_artifacts": [
+                  "stage_result",
+                  "recon_packet",
+                  "task",
+                  "spec",
+                  "report"
+                ],
+                "entrypoint_contract_id": "recon.contract.v1",
+                "entrypoint_path": "entrypoints/planning/recon.md",
+                "model_name": null,
+                "model_reasoning_effort": null,
+                "node_id": "recon",
+                "plane": "planning",
+                "required_skill_paths": [
+                  "skills/stage/planning/recon-core/SKILL.md"
+                ],
+                "runner_name": "codex_cli",
+                "running_status_marker": "RECON_RUNNING",
+                "stage_kind_id": "recon",
+                "thinking_level": null,
+                "timeout_seconds": 3600
+              },
               {
                 "allowed_result_classes_by_outcome": {
                   "BLOCKED": [
@@ -8293,6 +9301,49 @@
               {
                 "emits_artifacts": [
                   "stage_result",
+                  "recon_packet",
+                  "task"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "success",
+                "terminal_state_id": "recon_to_execution",
+                "writes_status": "RECON_TO_EXECUTION"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
+                  "recon_packet",
+                  "spec"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "success",
+                "terminal_state_id": "recon_to_planning",
+                "writes_status": "RECON_TO_PLANNING"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
+                  "recon_packet"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "no_op",
+                "terminal_state_id": "recon_noop",
+                "writes_status": "RECON_NOOP"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
+                  "recon_packet",
+                  "report"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "blocked",
+                "terminal_state_id": "recon_blocked",
+                "writes_status": "RECON_BLOCKED"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
                   "task_cards"
                 ],
                 "ends_plane_run": true,
@@ -8347,6 +9398,71 @@
                 "priority": 100,
                 "terminal_state_id": null,
                 "to_node_id": "manager"
+              },
+              {
+                "description": null,
+                "edge_id": "recon-to-execution-to-terminal-recon-to-execution",
+                "from_node_id": "recon",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "RECON_TO_EXECUTION"
+                ],
+                "priority": 100,
+                "terminal_state_id": "recon_to_execution",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "recon-to-planning-to-terminal-recon-to-planning",
+                "from_node_id": "recon",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "RECON_TO_PLANNING"
+                ],
+                "priority": 100,
+                "terminal_state_id": "recon_to_planning",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "recon-noop-to-terminal-recon-noop",
+                "from_node_id": "recon",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "RECON_NOOP"
+                ],
+                "priority": 100,
+                "terminal_state_id": "recon_noop",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "recon-blocked-to-terminal-recon-blocked",
+                "from_node_id": "recon",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "RECON_BLOCKED"
+                ],
+                "priority": 100,
+                "terminal_state_id": "recon_blocked",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "recon-generic-blocked-to-terminal-recon-blocked",
+                "from_node_id": "recon",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "BLOCKED"
+                ],
+                "priority": 100,
+                "terminal_state_id": "recon_blocked",
+                "to_node_id": null
               },
               {
                 "description": null,
@@ -8935,6 +10051,12 @@
           },
           "compiled_entries": [
             {
+              "entry_key": "probe",
+              "node_id": "recon",
+              "plane": "planning",
+              "stage_kind_id": "recon"
+            },
+            {
               "entry_key": "spec",
               "node_id": "planner",
               "plane": "planning",
@@ -8987,6 +10109,56 @@
               "source_node_id": "planner",
               "target_node_id": "manager",
               "terminal_state_id": null
+            },
+            {
+              "edge_id": "recon-to-execution-to-terminal-recon-to-execution",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "RECON_TO_EXECUTION",
+              "priority": 100,
+              "source_node_id": "recon",
+              "target_node_id": null,
+              "terminal_state_id": "recon_to_execution"
+            },
+            {
+              "edge_id": "recon-to-planning-to-terminal-recon-to-planning",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "RECON_TO_PLANNING",
+              "priority": 100,
+              "source_node_id": "recon",
+              "target_node_id": null,
+              "terminal_state_id": "recon_to_planning"
+            },
+            {
+              "edge_id": "recon-noop-to-terminal-recon-noop",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "RECON_NOOP",
+              "priority": 100,
+              "source_node_id": "recon",
+              "target_node_id": null,
+              "terminal_state_id": "recon_noop"
+            },
+            {
+              "edge_id": "recon-blocked-to-terminal-recon-blocked",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "RECON_BLOCKED",
+              "priority": 100,
+              "source_node_id": "recon",
+              "target_node_id": null,
+              "terminal_state_id": "recon_blocked"
+            },
+            {
+              "edge_id": "recon-generic-blocked-to-terminal-recon-blocked",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "BLOCKED",
+              "priority": 100,
+              "source_node_id": "recon",
+              "target_node_id": null,
+              "terminal_state_id": "recon_blocked"
             },
             {
               "edge_id": "planner-blocked-to-mechanic",
@@ -9104,6 +10276,10 @@
           },
           "entry_nodes": [
             {
+              "entry_key": "probe",
+              "node_id": "recon"
+            },
+            {
               "entry_key": "spec",
               "node_id": "planner"
             },
@@ -9114,6 +10290,48 @@
           ],
           "loop_id": "planning.standard",
           "nodes": [
+            {
+              "allowed_result_classes_by_outcome": {
+                "BLOCKED": [
+                  "blocked",
+                  "recoverable_failure"
+                ],
+                "RECON_BLOCKED": [
+                  "blocked"
+                ],
+                "RECON_NOOP": [
+                  "no_op"
+                ],
+                "RECON_TO_EXECUTION": [
+                  "success"
+                ],
+                "RECON_TO_PLANNING": [
+                  "success"
+                ]
+              },
+              "attached_skill_additions": [],
+              "declared_output_artifacts": [
+                "stage_result",
+                "recon_packet",
+                "task",
+                "spec",
+                "report"
+              ],
+              "entrypoint_contract_id": "recon.contract.v1",
+              "entrypoint_path": "entrypoints/planning/recon.md",
+              "model_name": null,
+              "model_reasoning_effort": null,
+              "node_id": "recon",
+              "plane": "planning",
+              "required_skill_paths": [
+                "skills/stage/planning/recon-core/SKILL.md"
+              ],
+              "runner_name": "codex_cli",
+              "running_status_marker": "RECON_RUNNING",
+              "stage_kind_id": "recon",
+              "thinking_level": null,
+              "timeout_seconds": 3600
+            },
             {
               "allowed_result_classes_by_outcome": {
                 "BLOCKED": [
@@ -9275,6 +10493,49 @@
             {
               "emits_artifacts": [
                 "stage_result",
+                "recon_packet",
+                "task"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "success",
+              "terminal_state_id": "recon_to_execution",
+              "writes_status": "RECON_TO_EXECUTION"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
+                "recon_packet",
+                "spec"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "success",
+              "terminal_state_id": "recon_to_planning",
+              "writes_status": "RECON_TO_PLANNING"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
+                "recon_packet"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "no_op",
+              "terminal_state_id": "recon_noop",
+              "writes_status": "RECON_NOOP"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
+                "recon_packet",
+                "report"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "blocked",
+              "terminal_state_id": "recon_blocked",
+              "writes_status": "RECON_BLOCKED"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
                 "task_cards"
               ],
               "ends_plane_run": true,
@@ -9329,6 +10590,71 @@
               "priority": 100,
               "terminal_state_id": null,
               "to_node_id": "manager"
+            },
+            {
+              "description": null,
+              "edge_id": "recon-to-execution-to-terminal-recon-to-execution",
+              "from_node_id": "recon",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "RECON_TO_EXECUTION"
+              ],
+              "priority": 100,
+              "terminal_state_id": "recon_to_execution",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "recon-to-planning-to-terminal-recon-to-planning",
+              "from_node_id": "recon",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "RECON_TO_PLANNING"
+              ],
+              "priority": 100,
+              "terminal_state_id": "recon_to_planning",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "recon-noop-to-terminal-recon-noop",
+              "from_node_id": "recon",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "RECON_NOOP"
+              ],
+              "priority": 100,
+              "terminal_state_id": "recon_noop",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "recon-blocked-to-terminal-recon-blocked",
+              "from_node_id": "recon",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "RECON_BLOCKED"
+              ],
+              "priority": 100,
+              "terminal_state_id": "recon_blocked",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "recon-generic-blocked-to-terminal-recon-blocked",
+              "from_node_id": "recon",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "BLOCKED"
+              ],
+              "priority": 100,
+              "terminal_state_id": "recon_blocked",
+              "to_node_id": null
             },
             {
               "description": null,
@@ -9555,6 +10881,12 @@
             "logical_id": "entrypoint:entrypoints/planning/planner.md"
           },
           {
+            "asset_family": "entrypoint",
+            "compile_time_path": "entrypoints/planning/recon.md",
+            "content_sha256": "<content-sha256>",
+            "logical_id": "entrypoint:entrypoints/planning/recon.md"
+          },
+          {
             "asset_family": "graph_loop",
             "compile_time_path": "graphs/execution/standard.json",
             "content_sha256": "<content-sha256>",
@@ -9669,6 +11001,12 @@
             "logical_id": "skill:skills/stage/planning/planner-core/SKILL.md"
           },
           {
+            "asset_family": "skill",
+            "compile_time_path": "skills/stage/planning/recon-core/SKILL.md",
+            "content_sha256": "<content-sha256>",
+            "logical_id": "skill:skills/stage/planning/recon-core/SKILL.md"
+          },
+          {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/learning/analyst.json",
             "content_sha256": "<content-sha256>",
@@ -9748,6 +11086,12 @@
           },
           {
             "asset_family": "stage_kind",
+            "compile_time_path": "registry/stage_kinds/planning/recon.json",
+            "content_sha256": "<content-sha256>",
+            "logical_id": "stage_kind:recon"
+          },
+          {
+            "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/troubleshooter.json",
             "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:troubleshooter"
@@ -9802,6 +11146,7 @@
             "entry: execution.task -> builder",
             "entry: learning.learning_request -> analyst",
             "entry: planning.incident -> auditor",
+            "entry: planning.probe -> recon",
             "entry: planning.spec -> planner"
           ],
           "execution_loop_id": "execution.standard",
@@ -10018,6 +11363,20 @@
               "running_status_marker": "PLANNER_RUNNING",
               "stage": "planning.planner",
               "stage_kind_id": "planner",
+              "thinking_level": "none",
+              "timeout_seconds": "3600"
+            },
+            {
+              "attached_skills": "none",
+              "entrypoint_contract_id": "recon.contract.v1",
+              "entrypoint_path": "entrypoints/planning/recon.md",
+              "model_name": "none",
+              "model_reasoning_effort": "none",
+              "required_skills": "skills/stage/planning/recon-core/SKILL.md",
+              "runner_name": "codex_cli",
+              "running_status_marker": "RECON_RUNNING",
+              "stage": "planning.recon",
+              "stage_kind_id": "recon",
               "thinking_level": "none",
               "timeout_seconds": "3600"
             }
@@ -11921,6 +13280,12 @@
             },
             "compiled_entries": [
               {
+                "entry_key": "probe",
+                "node_id": "recon",
+                "plane": "planning",
+                "stage_kind_id": "recon"
+              },
+              {
                 "entry_key": "spec",
                 "node_id": "planner",
                 "plane": "planning",
@@ -11973,6 +13338,56 @@
                 "source_node_id": "planner",
                 "target_node_id": "manager",
                 "terminal_state_id": null
+              },
+              {
+                "edge_id": "recon-to-execution-to-terminal-recon-to-execution",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "RECON_TO_EXECUTION",
+                "priority": 100,
+                "source_node_id": "recon",
+                "target_node_id": null,
+                "terminal_state_id": "recon_to_execution"
+              },
+              {
+                "edge_id": "recon-to-planning-to-terminal-recon-to-planning",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "RECON_TO_PLANNING",
+                "priority": 100,
+                "source_node_id": "recon",
+                "target_node_id": null,
+                "terminal_state_id": "recon_to_planning"
+              },
+              {
+                "edge_id": "recon-noop-to-terminal-recon-noop",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "RECON_NOOP",
+                "priority": 100,
+                "source_node_id": "recon",
+                "target_node_id": null,
+                "terminal_state_id": "recon_noop"
+              },
+              {
+                "edge_id": "recon-blocked-to-terminal-recon-blocked",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "RECON_BLOCKED",
+                "priority": 100,
+                "source_node_id": "recon",
+                "target_node_id": null,
+                "terminal_state_id": "recon_blocked"
+              },
+              {
+                "edge_id": "recon-generic-blocked-to-terminal-recon-blocked",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "BLOCKED",
+                "priority": 100,
+                "source_node_id": "recon",
+                "target_node_id": null,
+                "terminal_state_id": "recon_blocked"
               },
               {
                 "edge_id": "planner-blocked-to-mechanic",
@@ -12090,6 +13505,10 @@
             },
             "entry_nodes": [
               {
+                "entry_key": "probe",
+                "node_id": "recon"
+              },
+              {
                 "entry_key": "spec",
                 "node_id": "planner"
               },
@@ -12100,6 +13519,48 @@
             ],
             "loop_id": "planning.standard",
             "nodes": [
+              {
+                "allowed_result_classes_by_outcome": {
+                  "BLOCKED": [
+                    "blocked",
+                    "recoverable_failure"
+                  ],
+                  "RECON_BLOCKED": [
+                    "blocked"
+                  ],
+                  "RECON_NOOP": [
+                    "no_op"
+                  ],
+                  "RECON_TO_EXECUTION": [
+                    "success"
+                  ],
+                  "RECON_TO_PLANNING": [
+                    "success"
+                  ]
+                },
+                "attached_skill_additions": [],
+                "declared_output_artifacts": [
+                  "stage_result",
+                  "recon_packet",
+                  "task",
+                  "spec",
+                  "report"
+                ],
+                "entrypoint_contract_id": "recon.contract.v1",
+                "entrypoint_path": "entrypoints/planning/recon.md",
+                "model_name": null,
+                "model_reasoning_effort": null,
+                "node_id": "recon",
+                "plane": "planning",
+                "required_skill_paths": [
+                  "skills/stage/planning/recon-core/SKILL.md"
+                ],
+                "runner_name": "pi_rpc",
+                "running_status_marker": "RECON_RUNNING",
+                "stage_kind_id": "recon",
+                "thinking_level": null,
+                "timeout_seconds": 3600
+              },
               {
                 "allowed_result_classes_by_outcome": {
                   "BLOCKED": [
@@ -12261,6 +13722,49 @@
               {
                 "emits_artifacts": [
                   "stage_result",
+                  "recon_packet",
+                  "task"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "success",
+                "terminal_state_id": "recon_to_execution",
+                "writes_status": "RECON_TO_EXECUTION"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
+                  "recon_packet",
+                  "spec"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "success",
+                "terminal_state_id": "recon_to_planning",
+                "writes_status": "RECON_TO_PLANNING"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
+                  "recon_packet"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "no_op",
+                "terminal_state_id": "recon_noop",
+                "writes_status": "RECON_NOOP"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
+                  "recon_packet",
+                  "report"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "blocked",
+                "terminal_state_id": "recon_blocked",
+                "writes_status": "RECON_BLOCKED"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
                   "task_cards"
                 ],
                 "ends_plane_run": true,
@@ -12315,6 +13819,71 @@
                 "priority": 100,
                 "terminal_state_id": null,
                 "to_node_id": "manager"
+              },
+              {
+                "description": null,
+                "edge_id": "recon-to-execution-to-terminal-recon-to-execution",
+                "from_node_id": "recon",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "RECON_TO_EXECUTION"
+                ],
+                "priority": 100,
+                "terminal_state_id": "recon_to_execution",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "recon-to-planning-to-terminal-recon-to-planning",
+                "from_node_id": "recon",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "RECON_TO_PLANNING"
+                ],
+                "priority": 100,
+                "terminal_state_id": "recon_to_planning",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "recon-noop-to-terminal-recon-noop",
+                "from_node_id": "recon",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "RECON_NOOP"
+                ],
+                "priority": 100,
+                "terminal_state_id": "recon_noop",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "recon-blocked-to-terminal-recon-blocked",
+                "from_node_id": "recon",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "RECON_BLOCKED"
+                ],
+                "priority": 100,
+                "terminal_state_id": "recon_blocked",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "recon-generic-blocked-to-terminal-recon-blocked",
+                "from_node_id": "recon",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "BLOCKED"
+                ],
+                "priority": 100,
+                "terminal_state_id": "recon_blocked",
+                "to_node_id": null
               },
               {
                 "description": null,
@@ -12903,6 +14472,12 @@
           },
           "compiled_entries": [
             {
+              "entry_key": "probe",
+              "node_id": "recon",
+              "plane": "planning",
+              "stage_kind_id": "recon"
+            },
+            {
               "entry_key": "spec",
               "node_id": "planner",
               "plane": "planning",
@@ -12955,6 +14530,56 @@
               "source_node_id": "planner",
               "target_node_id": "manager",
               "terminal_state_id": null
+            },
+            {
+              "edge_id": "recon-to-execution-to-terminal-recon-to-execution",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "RECON_TO_EXECUTION",
+              "priority": 100,
+              "source_node_id": "recon",
+              "target_node_id": null,
+              "terminal_state_id": "recon_to_execution"
+            },
+            {
+              "edge_id": "recon-to-planning-to-terminal-recon-to-planning",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "RECON_TO_PLANNING",
+              "priority": 100,
+              "source_node_id": "recon",
+              "target_node_id": null,
+              "terminal_state_id": "recon_to_planning"
+            },
+            {
+              "edge_id": "recon-noop-to-terminal-recon-noop",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "RECON_NOOP",
+              "priority": 100,
+              "source_node_id": "recon",
+              "target_node_id": null,
+              "terminal_state_id": "recon_noop"
+            },
+            {
+              "edge_id": "recon-blocked-to-terminal-recon-blocked",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "RECON_BLOCKED",
+              "priority": 100,
+              "source_node_id": "recon",
+              "target_node_id": null,
+              "terminal_state_id": "recon_blocked"
+            },
+            {
+              "edge_id": "recon-generic-blocked-to-terminal-recon-blocked",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "BLOCKED",
+              "priority": 100,
+              "source_node_id": "recon",
+              "target_node_id": null,
+              "terminal_state_id": "recon_blocked"
             },
             {
               "edge_id": "planner-blocked-to-mechanic",
@@ -13072,6 +14697,10 @@
           },
           "entry_nodes": [
             {
+              "entry_key": "probe",
+              "node_id": "recon"
+            },
+            {
               "entry_key": "spec",
               "node_id": "planner"
             },
@@ -13082,6 +14711,48 @@
           ],
           "loop_id": "planning.standard",
           "nodes": [
+            {
+              "allowed_result_classes_by_outcome": {
+                "BLOCKED": [
+                  "blocked",
+                  "recoverable_failure"
+                ],
+                "RECON_BLOCKED": [
+                  "blocked"
+                ],
+                "RECON_NOOP": [
+                  "no_op"
+                ],
+                "RECON_TO_EXECUTION": [
+                  "success"
+                ],
+                "RECON_TO_PLANNING": [
+                  "success"
+                ]
+              },
+              "attached_skill_additions": [],
+              "declared_output_artifacts": [
+                "stage_result",
+                "recon_packet",
+                "task",
+                "spec",
+                "report"
+              ],
+              "entrypoint_contract_id": "recon.contract.v1",
+              "entrypoint_path": "entrypoints/planning/recon.md",
+              "model_name": null,
+              "model_reasoning_effort": null,
+              "node_id": "recon",
+              "plane": "planning",
+              "required_skill_paths": [
+                "skills/stage/planning/recon-core/SKILL.md"
+              ],
+              "runner_name": "pi_rpc",
+              "running_status_marker": "RECON_RUNNING",
+              "stage_kind_id": "recon",
+              "thinking_level": null,
+              "timeout_seconds": 3600
+            },
             {
               "allowed_result_classes_by_outcome": {
                 "BLOCKED": [
@@ -13243,6 +14914,49 @@
             {
               "emits_artifacts": [
                 "stage_result",
+                "recon_packet",
+                "task"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "success",
+              "terminal_state_id": "recon_to_execution",
+              "writes_status": "RECON_TO_EXECUTION"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
+                "recon_packet",
+                "spec"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "success",
+              "terminal_state_id": "recon_to_planning",
+              "writes_status": "RECON_TO_PLANNING"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
+                "recon_packet"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "no_op",
+              "terminal_state_id": "recon_noop",
+              "writes_status": "RECON_NOOP"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
+                "recon_packet",
+                "report"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "blocked",
+              "terminal_state_id": "recon_blocked",
+              "writes_status": "RECON_BLOCKED"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
                 "task_cards"
               ],
               "ends_plane_run": true,
@@ -13297,6 +15011,71 @@
               "priority": 100,
               "terminal_state_id": null,
               "to_node_id": "manager"
+            },
+            {
+              "description": null,
+              "edge_id": "recon-to-execution-to-terminal-recon-to-execution",
+              "from_node_id": "recon",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "RECON_TO_EXECUTION"
+              ],
+              "priority": 100,
+              "terminal_state_id": "recon_to_execution",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "recon-to-planning-to-terminal-recon-to-planning",
+              "from_node_id": "recon",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "RECON_TO_PLANNING"
+              ],
+              "priority": 100,
+              "terminal_state_id": "recon_to_planning",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "recon-noop-to-terminal-recon-noop",
+              "from_node_id": "recon",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "RECON_NOOP"
+              ],
+              "priority": 100,
+              "terminal_state_id": "recon_noop",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "recon-blocked-to-terminal-recon-blocked",
+              "from_node_id": "recon",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "RECON_BLOCKED"
+              ],
+              "priority": 100,
+              "terminal_state_id": "recon_blocked",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "recon-generic-blocked-to-terminal-recon-blocked",
+              "from_node_id": "recon",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "BLOCKED"
+              ],
+              "priority": 100,
+              "terminal_state_id": "recon_blocked",
+              "to_node_id": null
             },
             {
               "description": null,
@@ -13523,6 +15302,12 @@
             "logical_id": "entrypoint:entrypoints/planning/planner.md"
           },
           {
+            "asset_family": "entrypoint",
+            "compile_time_path": "entrypoints/planning/recon.md",
+            "content_sha256": "<content-sha256>",
+            "logical_id": "entrypoint:entrypoints/planning/recon.md"
+          },
+          {
             "asset_family": "graph_loop",
             "compile_time_path": "graphs/execution/standard.json",
             "content_sha256": "<content-sha256>",
@@ -13637,6 +15422,12 @@
             "logical_id": "skill:skills/stage/planning/planner-core/SKILL.md"
           },
           {
+            "asset_family": "skill",
+            "compile_time_path": "skills/stage/planning/recon-core/SKILL.md",
+            "content_sha256": "<content-sha256>",
+            "logical_id": "skill:skills/stage/planning/recon-core/SKILL.md"
+          },
+          {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/learning/analyst.json",
             "content_sha256": "<content-sha256>",
@@ -13716,6 +15507,12 @@
           },
           {
             "asset_family": "stage_kind",
+            "compile_time_path": "registry/stage_kinds/planning/recon.json",
+            "content_sha256": "<content-sha256>",
+            "logical_id": "stage_kind:recon"
+          },
+          {
+            "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/troubleshooter.json",
             "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:troubleshooter"
@@ -13770,6 +15567,7 @@
             "entry: execution.task -> builder",
             "entry: learning.learning_request -> analyst",
             "entry: planning.incident -> auditor",
+            "entry: planning.probe -> recon",
             "entry: planning.spec -> planner"
           ],
           "execution_loop_id": "execution.standard",
@@ -13986,6 +15784,20 @@
               "running_status_marker": "PLANNER_RUNNING",
               "stage": "planning.planner",
               "stage_kind_id": "planner",
+              "thinking_level": "none",
+              "timeout_seconds": "3600"
+            },
+            {
+              "attached_skills": "none",
+              "entrypoint_contract_id": "recon.contract.v1",
+              "entrypoint_path": "entrypoints/planning/recon.md",
+              "model_name": "none",
+              "model_reasoning_effort": "none",
+              "required_skills": "skills/stage/planning/recon-core/SKILL.md",
+              "runner_name": "pi_rpc",
+              "running_status_marker": "RECON_RUNNING",
+              "stage": "planning.recon",
+              "stage_kind_id": "recon",
               "thinking_level": "none",
               "timeout_seconds": "3600"
             }
@@ -15486,6 +17298,12 @@
             },
             "compiled_entries": [
               {
+                "entry_key": "probe",
+                "node_id": "recon",
+                "plane": "planning",
+                "stage_kind_id": "recon"
+              },
+              {
                 "entry_key": "spec",
                 "node_id": "planner",
                 "plane": "planning",
@@ -15538,6 +17356,56 @@
                 "source_node_id": "planner",
                 "target_node_id": "manager",
                 "terminal_state_id": null
+              },
+              {
+                "edge_id": "recon-to-execution-to-terminal-recon-to-execution",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "RECON_TO_EXECUTION",
+                "priority": 100,
+                "source_node_id": "recon",
+                "target_node_id": null,
+                "terminal_state_id": "recon_to_execution"
+              },
+              {
+                "edge_id": "recon-to-planning-to-terminal-recon-to-planning",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "RECON_TO_PLANNING",
+                "priority": 100,
+                "source_node_id": "recon",
+                "target_node_id": null,
+                "terminal_state_id": "recon_to_planning"
+              },
+              {
+                "edge_id": "recon-noop-to-terminal-recon-noop",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "RECON_NOOP",
+                "priority": 100,
+                "source_node_id": "recon",
+                "target_node_id": null,
+                "terminal_state_id": "recon_noop"
+              },
+              {
+                "edge_id": "recon-blocked-to-terminal-recon-blocked",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "RECON_BLOCKED",
+                "priority": 100,
+                "source_node_id": "recon",
+                "target_node_id": null,
+                "terminal_state_id": "recon_blocked"
+              },
+              {
+                "edge_id": "recon-generic-blocked-to-terminal-recon-blocked",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "BLOCKED",
+                "priority": 100,
+                "source_node_id": "recon",
+                "target_node_id": null,
+                "terminal_state_id": "recon_blocked"
               },
               {
                 "edge_id": "planner-blocked-to-mechanic",
@@ -15655,6 +17523,10 @@
             },
             "entry_nodes": [
               {
+                "entry_key": "probe",
+                "node_id": "recon"
+              },
+              {
                 "entry_key": "spec",
                 "node_id": "planner"
               },
@@ -15665,6 +17537,48 @@
             ],
             "loop_id": "planning.standard",
             "nodes": [
+              {
+                "allowed_result_classes_by_outcome": {
+                  "BLOCKED": [
+                    "blocked",
+                    "recoverable_failure"
+                  ],
+                  "RECON_BLOCKED": [
+                    "blocked"
+                  ],
+                  "RECON_NOOP": [
+                    "no_op"
+                  ],
+                  "RECON_TO_EXECUTION": [
+                    "success"
+                  ],
+                  "RECON_TO_PLANNING": [
+                    "success"
+                  ]
+                },
+                "attached_skill_additions": [],
+                "declared_output_artifacts": [
+                  "stage_result",
+                  "recon_packet",
+                  "task",
+                  "spec",
+                  "report"
+                ],
+                "entrypoint_contract_id": "recon.contract.v1",
+                "entrypoint_path": "entrypoints/planning/recon.md",
+                "model_name": null,
+                "model_reasoning_effort": null,
+                "node_id": "recon",
+                "plane": "planning",
+                "required_skill_paths": [
+                  "skills/stage/planning/recon-core/SKILL.md"
+                ],
+                "runner_name": "codex_cli",
+                "running_status_marker": "RECON_RUNNING",
+                "stage_kind_id": "recon",
+                "thinking_level": null,
+                "timeout_seconds": 3600
+              },
               {
                 "allowed_result_classes_by_outcome": {
                   "BLOCKED": [
@@ -15826,6 +17740,49 @@
               {
                 "emits_artifacts": [
                   "stage_result",
+                  "recon_packet",
+                  "task"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "success",
+                "terminal_state_id": "recon_to_execution",
+                "writes_status": "RECON_TO_EXECUTION"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
+                  "recon_packet",
+                  "spec"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "success",
+                "terminal_state_id": "recon_to_planning",
+                "writes_status": "RECON_TO_PLANNING"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
+                  "recon_packet"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "no_op",
+                "terminal_state_id": "recon_noop",
+                "writes_status": "RECON_NOOP"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
+                  "recon_packet",
+                  "report"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "blocked",
+                "terminal_state_id": "recon_blocked",
+                "writes_status": "RECON_BLOCKED"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
                   "task_cards"
                 ],
                 "ends_plane_run": true,
@@ -15880,6 +17837,71 @@
                 "priority": 100,
                 "terminal_state_id": null,
                 "to_node_id": "manager"
+              },
+              {
+                "description": null,
+                "edge_id": "recon-to-execution-to-terminal-recon-to-execution",
+                "from_node_id": "recon",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "RECON_TO_EXECUTION"
+                ],
+                "priority": 100,
+                "terminal_state_id": "recon_to_execution",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "recon-to-planning-to-terminal-recon-to-planning",
+                "from_node_id": "recon",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "RECON_TO_PLANNING"
+                ],
+                "priority": 100,
+                "terminal_state_id": "recon_to_planning",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "recon-noop-to-terminal-recon-noop",
+                "from_node_id": "recon",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "RECON_NOOP"
+                ],
+                "priority": 100,
+                "terminal_state_id": "recon_noop",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "recon-blocked-to-terminal-recon-blocked",
+                "from_node_id": "recon",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "RECON_BLOCKED"
+                ],
+                "priority": 100,
+                "terminal_state_id": "recon_blocked",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "recon-generic-blocked-to-terminal-recon-blocked",
+                "from_node_id": "recon",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "BLOCKED"
+                ],
+                "priority": 100,
+                "terminal_state_id": "recon_blocked",
+                "to_node_id": null
               },
               {
                 "description": null,
@@ -16042,6 +18064,12 @@
           },
           "compiled_entries": [
             {
+              "entry_key": "probe",
+              "node_id": "recon",
+              "plane": "planning",
+              "stage_kind_id": "recon"
+            },
+            {
               "entry_key": "spec",
               "node_id": "planner",
               "plane": "planning",
@@ -16094,6 +18122,56 @@
               "source_node_id": "planner",
               "target_node_id": "manager",
               "terminal_state_id": null
+            },
+            {
+              "edge_id": "recon-to-execution-to-terminal-recon-to-execution",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "RECON_TO_EXECUTION",
+              "priority": 100,
+              "source_node_id": "recon",
+              "target_node_id": null,
+              "terminal_state_id": "recon_to_execution"
+            },
+            {
+              "edge_id": "recon-to-planning-to-terminal-recon-to-planning",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "RECON_TO_PLANNING",
+              "priority": 100,
+              "source_node_id": "recon",
+              "target_node_id": null,
+              "terminal_state_id": "recon_to_planning"
+            },
+            {
+              "edge_id": "recon-noop-to-terminal-recon-noop",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "RECON_NOOP",
+              "priority": 100,
+              "source_node_id": "recon",
+              "target_node_id": null,
+              "terminal_state_id": "recon_noop"
+            },
+            {
+              "edge_id": "recon-blocked-to-terminal-recon-blocked",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "RECON_BLOCKED",
+              "priority": 100,
+              "source_node_id": "recon",
+              "target_node_id": null,
+              "terminal_state_id": "recon_blocked"
+            },
+            {
+              "edge_id": "recon-generic-blocked-to-terminal-recon-blocked",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "BLOCKED",
+              "priority": 100,
+              "source_node_id": "recon",
+              "target_node_id": null,
+              "terminal_state_id": "recon_blocked"
             },
             {
               "edge_id": "planner-blocked-to-mechanic",
@@ -16211,6 +18289,10 @@
           },
           "entry_nodes": [
             {
+              "entry_key": "probe",
+              "node_id": "recon"
+            },
+            {
               "entry_key": "spec",
               "node_id": "planner"
             },
@@ -16221,6 +18303,48 @@
           ],
           "loop_id": "planning.standard",
           "nodes": [
+            {
+              "allowed_result_classes_by_outcome": {
+                "BLOCKED": [
+                  "blocked",
+                  "recoverable_failure"
+                ],
+                "RECON_BLOCKED": [
+                  "blocked"
+                ],
+                "RECON_NOOP": [
+                  "no_op"
+                ],
+                "RECON_TO_EXECUTION": [
+                  "success"
+                ],
+                "RECON_TO_PLANNING": [
+                  "success"
+                ]
+              },
+              "attached_skill_additions": [],
+              "declared_output_artifacts": [
+                "stage_result",
+                "recon_packet",
+                "task",
+                "spec",
+                "report"
+              ],
+              "entrypoint_contract_id": "recon.contract.v1",
+              "entrypoint_path": "entrypoints/planning/recon.md",
+              "model_name": null,
+              "model_reasoning_effort": null,
+              "node_id": "recon",
+              "plane": "planning",
+              "required_skill_paths": [
+                "skills/stage/planning/recon-core/SKILL.md"
+              ],
+              "runner_name": "codex_cli",
+              "running_status_marker": "RECON_RUNNING",
+              "stage_kind_id": "recon",
+              "thinking_level": null,
+              "timeout_seconds": 3600
+            },
             {
               "allowed_result_classes_by_outcome": {
                 "BLOCKED": [
@@ -16382,6 +18506,49 @@
             {
               "emits_artifacts": [
                 "stage_result",
+                "recon_packet",
+                "task"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "success",
+              "terminal_state_id": "recon_to_execution",
+              "writes_status": "RECON_TO_EXECUTION"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
+                "recon_packet",
+                "spec"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "success",
+              "terminal_state_id": "recon_to_planning",
+              "writes_status": "RECON_TO_PLANNING"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
+                "recon_packet"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "no_op",
+              "terminal_state_id": "recon_noop",
+              "writes_status": "RECON_NOOP"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
+                "recon_packet",
+                "report"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "blocked",
+              "terminal_state_id": "recon_blocked",
+              "writes_status": "RECON_BLOCKED"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
                 "task_cards"
               ],
               "ends_plane_run": true,
@@ -16436,6 +18603,71 @@
               "priority": 100,
               "terminal_state_id": null,
               "to_node_id": "manager"
+            },
+            {
+              "description": null,
+              "edge_id": "recon-to-execution-to-terminal-recon-to-execution",
+              "from_node_id": "recon",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "RECON_TO_EXECUTION"
+              ],
+              "priority": 100,
+              "terminal_state_id": "recon_to_execution",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "recon-to-planning-to-terminal-recon-to-planning",
+              "from_node_id": "recon",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "RECON_TO_PLANNING"
+              ],
+              "priority": 100,
+              "terminal_state_id": "recon_to_planning",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "recon-noop-to-terminal-recon-noop",
+              "from_node_id": "recon",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "RECON_NOOP"
+              ],
+              "priority": 100,
+              "terminal_state_id": "recon_noop",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "recon-blocked-to-terminal-recon-blocked",
+              "from_node_id": "recon",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "RECON_BLOCKED"
+              ],
+              "priority": 100,
+              "terminal_state_id": "recon_blocked",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "recon-generic-blocked-to-terminal-recon-blocked",
+              "from_node_id": "recon",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "BLOCKED"
+              ],
+              "priority": 100,
+              "terminal_state_id": "recon_blocked",
+              "to_node_id": null
             },
             {
               "description": null,
@@ -16644,6 +18876,12 @@
             "logical_id": "entrypoint:entrypoints/planning/planner.md"
           },
           {
+            "asset_family": "entrypoint",
+            "compile_time_path": "entrypoints/planning/recon.md",
+            "content_sha256": "<content-sha256>",
+            "logical_id": "entrypoint:entrypoints/planning/recon.md"
+          },
+          {
             "asset_family": "graph_loop",
             "compile_time_path": "graphs/execution/standard.json",
             "content_sha256": "<content-sha256>",
@@ -16734,6 +18972,12 @@
             "logical_id": "skill:skills/stage/planning/planner-core/SKILL.md"
           },
           {
+            "asset_family": "skill",
+            "compile_time_path": "skills/stage/planning/recon-core/SKILL.md",
+            "content_sha256": "<content-sha256>",
+            "logical_id": "skill:skills/stage/planning/recon-core/SKILL.md"
+          },
+          {
             "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/planning/arbiter.json",
             "content_sha256": "<content-sha256>",
@@ -16795,6 +19039,12 @@
           },
           {
             "asset_family": "stage_kind",
+            "compile_time_path": "registry/stage_kinds/planning/recon.json",
+            "content_sha256": "<content-sha256>",
+            "logical_id": "stage_kind:recon"
+          },
+          {
+            "asset_family": "stage_kind",
             "compile_time_path": "registry/stage_kinds/execution/troubleshooter.json",
             "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:troubleshooter"
@@ -16847,6 +19097,7 @@
           "entries": [
             "entry: execution.task -> builder",
             "entry: planning.incident -> auditor",
+            "entry: planning.probe -> recon",
             "entry: planning.spec -> planner"
           ],
           "execution_loop_id": "execution.standard",
@@ -17022,6 +19273,20 @@
               "stage_kind_id": "planner",
               "thinking_level": "none",
               "timeout_seconds": "3600"
+            },
+            {
+              "attached_skills": "none",
+              "entrypoint_contract_id": "recon.contract.v1",
+              "entrypoint_path": "entrypoints/planning/recon.md",
+              "model_name": "none",
+              "model_reasoning_effort": "none",
+              "required_skills": "skills/stage/planning/recon-core/SKILL.md",
+              "runner_name": "codex_cli",
+              "running_status_marker": "RECON_RUNNING",
+              "stage": "planning.recon",
+              "stage_kind_id": "recon",
+              "thinking_level": "none",
+              "timeout_seconds": "3600"
             }
           ]
         }
@@ -17055,6 +19320,15 @@
       "src/millrace_ai/contracts/modes.py",
       "src/millrace_ai/contracts/stage_metadata.py",
       "src/millrace_ai/architecture/loop_graphs.py",
+      "src/millrace_ai/assets/entrypoints/planning/recon.md",
+      "src/millrace_ai/assets/graphs/planning/standard.json",
+      "src/millrace_ai/assets/modes/default_codex.json",
+      "src/millrace_ai/assets/modes/default_pi.json",
+      "src/millrace_ai/assets/modes/learning_codex.json",
+      "src/millrace_ai/assets/modes/learning_pi.json",
+      "src/millrace_ai/assets/registry/stage_kinds/planning/recon.json",
+      "src/millrace_ai/assets/skills/skills_index.md",
+      "src/millrace_ai/assets/skills/stage/planning/recon-core/SKILL.md",
       "src/millrace_ai/architecture/materialization.py",
       "src/millrace_ai/cli/commands/compile.py",
       "src/millrace_ai/cli/formatting.py",
@@ -17072,15 +19346,15 @@
       "tests/integration/test_compiler.py",
       "tests/integration/test_graph_exports.py"
     ],
-    "diff_range": "v0.17.4..v0.18.0",
+    "diff_range": "v0.18.0..v0.18.1",
     "package": "millrace-ai",
-    "previous_commit": "304e537964ff772c815689b87e4c1e3b805c656c",
-    "previous_tag": "v0.17.4",
-    "previous_version": "0.17.4",
+    "previous_commit": "e4ccf099c8345a8b8708cdaa1ac510bdc7851387",
+    "previous_tag": "v0.18.0",
+    "previous_version": "0.18.0",
     "python_root": "../millrace-py",
-    "target_commit": "e4ccf099c8345a8b8708cdaa1ac510bdc7851387",
-    "target_tag": "v0.18.0",
-    "target_version": "0.18.0",
-    "version": "0.18.0"
+    "target_commit": "0396c7852793b212d31345862b38a7d6f3f02854",
+    "target_tag": "v0.18.1",
+    "target_version": "0.18.1",
+    "version": "0.18.1"
   }
 }

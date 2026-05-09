@@ -121,10 +121,14 @@ fn initialize_workspace_deploys_managed_assets_and_manifest_io() {
 
     let representative_assets = [
         "entrypoints/execution/builder.md",
+        "entrypoints/planning/recon.md",
         "skills/stage/execution/builder-core/SKILL.md",
+        "skills/stage/planning/recon-core/SKILL.md",
         "modes/default_codex.json",
         "graphs/execution/standard.json",
+        "graphs/planning/standard.json",
         "registry/stage_kinds/execution/builder.json",
+        "registry/stage_kinds/planning/recon.json",
         "loops/execution/default.json",
     ];
 
@@ -168,6 +172,68 @@ fn initialize_workspace_deploys_managed_assets_and_manifest_io() {
         "operator edit\n"
     );
     assert_eq!(load_baseline_manifest(&paths).unwrap(), manifest);
+}
+
+#[test]
+fn initialized_workspace_recon_assets_match_packaged_baseline() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+    let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/assets/baseline");
+    let recon_assets = [
+        "entrypoints/planning/recon.md",
+        "skills/stage/planning/recon-core/SKILL.md",
+        "registry/stage_kinds/planning/recon.json",
+        "graphs/planning/standard.json",
+        "modes/default_codex.json",
+        "modes/default_pi.json",
+        "modes/learning_codex.json",
+        "modes/learning_pi.json",
+        "skills/skills_index.md",
+    ];
+
+    for relative_path in recon_assets {
+        assert_eq!(
+            fs::read(paths.runtime_root.join(relative_path)).unwrap(),
+            fs::read(source_root.join(relative_path)).unwrap(),
+            "workspace Recon asset drifted from packaged baseline: {relative_path}",
+        );
+    }
+
+    let planning_graph: Value = serde_json::from_slice(
+        &fs::read(paths.runtime_root.join("graphs/planning/standard.json")).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        planning_graph["entry_nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["entry_key"] == "probe" && entry["node_id"] == "recon")
+    );
+    assert!(
+        planning_graph["terminal_states"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|state| state["terminal_state_id"] == "recon_to_execution"
+                && state["writes_status"] == "RECON_TO_EXECUTION")
+    );
+
+    let default_mode: Value = serde_json::from_slice(
+        &fs::read(paths.runtime_root.join("modes/default_codex.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(default_mode["stage_runner_bindings"]["recon"], "codex_cli");
+
+    let pi_mode: Value = serde_json::from_slice(
+        &fs::read(paths.runtime_root.join("modes/default_pi.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(pi_mode["stage_runner_bindings"]["recon"], "pi_rpc");
+
+    let skills_index =
+        fs::read_to_string(paths.runtime_root.join("skills/skills_index.md")).unwrap();
+    assert!(skills_index.contains("| `recon-core` |"));
 }
 
 #[test]

@@ -47,11 +47,12 @@ pub use queue_store::{
     QueueClaim, QueueInspectionEntry, QueueStore, QueueStoreError, QueueStoreResult,
     StaleActiveState, claim_next_execution_task, claim_next_learning_request,
     claim_next_planning_item, detect_execution_stale_state, detect_learning_stale_state,
-    detect_planning_stale_state, enqueue_incident, enqueue_learning_request, enqueue_spec,
-    enqueue_task, find_queue_item, inspect_queue_items, list_deferred_root_spec_ids,
+    detect_planning_stale_state, enqueue_incident, enqueue_learning_request, enqueue_probe,
+    enqueue_spec, enqueue_task, find_queue_item, inspect_queue_items, list_deferred_root_spec_ids,
     mark_incident_blocked, mark_incident_resolved, mark_learning_request_blocked,
-    mark_learning_request_done, mark_spec_blocked, mark_spec_done, mark_task_blocked,
-    mark_task_done, requeue_incident, requeue_learning_request, requeue_spec, requeue_task,
+    mark_learning_request_done, mark_probe_blocked, mark_probe_done, mark_spec_blocked,
+    mark_spec_done, mark_task_blocked, mark_task_done, requeue_incident, requeue_learning_request,
+    requeue_probe, requeue_spec, requeue_task,
 };
 pub use runtime_control::{
     RuntimeControl, RuntimeControlActionResult, RuntimeControlError, RuntimeControlMode,
@@ -216,6 +217,24 @@ pub struct WorkspacePaths {
     /// Blocked incident directory.
     pub incidents_blocked_dir: PathBuf,
 
+    /// Probe root directory.
+    pub probes_dir: PathBuf,
+    /// Queued probe directory.
+    pub probes_queue_dir: PathBuf,
+    /// Active probe directory.
+    pub probes_active_dir: PathBuf,
+    /// Done probe directory.
+    pub probes_done_dir: PathBuf,
+    /// Blocked probe directory.
+    pub probes_blocked_dir: PathBuf,
+
+    /// Recon artifact root directory.
+    pub recon_dir: PathBuf,
+    /// Durable recon packet directory.
+    pub recon_packets_dir: PathBuf,
+    /// Recon report directory.
+    pub recon_reports_dir: PathBuf,
+
     /// Learning plane root directory.
     pub learning_dir: PathBuf,
     /// Learning request root directory.
@@ -355,6 +374,14 @@ impl WorkspacePaths {
             &self.incidents_active_dir,
             &self.incidents_resolved_dir,
             &self.incidents_blocked_dir,
+            &self.probes_dir,
+            &self.probes_queue_dir,
+            &self.probes_active_dir,
+            &self.probes_done_dir,
+            &self.probes_blocked_dir,
+            &self.recon_dir,
+            &self.recon_packets_dir,
+            &self.recon_reports_dir,
             &self.learning_dir,
             &self.learning_requests_dir,
             &self.learning_requests_queue_dir,
@@ -403,6 +430,8 @@ pub fn workspace_paths(root: impl AsRef<Path>) -> WorkspacePaths {
     let tasks_dir = runtime_root.join("tasks");
     let specs_dir = runtime_root.join("specs");
     let incidents_dir = runtime_root.join("incidents");
+    let probes_dir = runtime_root.join("probes");
+    let recon_dir = runtime_root.join("recon");
     let learning_dir = runtime_root.join("learning");
     let learning_requests_dir = learning_dir.join("requests");
     let arbiter_dir = runtime_root.join("arbiter");
@@ -436,6 +465,14 @@ pub fn workspace_paths(root: impl AsRef<Path>) -> WorkspacePaths {
         incidents_active_dir: incidents_dir.join("active"),
         incidents_resolved_dir: incidents_dir.join("resolved"),
         incidents_blocked_dir: incidents_dir.join("blocked"),
+        probes_dir: probes_dir.clone(),
+        probes_queue_dir: probes_dir.join("queue"),
+        probes_active_dir: probes_dir.join("active"),
+        probes_done_dir: probes_dir.join("done"),
+        probes_blocked_dir: probes_dir.join("blocked"),
+        recon_dir: recon_dir.clone(),
+        recon_packets_dir: recon_dir.join("packets"),
+        recon_reports_dir: recon_dir.join("reports"),
         learning_dir: learning_dir.clone(),
         learning_requests_dir: learning_requests_dir.clone(),
         learning_requests_queue_dir: learning_requests_dir.join("queue"),
@@ -502,8 +539,10 @@ pub fn require_initialized_workspace_paths(paths: &WorkspacePaths) -> WorkspaceR
         &paths.runtime_root,
         &paths.state_dir,
         &paths.tasks_queue_dir,
+        &paths.probes_queue_dir,
         &paths.specs_queue_dir,
         &paths.incidents_incoming_dir,
+        &paths.recon_packets_dir,
         &paths.learning_requests_queue_dir,
         &paths.entrypoints_dir,
         &paths.skills_dir,

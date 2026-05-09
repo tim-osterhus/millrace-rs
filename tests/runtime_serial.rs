@@ -9,14 +9,19 @@ use tempfile::TempDir;
 use millrace_ai::contracts::{
     ActiveRunRequestKind, ActiveRunState, ClosureTargetState, ExecutionTerminalResult,
     IncidentDecision, IncidentDocument, IncidentSeverity, LearningRequestAction,
-    LearningRequestDocument, LearningTerminalResult, Plane, PlanningTerminalResult, ResultClass,
-    RunTraceGraph, RuntimeErrorContext, RuntimeJsonContract, RuntimeMode, SpecDocument,
-    SpecSourceType, StageName, StageResultEnvelope, SubscriptionQuotaWindowReading, TaskDocument,
-    TerminalResult, Timestamp, TokenUsage, UsageGovernanceDegradedPolicy,
-    UsageGovernanceRuntimeTokenMetric, UsageGovernanceRuntimeTokenWindow,
-    UsageGovernanceSubscriptionWindow, WorkItemKind,
+    LearningRequestDocument, LearningTerminalResult, Plane, PlanningTerminalResult, ProbeDocument,
+    ReconConfidence, ReconDecision, ReconPacketDocument, ReconPathFinding, ReconRiskLevel,
+    ReconVerificationPlan, ResultClass, RootIntakeKind, RunTraceGraph, RuntimeErrorContext,
+    RuntimeJsonContract, RuntimeMode, SpecDocument, SpecSourceType, StageName, StageResultEnvelope,
+    SubscriptionQuotaWindowReading, TaskDocument, TerminalResult, Timestamp, TokenUsage,
+    UsageGovernanceDegradedPolicy, UsageGovernanceRuntimeTokenMetric,
+    UsageGovernanceRuntimeTokenWindow, UsageGovernanceSubscriptionWindow, WorkItemKind,
 };
-use millrace_ai::work_documents::{parse_incident_document, parse_learning_request_document};
+use millrace_ai::recon_packets::render_recon_packet;
+use millrace_ai::work_documents::{
+    parse_incident_document, parse_learning_request_document, parse_spec_document,
+    parse_task_document,
+};
 use millrace_ai::workspace::{
     QueueStore, RuntimeOwnershipLockOptions, RuntimeOwnershipLockState,
     acquire_runtime_ownership_lock_with_options, initialize_workspace,
@@ -597,6 +602,8 @@ fn task_document(task_id: &str) -> TaskDocument {
         summary: "runtime startup test".to_owned(),
         root_idea_id: Some("idea-001".to_owned()),
         root_spec_id: Some("spec-root-001".to_owned()),
+        root_intake_kind: None,
+        root_intake_id: None,
         spec_id: Some("spec-root-001".to_owned()),
         parent_task_id: None,
         incident_id: None,
@@ -625,6 +632,8 @@ fn spec_document(spec_id: &str) -> SpecDocument {
         parent_spec_id: None,
         root_idea_id: Some("idea-001".to_owned()),
         root_spec_id: Some(spec_id.to_owned()),
+        root_intake_kind: None,
+        root_intake_id: None,
         goals: vec!["plan runtime work".to_owned()],
         non_goals: Vec::new(),
         scope: vec!["runtime activation".to_owned()],
@@ -643,6 +652,93 @@ fn spec_document(spec_id: &str) -> SpecDocument {
     }
 }
 
+fn probe_document_for_recon(probe_id: &str) -> ProbeDocument {
+    ProbeDocument {
+        probe_id: probe_id.to_owned(),
+        title: format!("Probe {probe_id}"),
+        summary: "runtime recon routing test".to_owned(),
+        request: "Research the repo surface and route this work safely.".to_owned(),
+        target_paths: vec!["src/runtime/".to_owned()],
+        constraints: vec!["Do not implement during recon.".to_owned()],
+        acceptance: vec!["Recon packet is applied by the runtime.".to_owned()],
+        risk_notes: vec!["result application can move probes too early".to_owned()],
+        references: vec!["../millrace-py/src/millrace_ai/runtime/recon_transitions.py".to_owned()],
+        tags: vec!["probe".to_owned(), "recon".to_owned()],
+        status_hint: None,
+        created_at: timestamp(STARTUP_NOW),
+        created_by: "tests".to_owned(),
+        updated_at: None,
+    }
+}
+
+fn recon_packet_for(probe_id: &str, decision: ReconDecision) -> ReconPacketDocument {
+    ReconPacketDocument {
+        schema_version: "1.0".to_owned(),
+        kind: "recon_packet".to_owned(),
+        recon_packet_id: format!("recon-{probe_id}"),
+        probe_id: probe_id.to_owned(),
+        decision,
+        confidence: ReconConfidence::High,
+        risk_level: ReconRiskLevel::Medium,
+        request_summary: "Research before routing.".to_owned(),
+        interpreted_goal: "Route this work through the smallest safe lane.".to_owned(),
+        relevant_paths: vec![ReconPathFinding {
+            path: "src/runtime/".to_owned(),
+            reason: "Runtime result application owns Recon handoff.".to_owned(),
+        }],
+        relevant_symbols: Vec::new(),
+        relevant_tests: vec![ReconPathFinding {
+            path: "tests/runtime_serial.rs".to_owned(),
+            reason: "Serial runtime coverage proves routing and lifecycle.".to_owned(),
+        }],
+        semantic_invariants: vec![
+            "Validate packet and generated artifact before moving probe.".to_owned(),
+        ],
+        edge_cases_to_preserve: Vec::new(),
+        verification_plan: ReconVerificationPlan {
+            required_commands: vec!["cargo test --test runtime_serial".to_owned()],
+            focused_checks: vec!["Recon result application tests".to_owned()],
+            fallback_checks: Vec::new(),
+        },
+        open_questions: Vec::new(),
+        handoff_target: decision.handoff_target(),
+        emitted_task_id: (decision == ReconDecision::ToExecution)
+            .then(|| "task-from-probe".to_owned()),
+        emitted_spec_id: (decision == ReconDecision::ToPlanning)
+            .then(|| "spec-from-probe".to_owned()),
+        created_at: timestamp(STARTUP_NOW),
+        created_by: "recon".to_owned(),
+    }
+}
+
+fn generated_probe_task(task_id: &str) -> TaskDocument {
+    let mut task = task_document(task_id);
+    task.title = "Task from probe".to_owned();
+    task.summary = "direct execution route".to_owned();
+    task.root_idea_id = Some("idea-from-probe".to_owned());
+    task.root_spec_id = Some("spec-from-probe-root".to_owned());
+    task.root_intake_kind = None;
+    task.root_intake_id = None;
+    task.references = vec!["millrace-agents/probes/active/probe-001.md".to_owned()];
+    task.created_by = "recon".to_owned();
+    task
+}
+
+fn generated_probe_spec(spec_id: &str) -> SpecDocument {
+    let mut spec = spec_document(spec_id);
+    spec.title = "Spec from probe".to_owned();
+    spec.summary = "planning route".to_owned();
+    spec.source_type = SpecSourceType::Manual;
+    spec.source_id = None;
+    spec.root_idea_id = Some("idea-from-probe".to_owned());
+    spec.root_spec_id = None;
+    spec.root_intake_kind = None;
+    spec.root_intake_id = None;
+    spec.references = vec!["millrace-agents/probes/active/probe-001.md".to_owned()];
+    spec.created_by = "recon".to_owned();
+    spec
+}
+
 fn incident_document(incident_id: &str) -> IncidentDocument {
     IncidentDocument {
         incident_id: incident_id.to_owned(),
@@ -650,6 +746,8 @@ fn incident_document(incident_id: &str) -> IncidentDocument {
         summary: "runtime activation incident".to_owned(),
         root_idea_id: Some("idea-001".to_owned()),
         root_spec_id: Some("spec-root-001".to_owned()),
+        root_intake_kind: None,
+        root_intake_id: None,
         source_task_id: None,
         source_spec_id: Some("spec-root-001".to_owned()),
         source_stage: StageName::Checker,
@@ -707,6 +805,8 @@ fn closure_target_state(root_spec_id: &str, root_idea_id: &str) -> ClosureTarget
         kind: "closure_target_state".to_owned(),
         root_spec_id: root_spec_id.to_owned(),
         root_idea_id: root_idea_id.to_owned(),
+        root_intake_kind: None,
+        root_intake_id: None,
         root_spec_path: format!("millrace-agents/arbiter/contracts/root-specs/{root_spec_id}.md"),
         root_idea_path: format!("millrace-agents/arbiter/contracts/ideas/{root_idea_id}.md"),
         rubric_path: format!("millrace-agents/arbiter/rubrics/{root_spec_id}.md"),
@@ -1189,7 +1289,7 @@ impl StageRunnerAdapter for PreemptiveCompletionRunner {
                 WorkItemKind::Spec => {
                     queue.mark_spec_done(self.work_item_id).unwrap();
                 }
-                WorkItemKind::Incident | WorkItemKind::LearningRequest => {
+                WorkItemKind::Probe | WorkItemKind::Incident | WorkItemKind::LearningRequest => {
                     panic!("unsupported preemptive completion kind");
                 }
             }
@@ -1345,6 +1445,103 @@ impl StageRunnerAdapter for ArbiterArtifactRunner {
         config.fixed_started_at = timestamp("2026-04-28T20:10:00Z");
         config.fixed_ended_at = timestamp("2026-04-28T20:10:01Z");
         FakeRunner::new(config).run(request)
+    }
+}
+
+enum ReconGeneratedArtifact {
+    Task(TaskDocument),
+    Spec(SpecDocument),
+}
+
+struct ReconArtifactRunner {
+    marker: &'static str,
+    packet: ReconPacketDocument,
+    generated: Option<ReconGeneratedArtifact>,
+}
+
+impl ReconArtifactRunner {
+    fn new(
+        marker: &'static str,
+        packet: ReconPacketDocument,
+        generated: Option<ReconGeneratedArtifact>,
+    ) -> Self {
+        Self {
+            marker,
+            packet,
+            generated,
+        }
+    }
+}
+
+impl StageRunnerAdapter for ReconArtifactRunner {
+    fn run(&self, request: &StageRunRequest) -> RunnerResult<RunnerRawResult> {
+        let run_dir = Path::new(&request.run_dir);
+        fs::create_dir_all(run_dir).map_err(|error| RunnerError::Io {
+            path: run_dir.display().to_string(),
+            message: error.to_string(),
+        })?;
+
+        let packet_path = run_dir.join("recon_packet.md");
+        fs::write(&packet_path, render_recon_packet(&self.packet)).map_err(|error| {
+            RunnerError::Io {
+                path: packet_path.display().to_string(),
+                message: error.to_string(),
+            }
+        })?;
+
+        if let Some(generated) = &self.generated {
+            let (path, payload) = match generated {
+                ReconGeneratedArtifact::Task(task) => (
+                    run_dir.join("generated_task.md"),
+                    serde_json::to_string_pretty(task).map_err(|error| {
+                        RunnerError::InvalidRawResult {
+                            message: error.to_string(),
+                        }
+                    })?,
+                ),
+                ReconGeneratedArtifact::Spec(spec) => (
+                    run_dir.join("generated_spec.md"),
+                    serde_json::to_string_pretty(spec).map_err(|error| {
+                        RunnerError::InvalidRawResult {
+                            message: error.to_string(),
+                        }
+                    })?,
+                ),
+            };
+            fs::write(&path, format!("{payload}\n")).map_err(|error| RunnerError::Io {
+                path: path.display().to_string(),
+                message: error.to_string(),
+            })?;
+        }
+
+        let stdout_path = run_dir.join(format!("recon-{}.stdout.txt", request.request_id));
+        fs::write(&stdout_path, format!("{}\n", self.marker)).map_err(|error| RunnerError::Io {
+            path: stdout_path.display().to_string(),
+            message: error.to_string(),
+        })?;
+
+        let raw_result = RunnerRawResult {
+            request_id: request.request_id.clone(),
+            run_id: request.run_id.clone(),
+            stage: request.stage,
+            runner_name: "recon-artifact-runner".to_owned(),
+            model_name: request.model_name.clone(),
+            thinking_level: request.thinking_level.clone(),
+            model_reasoning_effort: request.model_reasoning_effort.clone(),
+            exit_kind: RunnerExitKind::Completed,
+            exit_code: Some(0),
+            observed_exit_kind: None,
+            observed_exit_code: None,
+            stdout_path: Some(stdout_path.display().to_string()),
+            stderr_path: None,
+            terminal_result_path: None,
+            event_log_path: None,
+            token_usage: None,
+            started_at: timestamp("2026-04-28T20:10:00Z"),
+            ended_at: timestamp("2026-04-28T20:10:01Z"),
+        };
+        raw_result.validate()?;
+        Ok(raw_result)
     }
 }
 
@@ -2402,6 +2599,73 @@ fn serial_tick_claims_planning_before_execution_and_marks_stage_started() {
 }
 
 #[test]
+fn serial_tick_claims_probe_for_recon_stage_request_metadata() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    let queue = QueueStore::from_paths(paths.clone());
+    queue
+        .enqueue_probe(&probe_document_for_recon("probe-ready"))
+        .unwrap();
+
+    let mut session =
+        startup_runtime_once_for_paths(&paths, startup_options("tick-recon-activate")).unwrap();
+    let outcome = run_serial_runtime_tick(
+        &mut session,
+        tick_options("run-recon-activate", "request-recon-activate"),
+    )
+    .unwrap();
+
+    assert_eq!(outcome.kind, RuntimeTickOutcomeKind::StageRequestReady);
+    let request = outcome.stage_request.unwrap();
+    assert_eq!(request.request_id, "request-recon-activate");
+    assert_eq!(request.run_id, "run-recon-activate");
+    assert_eq!(request.plane, Plane::Planning);
+    assert_eq!(request.stage, StageName::Recon);
+    assert_eq!(request.node_id, "recon");
+    assert_eq!(request.stage_kind_id, "recon");
+    assert_eq!(request.request_kind, RequestKind::ActiveWorkItem);
+    assert_eq!(request.active_work_item_kind, Some(WorkItemKind::Probe));
+    assert_eq!(request.active_work_item_id.as_deref(), Some("probe-ready"));
+    assert!(
+        request
+            .active_work_item_path
+            .as_deref()
+            .unwrap()
+            .ends_with("millrace-agents/probes/active/probe-ready.md")
+    );
+    assert_eq!(request.running_status_marker, "RECON_RUNNING");
+    assert_eq!(
+        request.legal_terminal_markers,
+        vec![
+            "### RECON_TO_EXECUTION".to_owned(),
+            "### RECON_TO_PLANNING".to_owned(),
+            "### RECON_NOOP".to_owned(),
+            "### RECON_BLOCKED".to_owned(),
+            "### BLOCKED".to_owned(),
+        ]
+    );
+    assert!(
+        request
+            .required_skill_paths
+            .iter()
+            .any(|path| path.ends_with("skills/stage/planning/recon-core/SKILL.md"))
+    );
+    assert!(Path::new(&request.run_dir).is_dir());
+    assert!(
+        request
+            .preferred_troubleshoot_report_path
+            .as_deref()
+            .unwrap()
+            .starts_with(&request.run_dir)
+    );
+    assert_eq!(load_planning_status(&paths).unwrap(), "### RECON_RUNNING");
+    assert!(paths.probes_active_dir.join("probe-ready.md").is_file());
+    assert!(!paths.probes_queue_dir.join("probe-ready.md").exists());
+
+    session.finish().unwrap();
+}
+
+#[test]
 fn serial_tick_claims_execution_when_planning_has_no_work() {
     let temp = TempDir::new().unwrap();
     let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
@@ -2430,6 +2694,367 @@ fn serial_tick_claims_execution_when_planning_has_no_work() {
         "### BUILDER_RUNNING"
     );
     assert!(paths.runs_dir.join("run-execution").is_dir());
+
+    session.finish().unwrap();
+}
+
+#[test]
+fn recon_to_execution_persists_packet_marks_probe_done_enqueues_task_and_traces() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    let queue = QueueStore::from_paths(paths.clone());
+    queue
+        .enqueue_probe(&probe_document_for_recon("probe-001"))
+        .unwrap();
+    let runner = ReconArtifactRunner::new(
+        "### RECON_TO_EXECUTION",
+        recon_packet_for("probe-001", ReconDecision::ToExecution),
+        Some(ReconGeneratedArtifact::Task(generated_probe_task(
+            "task-from-probe",
+        ))),
+    );
+    let mut session =
+        startup_runtime_once_for_paths(&paths, startup_options("tick-recon-exec")).unwrap();
+
+    let outcome = run_serial_runtime_tick_with_runner(
+        &mut session,
+        tick_options("run-recon-exec", "request-recon-exec"),
+        &runner,
+    )
+    .unwrap();
+
+    let decision = outcome.router_decision.as_ref().unwrap();
+    assert_eq!(decision.action, RouterAction::Idle);
+    assert_eq!(decision.reason, "recon_to_execution");
+    assert!(paths.probes_done_dir.join("probe-001.md").is_file());
+    assert!(!paths.probes_active_dir.join("probe-001.md").exists());
+    assert!(paths.recon_packets_dir.join("recon-probe-001.md").is_file());
+
+    let task_path = paths.tasks_queue_dir.join("task-from-probe.md");
+    assert!(task_path.is_file());
+    let task = parse_task_document(&fs::read_to_string(&task_path).unwrap()).unwrap();
+    assert_eq!(task.root_intake_kind, Some(RootIntakeKind::Probe));
+    assert_eq!(task.root_intake_id.as_deref(), Some("probe-001"));
+    assert_eq!(task.root_idea_id.as_deref(), Some("idea-from-probe"));
+    assert_eq!(task.root_spec_id.as_deref(), Some("spec-from-probe-root"));
+    assert!(
+        task.references
+            .contains(&"millrace-agents/probes/active/probe-001.md".to_owned())
+    );
+    assert!(
+        task.references
+            .contains(&"millrace-agents/recon/packets/recon-probe-001.md".to_owned())
+    );
+
+    let trace = inspect_run_trace(paths.runs_dir.join("run-recon-exec")).unwrap();
+    assert_eq!(trace.status.as_str(), "complete");
+    assert_eq!(trace.edges[0].outcome, "RECON_TO_EXECUTION");
+    assert_eq!(trace.edges[0].edge_kind, "idle");
+    assert_eq!(
+        trace.edges[0].decision_reason.as_deref(),
+        Some("recon_to_execution")
+    );
+    assert_eq!(trace.edges[0].spawned_work.len(), 1);
+    assert_eq!(trace.edges[0].spawned_work[0].kind.as_str(), "task");
+    assert_eq!(trace.edges[0].spawned_work[0].item_id, "task-from-probe");
+    assert_eq!(
+        trace.edges[0].spawned_work[0].reason.as_deref(),
+        Some("recon_to_execution")
+    );
+
+    session.finish().unwrap();
+}
+
+#[test]
+fn recon_to_planning_persists_packet_marks_probe_done_enqueues_spec() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    let queue = QueueStore::from_paths(paths.clone());
+    queue
+        .enqueue_probe(&probe_document_for_recon("probe-001"))
+        .unwrap();
+    let runner = ReconArtifactRunner::new(
+        "### RECON_TO_PLANNING",
+        recon_packet_for("probe-001", ReconDecision::ToPlanning),
+        Some(ReconGeneratedArtifact::Spec(generated_probe_spec(
+            "spec-from-probe",
+        ))),
+    );
+    let mut session =
+        startup_runtime_once_for_paths(&paths, startup_options("tick-recon-plan")).unwrap();
+
+    let outcome = run_serial_runtime_tick_with_runner(
+        &mut session,
+        tick_options("run-recon-plan", "request-recon-plan"),
+        &runner,
+    )
+    .unwrap();
+
+    let decision = outcome.router_decision.as_ref().unwrap();
+    assert_eq!(decision.action, RouterAction::Idle);
+    assert_eq!(decision.reason, "recon_to_planning");
+    assert!(paths.probes_done_dir.join("probe-001.md").is_file());
+    assert!(paths.recon_packets_dir.join("recon-probe-001.md").is_file());
+
+    let spec_path = paths.specs_queue_dir.join("spec-from-probe.md");
+    assert!(spec_path.is_file());
+    let spec = parse_spec_document(&fs::read_to_string(&spec_path).unwrap()).unwrap();
+    assert_eq!(spec.source_type, SpecSourceType::Probe);
+    assert_eq!(spec.source_id.as_deref(), Some("probe-001"));
+    assert_eq!(spec.root_intake_kind, Some(RootIntakeKind::Probe));
+    assert_eq!(spec.root_intake_id.as_deref(), Some("probe-001"));
+    assert_eq!(spec.root_idea_id.as_deref(), Some("idea-from-probe"));
+    assert_eq!(spec.root_spec_id.as_deref(), Some("spec-from-probe"));
+    assert!(
+        spec.references
+            .contains(&"millrace-agents/probes/active/probe-001.md".to_owned())
+    );
+    assert!(
+        spec.references
+            .contains(&"millrace-agents/recon/packets/recon-probe-001.md".to_owned())
+    );
+
+    let trace = inspect_run_trace(paths.runs_dir.join("run-recon-plan")).unwrap();
+    assert_eq!(trace.status.as_str(), "complete");
+    assert_eq!(trace.edges[0].outcome, "RECON_TO_PLANNING");
+    assert_eq!(trace.edges[0].spawned_work.len(), 1);
+    assert_eq!(trace.edges[0].spawned_work[0].kind.as_str(), "spec");
+    assert_eq!(trace.edges[0].spawned_work[0].item_id, "spec-from-probe");
+
+    session.finish().unwrap();
+}
+
+#[test]
+fn recon_noop_persists_packet_marks_probe_done_without_spawned_work() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    QueueStore::from_paths(paths.clone())
+        .enqueue_probe(&probe_document_for_recon("probe-001"))
+        .unwrap();
+    let runner = ReconArtifactRunner::new(
+        "### RECON_NOOP",
+        recon_packet_for("probe-001", ReconDecision::Noop),
+        None,
+    );
+    let mut session =
+        startup_runtime_once_for_paths(&paths, startup_options("tick-recon-noop")).unwrap();
+
+    let outcome = run_serial_runtime_tick_with_runner(
+        &mut session,
+        tick_options("run-recon-noop", "request-recon-noop"),
+        &runner,
+    )
+    .unwrap();
+
+    let decision = outcome.router_decision.as_ref().unwrap();
+    assert_eq!(decision.action, RouterAction::Idle);
+    assert_eq!(decision.reason, "recon_noop");
+    assert!(paths.probes_done_dir.join("probe-001.md").is_file());
+    assert!(paths.recon_packets_dir.join("recon-probe-001.md").is_file());
+    assert_eq!(fs::read_dir(&paths.tasks_queue_dir).unwrap().count(), 0);
+    assert_eq!(fs::read_dir(&paths.specs_queue_dir).unwrap().count(), 0);
+
+    let trace = inspect_run_trace(paths.runs_dir.join("run-recon-noop")).unwrap();
+    assert_eq!(trace.status.as_str(), "complete");
+    assert_eq!(trace.edges[0].outcome, "RECON_NOOP");
+    assert_eq!(trace.edges[0].spawned_work.len(), 0);
+    assert_eq!(
+        trace.edges[0].decision_reason.as_deref(),
+        Some("recon_noop")
+    );
+
+    session.finish().unwrap();
+}
+
+#[test]
+fn recon_blocked_persists_packet_marks_probe_blocked() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    QueueStore::from_paths(paths.clone())
+        .enqueue_probe(&probe_document_for_recon("probe-001"))
+        .unwrap();
+    let runner = ReconArtifactRunner::new(
+        "### RECON_BLOCKED",
+        recon_packet_for("probe-001", ReconDecision::Blocked),
+        None,
+    );
+    let mut session =
+        startup_runtime_once_for_paths(&paths, startup_options("tick-recon-blocked")).unwrap();
+
+    let outcome = run_serial_runtime_tick_with_runner(
+        &mut session,
+        tick_options("run-recon-blocked", "request-recon-blocked"),
+        &runner,
+    )
+    .unwrap();
+
+    let decision = outcome.router_decision.as_ref().unwrap();
+    assert_eq!(decision.action, RouterAction::Blocked);
+    assert_eq!(decision.reason, "recon_blocked");
+    assert_eq!(decision.failure_class.as_deref(), Some("recon_blocked"));
+    assert!(paths.probes_blocked_dir.join("probe-001.md").is_file());
+    assert!(paths.recon_packets_dir.join("recon-probe-001.md").is_file());
+    let snapshot = load_snapshot(&paths).unwrap();
+    assert!(snapshot.active_runs_by_plane.is_empty());
+    assert_eq!(
+        snapshot.current_failure_class.as_deref(),
+        Some("recon_blocked")
+    );
+    assert_eq!(load_planning_status(&paths).unwrap(), "### RECON_BLOCKED");
+
+    let trace = inspect_run_trace(paths.runs_dir.join("run-recon-blocked")).unwrap();
+    assert_eq!(trace.status.as_str(), "blocked");
+    assert_eq!(trace.edges[0].outcome, "RECON_BLOCKED");
+    assert_eq!(trace.edges[0].edge_kind, "blocked");
+
+    session.finish().unwrap();
+}
+
+#[test]
+fn recon_generic_blocked_persists_packet_marks_probe_blocked() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    QueueStore::from_paths(paths.clone())
+        .enqueue_probe(&probe_document_for_recon("probe-001"))
+        .unwrap();
+    let runner = ReconArtifactRunner::new(
+        "### BLOCKED",
+        recon_packet_for("probe-001", ReconDecision::Blocked),
+        None,
+    );
+    let mut session =
+        startup_runtime_once_for_paths(&paths, startup_options("tick-recon-generic-blocked"))
+            .unwrap();
+
+    let outcome = run_serial_runtime_tick_with_runner(
+        &mut session,
+        tick_options("run-recon-generic-blocked", "request-recon-generic-blocked"),
+        &runner,
+    )
+    .unwrap();
+
+    let decision = outcome.router_decision.as_ref().unwrap();
+    assert_eq!(decision.action, RouterAction::Blocked);
+    assert_eq!(decision.reason, "recon_blocked");
+    assert_eq!(decision.failure_class.as_deref(), Some("recon_blocked"));
+    assert!(paths.probes_blocked_dir.join("probe-001.md").is_file());
+    assert!(paths.recon_packets_dir.join("recon-probe-001.md").is_file());
+    let trace = inspect_run_trace(paths.runs_dir.join("run-recon-generic-blocked")).unwrap();
+    assert_eq!(trace.status.as_str(), "blocked");
+    assert_eq!(trace.edges[0].outcome, "BLOCKED");
+    assert_eq!(
+        trace.edges[0].decision_reason.as_deref(),
+        Some("recon_blocked")
+    );
+
+    session.finish().unwrap();
+}
+
+#[test]
+fn recon_packet_decision_mismatch_schedules_planning_recovery_without_moving_probe() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    QueueStore::from_paths(paths.clone())
+        .enqueue_probe(&probe_document_for_recon("probe-001"))
+        .unwrap();
+    let runner = ReconArtifactRunner::new(
+        "### RECON_TO_EXECUTION",
+        recon_packet_for("probe-001", ReconDecision::Noop),
+        Some(ReconGeneratedArtifact::Task(generated_probe_task(
+            "task-from-probe",
+        ))),
+    );
+    let mut session =
+        startup_runtime_once_for_paths(&paths, startup_options("tick-recon-mismatch")).unwrap();
+
+    let outcome = run_serial_runtime_tick_with_runner(
+        &mut session,
+        tick_options("run-recon-mismatch", "request-recon-mismatch"),
+        &runner,
+    )
+    .unwrap();
+
+    let decision = outcome.router_decision.as_ref().unwrap();
+    assert_eq!(decision.action, RouterAction::RunStage);
+    assert_eq!(decision.next_stage, Some(StageName::Mechanic));
+    assert_eq!(
+        decision.failure_class.as_deref(),
+        Some("planning_post_stage_apply_failed")
+    );
+    assert_eq!(
+        outcome.runtime_error_context_path.as_ref().unwrap(),
+        &paths.runtime_error_context_file
+    );
+    assert!(paths.probes_active_dir.join("probe-001.md").is_file());
+    assert!(!paths.probes_done_dir.join("probe-001.md").exists());
+    assert!(!paths.probes_blocked_dir.join("probe-001.md").exists());
+    assert!(!paths.recon_packets_dir.join("recon-probe-001.md").exists());
+    assert!(!paths.tasks_queue_dir.join("task-from-probe.md").exists());
+    let snapshot = load_snapshot(&paths).unwrap();
+    assert_eq!(snapshot.active_stage, Some(StageName::Mechanic));
+    assert_eq!(
+        snapshot.current_failure_class.as_deref(),
+        Some("planning_post_stage_apply_failed")
+    );
+    assert!(runtime_events(&paths).iter().any(|event| {
+        event["event_type"] == "runtime_post_stage_recovery_scheduled"
+            && event["data"]["error_code"] == "planning_post_stage_apply_failed"
+    }));
+
+    session.finish().unwrap();
+}
+
+#[test]
+fn recon_generated_task_id_mismatch_schedules_recovery_without_moving_probe() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    QueueStore::from_paths(paths.clone())
+        .enqueue_probe(&probe_document_for_recon("probe-001"))
+        .unwrap();
+    let runner = ReconArtifactRunner::new(
+        "### RECON_TO_EXECUTION",
+        recon_packet_for("probe-001", ReconDecision::ToExecution),
+        Some(ReconGeneratedArtifact::Task(generated_probe_task(
+            "task-other",
+        ))),
+    );
+    let mut session =
+        startup_runtime_once_for_paths(&paths, startup_options("tick-recon-id-mismatch")).unwrap();
+
+    let outcome = run_serial_runtime_tick_with_runner(
+        &mut session,
+        tick_options("run-recon-id-mismatch", "request-recon-id-mismatch"),
+        &runner,
+    )
+    .unwrap();
+
+    let decision = outcome.router_decision.as_ref().unwrap();
+    assert_eq!(decision.action, RouterAction::RunStage);
+    assert_eq!(decision.next_stage, Some(StageName::Mechanic));
+    assert_eq!(
+        decision.failure_class.as_deref(),
+        Some("planning_post_stage_apply_failed")
+    );
+    assert!(paths.probes_active_dir.join("probe-001.md").is_file());
+    assert!(!paths.probes_done_dir.join("probe-001.md").exists());
+    assert!(!paths.recon_packets_dir.join("recon-probe-001.md").exists());
+    assert_eq!(fs::read_dir(&paths.tasks_queue_dir).unwrap().count(), 0);
+    let snapshot = load_snapshot(&paths).unwrap();
+    assert_eq!(snapshot.active_stage, Some(StageName::Mechanic));
+    assert_eq!(
+        snapshot.current_failure_class.as_deref(),
+        Some("planning_post_stage_apply_failed")
+    );
+    let context = RuntimeErrorContext::from_json_str(
+        &fs::read_to_string(outcome.runtime_error_context_path.as_ref().unwrap()).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        context.error_code.as_str(),
+        "planning_post_stage_apply_failed"
+    );
+    assert_eq!(context.failed_stage, StageName::Recon);
+    assert_eq!(context.repair_stage, StageName::Mechanic);
 
     session.finish().unwrap();
 }

@@ -73,6 +73,7 @@ fn public_compiler_contract_exports_remain_importable() {
 
     assert!(names.iter().all(|name| name.contains("millrace_ai")));
     assert_eq!(GraphLoopEntryKey::ClosureTarget.as_str(), "closure_target");
+    assert_eq!(GraphLoopEntryKey::Probe.as_str(), "probe");
     assert_eq!(
         GraphLoopCounterName::FixCycleCount.as_str(),
         "fix_cycle_count"
@@ -165,12 +166,25 @@ fn baseline_mode_graph_and_stage_kind_assets_parse_through_contracts() {
     let planning_graph: GraphLoopDefinition = parse_contract(include_str!(
         "../src/assets/baseline/graphs/planning/standard.json"
     ));
+    assert_eq!(planning_graph.nodes[0].stage_kind_id, "recon");
+    assert_eq!(
+        planning_graph.entry_nodes[0].entry_key,
+        GraphLoopEntryKey::Probe
+    );
     assert_eq!(
         planning_graph
             .completion_behavior
             .as_ref()
             .map(|completion| completion.target_node_id.as_str()),
         Some("arbiter")
+    );
+    assert!(
+        planning_graph
+            .terminal_states
+            .iter()
+            .any(|state| state.terminal_state_id == "recon_to_execution"
+                && state.terminal_class == GraphLoopTerminalClass::Success
+                && state.writes_status == "RECON_TO_EXECUTION")
     );
 
     let learning_graph: GraphLoopDefinition = parse_contract(include_str!(
@@ -200,6 +214,20 @@ fn baseline_mode_graph_and_stage_kind_assets_parse_through_contracts() {
         builder_kind
             .allowed_overrides
             .contains(&"thinking_level".to_owned())
+    );
+
+    let recon_kind: RegisteredStageKindDefinition = parse_contract(include_str!(
+        "../src/assets/baseline/registry/stage_kinds/planning/recon.json"
+    ));
+    assert_eq!(recon_kind.stage_kind_id, "recon");
+    assert_eq!(recon_kind.plane, Plane::Planning);
+    assert_eq!(
+        recon_kind.required_skill_paths,
+        ["skills/stage/planning/recon-core/SKILL.md".to_owned()]
+    );
+    assert_eq!(
+        recon_kind.allowed_result_classes_by_outcome["RECON_NOOP"],
+        [ResultClass::NoOp]
     );
 }
 

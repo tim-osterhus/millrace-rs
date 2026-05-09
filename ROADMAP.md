@@ -7,23 +7,24 @@ Rust crate owns the `millrace` CLI, typed contracts, and local
 
 ## Current Release Target
 
-The current Rust release target is `0.3.0`, aligned to Python `v0.18.0` at
-commit `e4ccf099c8345a8b8708cdaa1ac510bdc7851387`.
+The current Rust release target is `0.3.1`, aligned to Python `v0.18.1` at
+commit `0396c7852793b212d31345862b38a7d6f3f02854`.
 
-The `0.3.0` release closes the Python `v0.17.4..v0.18.0` parity delta:
+The `0.3.1` release closes the Python `v0.18.0..v0.18.1` parity delta:
 
-- compiled-stage-graph exports expose selected compiled-plan topology by plane
-  without becoming routing authority
-- `run_trace.json` artifacts preserve historical stage-result nodes,
-  router-decision edges, artifact refs, spawned work, and trace status
-- `millrace compile graph` and `millrace runs trace <run_id>` provide
-  read-only text/JSON inspection plus output-file support
-- older or malformed runs remain inspectable through read-only fallback trace
-  rendering
-- optional Python `millrace-web` `v0.18.0` graph/trace API, Flow overlay,
-  trace outcome label, version/dependency sync, and read-only/no-lock changes
-  are recorded as unsupported-gap and shadow-CLI evidence for the existing Rust
-  boundary
+- probe work documents can be imported through `add-probe` and
+  `queue add-probe` as canonical markdown or JSON
+- the Planning graph includes `probe -> recon`, Recon stage metadata,
+  managed Recon assets, mode runner bindings, and `recon-core` skill packaging
+- probe queue lifecycle, workspace paths, duplicate protection, queue depth,
+  active-probe retry/clear-stale requeue, and read-only queue rendering are
+  covered
+- Recon stage results persist packets, move active probes to done or blocked,
+  enqueue generated task/spec handoffs when requested, and record spawned-work
+  run-trace evidence
+- optional Python `millrace-web` `v0.18.1` package version, runtime dependency
+  floor, and FastAPI app version are recorded as unsupported-gap package
+  evidence for the existing Rust boundary
 
 ## Active Parity Boundary
 
@@ -48,8 +49,8 @@ compatible.
 - `docs/source-package-map.md` records package include rules and ownership.
 - `docs/runtime/` records Rust runtime contract notes for operator and
   maintainer surfaces.
-- `tests/fixtures/cli_parity/auto_port_v0_18_0_release_parity_evidence.json`
-  records the final Rust `0.3.0` release evidence.
+- `tests/fixtures/cli_parity/auto_port_v0_18_1_release_parity_evidence.json`
+  records the final Rust `0.3.1` release evidence.
 
 ## Explicit Gaps
 
@@ -57,6 +58,8 @@ Rust still does not ship a `millrace-web` package, HTTP dashboard, static shell,
 SSE stream, or dashboard API route. The accepted Rust inspection surface
 remains local read-only CLI commands over initialized workspaces, including
 `millrace compile graph` and `millrace runs trace <run_id>` as graph/trace
-shadow surfaces. Native filesystem watcher integration, live subscription-quota
+shadow surfaces; the Python `v0.18.1` web package version sync is recorded as
+unsupported-gap evidence rather than a Rust web implementation. Native
+filesystem watcher integration, live subscription-quota
 provider polling, and live Codex/Pi smoke runs remain preview-only or opt-in
 surfaces.

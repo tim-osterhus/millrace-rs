@@ -15,6 +15,14 @@ reason, next node or terminal state, and spawned learning-request or incident
 refs when routing creates follow-up work. Trace write failures emit runtime
 events without changing otherwise valid stage or routing outcomes.
 
+For Python `v0.18.1` parity, startup can claim queued probe documents into the
+Planning plane as `recon` stage requests. Recon results validate and persist
+`recon_packet.md` under `millrace-agents/recon/packets/`, then move the active
+probe to `done/` or `blocked/`. Handoff results enqueue exactly one generated
+task or spec with probe/recon references and root-intake lineage; no-op results
+close the probe without downstream work. Packet/result mismatches schedule
+planning recovery without moving the active probe.
+
 Learning request activation uses active request documents under
 `millrace-agents/learning/requests/active/`. For Python `v0.17.4` parity,
 stage-specific no-op terminal results move the active learning request to
@@ -27,7 +35,8 @@ into both queued work documents and trigger metadata. This preserves
 without allowing destination-less direct Curator requests.
 
 The optional Python `millrace-web` package remains outside the accepted Rust
-runtime boundary. Rust inspection stays local and read-only through CLI commands
+runtime boundary, including the Python `v0.18.1` package/runtime version sync.
+Rust inspection stays local and read-only through CLI commands
 such as `queue ls/show`, `status show`, `runs ls/show/tail`, `modes show`,
 `config show`, `compile show`, `compile graph`, and `runs trace <run_id>`.
 Those graph/trace CLI commands shadow Python web graph and trace readers

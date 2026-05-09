@@ -92,6 +92,7 @@ compiler_string_enum! {
     /// Entry keys accepted by graph loop definitions.
     pub enum GraphLoopEntryKey {
         Task => "task",
+        Probe => "probe",
         Spec => "spec",
         Incident => "incident",
         ClosureTarget => "closure_target",

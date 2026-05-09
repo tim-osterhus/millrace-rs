@@ -4,9 +4,10 @@
 governed runtime for long-running agent work.
 
 The production implementation is currently the Python package
-[`millrace-ai`](https://pypi.org/project/millrace-ai/). The Rust `0.3.0`
-release consolidates the Python `v0.17.4..v0.18.0` parity pass on top of the
-earlier `v0.17.3..v0.17.4` port while the crate remains experimental.
+[`millrace-ai`](https://pypi.org/project/millrace-ai/). The Rust `0.3.1`
+release consolidates the Python `v0.18.0..v0.18.1` probe/Recon parity pass on
+top of the earlier `v0.17.4..v0.18.0` graph/trace port while the crate remains
+experimental.
 
 ## Package Names
 
@@ -29,9 +30,10 @@ rendering while recognizing the primary operator command groups and
 compatibility aliases. It implements read-only operator inspection commands for
 `queue ls/show`, `status`/`status show`/bounded `status watch`, `runs
 ls/show/tail/trace`, `modes list/show`, and `config show`, plus queue intake
-commands for `queue add-task`, `queue add-spec`, `queue add-idea`, and the
-top-level `add-task`/`add-spec`/`add-idea` aliases, plus `queue repair-lineage`
-preview/apply wiring over the workspace repair boundary. It also implements
+commands for `queue add-task`, `queue add-probe`, `queue add-spec`, `queue
+add-idea`, and the top-level `add-task`/`add-probe`/`add-spec`/`add-idea`
+aliases, plus `queue repair-lineage` preview/apply wiring over the workspace
+repair boundary. It also implements
 control commands for `pause`, `resume`, `stop`, `retry-active`,
 `clear-stale-state`, and `reload-config`, the `planning retry-active` alias,
 `config validate`, and `config reload`, routing mutating commands through the
@@ -212,24 +214,28 @@ keeps adapter-only command, permission, environment, and event-log fields out of
 compile fingerprints, and builds dispatchers with `codex_cli` and `pi_rpc`
 adapters for runtime operator paths.
 
-The contract layer currently covers canonical enum values, stage metadata,
-legal terminal and running markers, result-class validation, and safe
-identifier validation. It also includes typed task, spec, incident, and
+The contract layer currently covers canonical enum values including planning
+`recon`, probe work items/status hints, root-intake kinds, stage metadata, legal
+terminal and running markers, result-class validation, and safe identifier
+validation. It also includes typed task, probe, spec, incident, and
 learning-request work-document contracts with headed markdown parse/render
-helpers, a typed Arbiter closure-target-state contract, plus serde-backed
+helpers, root-intake lineage fields, a typed Arbiter closure-target-state
+contract, typed Recon packet contracts and markdown helpers, plus serde-backed
 runtime JSON contracts for runtime snapshots, recovery counters, mailbox
-command envelopes and add-task/add-spec/add-idea payload wrappers, compile
-diagnostics, stage-result envelopes, runtime error contexts, token usage
+command envelopes and add-task/add-spec/add-idea/add-probe payload wrappers,
+compile diagnostics, stage-result envelopes, runtime error contexts, token usage
 records, usage-governance state/blockers, usage-governance token ledger entries,
 subscription quota telemetry status/window readings, Python-compatible
 compiled-stage-graph exports, and Python-compatible `run_trace_graph`
 contracts.
 Always-on tests cover the public exports and Python-produced markdown/JSON
-fixtures without requiring a live daemon. The compiler parity tests also use a
-committed Python-normalized fixture so ordinary `cargo test` can compare
+fixtures, including probe documents, add-probe mailbox payloads, and Recon
+packet fixtures, without requiring a live daemon. The compiler parity tests also
+use a committed Python-normalized fixture so ordinary `cargo test` can compare
 compiled-plan structure and key compile CLI output without probing Python; that
-fixture now pins the Python `v0.17.4..v0.18.0` source range and graph-export
-references used by the Rust compiled-stage-graph export tests. The
+fixture now pins the Python `v0.18.0..v0.18.1` source range, including Recon
+planning graph and graph-export references used by the Rust compiled-stage-graph
+export tests. The
 CLI/runtime parity suite now includes a committed Slice 4 CLI evidence matrix,
 a committed Slice 5 serial runtime evidence matrix, a committed Slice 6 daemon
 runtime evidence matrix, a committed Slice 7 runner adapter evidence matrix,
@@ -239,7 +245,9 @@ decision fixture that records the optional web package as an Arbiter-visible
 unsupported gap rather than a silently omitted Rust surface, plus a
 target-facing Python `v0.17.4..v0.18.0` scout fixture plus final Rust `0.3.0`
 release evidence for graph/trace docs, version metadata, package include
-readiness, and web-gap handling. The Slice 5
+readiness, and web-gap handling, plus Python `v0.18.0..v0.18.1` guardrail
+fixtures and final Rust `0.3.1` release evidence for the Recon/probe auto-port.
+The Slice 5
 evidence maps
 Rust fake-runner startup, tick, routing,
 result-application, recovery, closure, and `run once` scenarios back to the
@@ -277,7 +285,33 @@ run-trace contracts/runtime persistence now implemented in the Rust trace slice,
 graph/trace CLI behavior now implemented by the read-only `millrace compile
 graph` and `millrace runs trace` commands, operator docs, web graph/trace gap
 evidence, active guardrail tests, no-live guarantees, and the docs/version plus
-final release evidence now captured in the v0.18.0 release fixture. Focused
+final release evidence now captured in the v0.18.0 release fixture. The v0.18.1
+guardrail fixture maps all 66 generated Python scout paths to expected Rust
+implementation, test, documentation, fixture, package-evidence,
+reference-evidence, or unsupported-gap targets for probe work documents, Recon
+packets/assets, queue, CLI/mailbox, runtime activation/result application,
+docs, and `millrace-web` package/version source references. The first
+v0.18.1 contract, asset/compiler, workspace queue lifecycle, CLI/mailbox, and
+runtime application slices now
+implement probe work documents, root-intake fields, Recon packet contracts,
+Recon stage metadata, add-probe runtime JSON fixtures, Recon managed assets,
+planning graph `probe -> recon`, mode runner bindings, stage-kind registry,
+compiler materialization/export parity, compiler parity fixture coverage,
+probe and Recon workspace paths, probe queue lifecycle transitions, planning
+probe depth/selection, runtime-control `add_probe`, daemon mailbox add-probe
+application, active-probe retry/clear-stale handling, top-level and namespaced
+probe CLI intake for canonical `.md`/`.json` documents, active-daemon mailbox
+routing with Python command name `add_probe`, and read-only queue probe
+depth/lifecycle rendering without mutation, plus probe activation into planning
+`recon`, Recon `StageRunRequest` metadata, graph-authoritative Recon routing,
+Recon packet validation/persistence, generated task/spec handoff enqueueing,
+active probe done/blocked movement, mismatch recovery, and spawned-work
+run-trace evidence. The Rust `0.3.1` release evidence now reconciles
+Cargo/lockfile metadata, docs, roadmap/source-package surfaces, package include
+readiness, required release checks, the plain `cargo publish --dry-run`
+dirty-worktree limitation, allow-dirty dry-run/offline package verification,
+and explicit Python `millrace-web` v0.18.1 package/version unsupported-gap
+evidence without adding a Rust web implementation. Focused
 `run once`
 coverage exercises one-stage mocked Codex dispatcher execution, idle/pause/stop
 outcomes, startup failures, lock contention, and run-artifact inspection, and
@@ -353,7 +387,16 @@ Python `v0.17.4` `millrace-web` version/dependency sync gap; and
 records the final Rust `0.3.0` release evidence for compiled graph exports,
 run traces, graph/trace CLI commands, docs/runtime docs, version metadata,
 package include readiness, and the Python `v0.18.0` `millrace-web`
-graph/trace unsupported gap. The optional Python `millrace-web` dashboard
+graph/trace unsupported gap; and
+`tests/fixtures/cli_parity/auto_port_v0_18_1_parity_evidence.json` records the
+target-facing Rust `0.3.1` guardrails for Python `v0.18.0..v0.18.1` Recon/probe
+source references, all generated scout paths, required release checks, and
+no-live guarantees; and
+`tests/fixtures/cli_parity/auto_port_v0_18_1_release_parity_evidence.json`
+records the final Rust `0.3.1` release evidence for probe/Recon docs, version
+metadata, package include readiness, required release checks, and the Python
+`v0.18.1` `millrace-web` package/version unsupported gap. The optional Python
+`millrace-web` dashboard
 remains an explicit unsupported Rust parity gap with source references,
 shadow-CLI graph/trace commands, and non-goal wording; native filesystem
 watcher integration and live subscription quota integration remain
@@ -394,23 +437,27 @@ Codex/Pi/learning modes and `standard_plain` alias, persist compiler artifacts,
 and render diagnostics, inspectable compiled-plan fields, or stable
 compiled-stage-graph text/JSON output including selected-plane and output-file
 behavior without invoking runtime execution behavior. The committed compiler
-parity fixture is
-pinned to the Python `v0.17.4..v0.18.0` source range and covers
-`default_codex`, `default_pi`, `learning_codex`, `learning_pi`, and
+parity fixture is pinned to the Python `v0.18.0..v0.18.1` source range and
+covers `default_codex`, `default_pi`, `learning_codex`, `learning_pi`, and
 `standard_plain`, including learning no-op terminal classes,
 success-to-Analyst trigger behavior, and Python graph-export source
-references. Focused contract and materialization tests cover the
-`compiled_stage_graph` JSON contract, stable selected-plane export ordering,
-learning-plane inclusion, source refs, skills, allowed result-class mappings,
-and missing-plane errors.
+references plus Recon managed asset, planning graph `probe -> recon`, mode
+binding, stage-kind registry, materialization, and graph-export parity. The
+v0.18.1 compiler scout fixture remains alongside the normalized fixture as
+target-facing source evidence. Focused contract and materialization tests cover
+the `compiled_stage_graph` JSON contract, stable selected-plane export ordering,
+learning-plane inclusion, Recon/probe planning topology, source refs, skills,
+allowed result-class mappings, and missing-plane errors.
 
 The workspace layer currently covers canonical `<workspace>/millrace-agents/`
 path resolution and idempotent initialization defaults for the directory tree,
 status files, runtime snapshot, recovery counters, learning event log, runtime
-config, outline, history log, managed asset deployment, and baseline manifest
-IO plus managed baseline upgrade preview/apply helpers. It now also includes
-filesystem queue stores for canonical task, spec, incident, and learning-request
-headed markdown documents, plus state stores for runtime snapshot, recovery
+config, outline, history log, managed asset deployment, baseline manifest IO,
+probe lifecycle directories under `probes/{queue,active,done,blocked}`, and
+Recon artifact directories under `recon/{packets,reports}` plus managed baseline
+upgrade preview/apply helpers. It now also includes filesystem queue stores for
+canonical task, probe, spec, incident, and learning-request headed markdown
+documents, plus state stores for runtime snapshot, recovery
 counter, status-file, usage-governance state, and usage-governance ledger
 persistence. Task lifecycle integrity helpers detect duplicate task ids across
 `tasks/queue`, `tasks/active`, `tasks/done`, and `tasks/blocked` using parsed
@@ -422,16 +469,17 @@ runtime ownership lock helpers can inspect, acquire, release, force-release, and
 clear stale or invalid `runtime_daemon.lock.json` files without starting a
 daemon. `RuntimeControl` uses those lock, state, and queue boundaries to apply
 offline pause, resume, stop, retry-active, planning retry-active,
-clear-stale-state, reload-config, and task/spec/idea intake directly when no
-active daemon owns the workspace, or to enqueue Python-compatible mailbox
-command envelopes when an active daemon lock owns it. The Rust
+clear-stale-state, reload-config, and task/spec/idea/probe intake directly when
+no active daemon owns the workspace, or to enqueue Python-compatible mailbox
+command envelopes when an active daemon lock owns it; probe intake refreshes
+planning depth and retry/clear-stale flows requeue active probes. The Rust
 `millrace init --workspace <path>` command routes through the workspace
 initialization helper, and first workspace doctor checks validate the
 initialized layout, status/state parseability, baseline manifest and managed
 assets, queue artifacts, duplicate task lifecycle state with workspace-relative
 paths, and runtime ownership lock health. Read-only operator
 CLI commands inspect queue, status, run, mode, and config artifacts without
-creating or mutating workspaces. Queue intake CLI commands import task/spec
+creating or mutating workspaces. Queue intake CLI commands import task/probe/spec
 markdown or JSON through typed work-document APIs, stage idea markdown, and use
 `RuntimeControl` for direct offline writes or active-daemon mailbox routing.
 Upgrade CLI commands compare workspace managed assets against the embedded
@@ -450,8 +498,9 @@ stage is present, refresh queue-depth snapshot fields, and append the
 `closure_lineage_repaired` event. The runtime library now has once-mode
 startup and serial tick activation boundaries for config loading, ownership
 locking, compile-plan authority, snapshot/counter loading, mailbox intake,
-queue-depth refresh, no-work/paused/stopped/blocked outcomes, compiled-plan
-claim activation, closure-target request activation, stage request
+queue-depth refresh including planning probes, no-work/paused/stopped/blocked
+outcomes, compiled-plan claim activation including the planning `probe` entry,
+closure-target request activation, stage request
 construction, running markers, active-run projection, runtime events, and stale
 active-state reconciliation. It also dispatches a ready stage through the
 runner boundary, persists request/raw-result/stage-result/terminal-marker/router
@@ -472,7 +521,8 @@ and bounded daemon loop/shutdown control for completed tick counting, idle
 sleep, max-tick/no-work/stop/process-stopped/blocked exits, completion draining,
 stopped-state reset, and matching-session lock release. It also has daemon
 mailbox/reload handling for deterministic command drain, processed/failed
-archives, retry-active and clear-stale-state, reload deferral/application,
+archives, `add_probe` application, retry-active and clear-stale-state, reload
+deferral/application,
 watcher-session rebuild, retained-plan diagnostics, and reload failure
 evidence, plus deterministic watcher poll intake for config, task queue,
 optional spec queue, and optional `ideas/inbox` changes before work claims.
@@ -511,8 +561,8 @@ Python runtime.
 The historical public proof package for the v0.1.0 autonomous port campaign
 lives in
 [`tim-osterhus/millrace-rs-port-docs`](https://github.com/tim-osterhus/millrace-rs-port-docs).
-The crate-local `0.3.0` release evidence lives in `CHANGELOG.md` and
-`tests/fixtures/cli_parity/auto_port_v0_18_0_release_parity_evidence.json`.
+The crate-local `0.3.1` release evidence lives in `CHANGELOG.md` and
+`tests/fixtures/cli_parity/auto_port_v0_18_1_release_parity_evidence.json`.
 
 ## License
 

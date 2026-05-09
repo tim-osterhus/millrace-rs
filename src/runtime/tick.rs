@@ -23,13 +23,15 @@ use crate::{
     contracts::{
         ActiveRunRequestKind, ActiveRunState, ClosureTargetState, ContractError, IncidentDecision,
         IncidentDocument, IncidentSeverity, LearningRequestDocument, LearningTerminalResult,
-        MailboxAddIdeaPayload, MailboxAddSpecPayload, MailboxAddTaskPayload, MailboxCommand,
-        MailboxCommandEnvelope, PauseSource, Plane, RecoveryCounters, ReloadOutcome, ResultClass,
-        RuntimeErrorCode, RuntimeErrorContext, RuntimeJsonContract, RuntimeSnapshot, SpecDocument,
-        SpecSourceType, StageName, StageResultEnvelope, SubscriptionQuotaTelemetryState,
-        TerminalResult, Timestamp, UsageGovernanceBlocker, WorkDocumentError, WorkItemKind,
-        stage_name_for_plane,
+        MailboxAddIdeaPayload, MailboxAddProbePayload, MailboxAddSpecPayload,
+        MailboxAddTaskPayload, MailboxCommand, MailboxCommandEnvelope, PauseSource, Plane,
+        PlanningTerminalResult, ReconDecision, ReconPacketDocument, RecoveryCounters,
+        ReloadOutcome, ResultClass, RootIntakeKind, RuntimeErrorCode, RuntimeErrorContext,
+        RuntimeJsonContract, RuntimeSnapshot, SpecDocument, SpecSourceType, StageName,
+        StageResultEnvelope, SubscriptionQuotaTelemetryState, TaskDocument, TerminalResult,
+        Timestamp, UsageGovernanceBlocker, WorkDocumentError, WorkItemKind, stage_name_for_plane,
     },
+    recon_packets::{read_recon_packet, render_recon_packet},
     runners::{
         RunnerCompletionArtifactContext, RunnerEnvironmentDelta, RunnerError, RunnerExitKind,
         RunnerRawResult, StageRunnerAdapter, completion_artifact_from_raw_result,
@@ -38,7 +40,8 @@ use crate::{
     },
     work_documents::{
         parse_incident_document_with_source, parse_learning_request_document_with_source,
-        parse_spec_document_with_source, parse_task_document_with_source,
+        parse_spec_document_with_source, parse_spec_json_import_with_source,
+        parse_task_document_with_source, parse_task_json_import_with_source,
     },
     workspace::{
         LineageRepairError, QueueClaim, QueueStore, QueueStoreError, StateStoreError,
@@ -1368,6 +1371,8 @@ fn create_closure_target_for_root_spec(
         kind: "closure_target_state".to_owned(),
         root_spec_id: root_spec_id.clone(),
         root_idea_id: root_idea_id.clone(),
+        root_intake_kind: None,
+        root_intake_id: None,
         root_spec_path: workspace_relative(&session.paths, &root_spec_path),
         root_idea_path: workspace_relative(&session.paths, &root_idea_path),
         rubric_path: workspace_relative(
@@ -2389,6 +2394,10 @@ fn apply_router_decision(
         return apply_closure_target_result(session, decision, stage_result, stage_result_path);
     }
 
+    if is_recon_stage_result(stage_result) {
+        return apply_recon_router_decision(session, decision, stage_result);
+    }
+
     match decision.action {
         RouterAction::RunStage => {
             apply_run_stage_decision(session, decision, stage_result).map(|()| Vec::new())
@@ -2807,6 +2816,276 @@ fn apply_blocked_decision(
     Ok(())
 }
 
+fn is_recon_stage_result(stage_result: &StageResultEnvelope) -> bool {
+    stage_result.stage_kind_id == "recon" && stage_result.work_item_kind == WorkItemKind::Probe
+}
+
+fn apply_recon_router_decision(
+    session: &mut RuntimeStartupSession,
+    decision: &RouterDecision,
+    stage_result: &StageResultEnvelope,
+) -> RuntimeTickResult<Vec<PathBuf>> {
+    let terminal_result = match stage_result.terminal_result {
+        TerminalResult::Planning(result) => result,
+        _ => {
+            return Err(invalid_state(
+                "recon stage results must use planning terminal results",
+            ));
+        }
+    };
+    match terminal_result {
+        PlanningTerminalResult::ReconToExecution
+        | PlanningTerminalResult::ReconToPlanning
+        | PlanningTerminalResult::ReconNoop => {
+            if decision.action != RouterAction::Idle {
+                return Err(invalid_state(
+                    "successful recon terminal results require an idle router decision",
+                ));
+            }
+        }
+        PlanningTerminalResult::ReconBlocked | PlanningTerminalResult::Blocked => {
+            if decision.action != RouterAction::Blocked {
+                return Err(invalid_state(
+                    "blocked recon terminal results require a blocked router decision",
+                ));
+            }
+        }
+        _ => {
+            return Err(invalid_state(format!(
+                "unsupported recon terminal result: {}",
+                stage_result.terminal_result.as_str()
+            )));
+        }
+    }
+
+    let packet = read_and_validate_recon_packet(session, stage_result, terminal_result)?;
+    match terminal_result {
+        PlanningTerminalResult::ReconToExecution => {
+            let task = generated_recon_task(session, stage_result, &packet)?;
+            persist_recon_packet(session, &packet)?;
+            let spawned_path = QueueStore::from_paths(session.paths.clone())
+                .enqueue_task(&task)
+                .map_err(RuntimeTickError::from)?;
+            apply_idle_decision(session, stage_result)?;
+            Ok(vec![spawned_path])
+        }
+        PlanningTerminalResult::ReconToPlanning => {
+            let spec = generated_recon_spec(session, stage_result, &packet)?;
+            persist_recon_packet(session, &packet)?;
+            let spawned_path = QueueStore::from_paths(session.paths.clone())
+                .enqueue_spec(&spec)
+                .map_err(RuntimeTickError::from)?;
+            apply_idle_decision(session, stage_result)?;
+            Ok(vec![spawned_path])
+        }
+        PlanningTerminalResult::ReconNoop => {
+            persist_recon_packet(session, &packet)?;
+            apply_idle_decision(session, stage_result)?;
+            Ok(Vec::new())
+        }
+        PlanningTerminalResult::ReconBlocked | PlanningTerminalResult::Blocked => {
+            persist_recon_packet(session, &packet)?;
+            apply_blocked_decision(session, decision, stage_result)?;
+            Ok(Vec::new())
+        }
+        _ => unreachable!("unsupported recon terminal result was rejected"),
+    }
+}
+
+fn read_and_validate_recon_packet(
+    session: &RuntimeStartupSession,
+    stage_result: &StageResultEnvelope,
+    terminal_result: PlanningTerminalResult,
+) -> RuntimeTickResult<ReconPacketDocument> {
+    let source = session
+        .paths
+        .runs_dir
+        .join(&stage_result.run_id)
+        .join("recon_packet.md");
+    let packet =
+        read_recon_packet(&source).map_err(|source_error| RuntimeTickError::InvalidState {
+            message: format!(
+                "failed to read recon packet {}: {source_error}",
+                source.display()
+            ),
+        })?;
+    validate_recon_packet_for_stage_result(&packet, stage_result, terminal_result)?;
+    Ok(packet)
+}
+
+fn persist_recon_packet(
+    session: &RuntimeStartupSession,
+    packet: &ReconPacketDocument,
+) -> RuntimeTickResult<PathBuf> {
+    let destination = session
+        .paths
+        .recon_packets_dir
+        .join(format!("{}.md", packet.recon_packet_id));
+    if destination.exists() {
+        return Err(invalid_state(format!(
+            "recon packet already exists: {}",
+            destination.display()
+        )));
+    }
+    write_runtime_text(&destination, &render_recon_packet(packet))?;
+    Ok(destination)
+}
+
+fn validate_recon_packet_for_stage_result(
+    packet: &ReconPacketDocument,
+    stage_result: &StageResultEnvelope,
+    terminal_result: PlanningTerminalResult,
+) -> RuntimeTickResult<()> {
+    if packet.probe_id != stage_result.work_item_id {
+        return Err(invalid_state(
+            "recon packet probe_id must match active probe",
+        ));
+    }
+    let expected_decision = recon_decision_for_terminal(terminal_result)?;
+    if packet.decision != expected_decision {
+        return Err(invalid_state(
+            "recon packet decision must match terminal result",
+        ));
+    }
+    Ok(())
+}
+
+fn recon_decision_for_terminal(
+    terminal_result: PlanningTerminalResult,
+) -> RuntimeTickResult<ReconDecision> {
+    Ok(match terminal_result {
+        PlanningTerminalResult::ReconToExecution => ReconDecision::ToExecution,
+        PlanningTerminalResult::ReconToPlanning => ReconDecision::ToPlanning,
+        PlanningTerminalResult::ReconNoop => ReconDecision::Noop,
+        PlanningTerminalResult::ReconBlocked | PlanningTerminalResult::Blocked => {
+            ReconDecision::Blocked
+        }
+        _ => {
+            return Err(invalid_state(format!(
+                "unsupported recon terminal result: {}",
+                terminal_result.as_str()
+            )));
+        }
+    })
+}
+
+fn generated_recon_task(
+    session: &RuntimeStartupSession,
+    stage_result: &StageResultEnvelope,
+    packet: &ReconPacketDocument,
+) -> RuntimeTickResult<TaskDocument> {
+    let emitted_task_id = packet
+        .emitted_task_id
+        .as_deref()
+        .ok_or_else(|| invalid_state("recon execution route requires emitted_task_id"))?;
+    let source = session
+        .paths
+        .runs_dir
+        .join(&stage_result.run_id)
+        .join("generated_task.md");
+    let mut task = read_generated_task_artifact(&source)?;
+    if task.task_id != emitted_task_id {
+        return Err(invalid_state(
+            "generated task id must match recon packet emitted_task_id",
+        ));
+    }
+    apply_probe_task_lineage(&mut task, packet);
+    Ok(task)
+}
+
+fn generated_recon_spec(
+    session: &RuntimeStartupSession,
+    stage_result: &StageResultEnvelope,
+    packet: &ReconPacketDocument,
+) -> RuntimeTickResult<SpecDocument> {
+    let emitted_spec_id = packet
+        .emitted_spec_id
+        .as_deref()
+        .ok_or_else(|| invalid_state("recon planning route requires emitted_spec_id"))?;
+    let source = session
+        .paths
+        .runs_dir
+        .join(&stage_result.run_id)
+        .join("generated_spec.md");
+    let mut spec = read_generated_spec_artifact(&source)?;
+    if spec.spec_id != emitted_spec_id {
+        return Err(invalid_state(
+            "generated spec id must match recon packet emitted_spec_id",
+        ));
+    }
+    apply_probe_spec_lineage(&mut spec, packet);
+    Ok(spec)
+}
+
+fn read_generated_task_artifact(path: &Path) -> RuntimeTickResult<TaskDocument> {
+    let raw = fs::read_to_string(path).map_err(|error| io_error(path, error))?;
+    if raw.trim_start().starts_with('{') {
+        parse_task_json_import_with_source(&raw, &path.display().to_string()).map_err(|source| {
+            RuntimeTickError::WorkDocument {
+                path: path.to_path_buf(),
+                source,
+            }
+        })
+    } else {
+        parse_task_document_with_source(&raw, &path.display().to_string()).map_err(|source| {
+            RuntimeTickError::WorkDocument {
+                path: path.to_path_buf(),
+                source,
+            }
+        })
+    }
+}
+
+fn read_generated_spec_artifact(path: &Path) -> RuntimeTickResult<SpecDocument> {
+    let raw = fs::read_to_string(path).map_err(|error| io_error(path, error))?;
+    if raw.trim_start().starts_with('{') {
+        parse_spec_json_import_with_source(&raw, &path.display().to_string()).map_err(|source| {
+            RuntimeTickError::WorkDocument {
+                path: path.to_path_buf(),
+                source,
+            }
+        })
+    } else {
+        parse_spec_document_with_source(&raw, &path.display().to_string()).map_err(|source| {
+            RuntimeTickError::WorkDocument {
+                path: path.to_path_buf(),
+                source,
+            }
+        })
+    }
+}
+
+fn apply_probe_task_lineage(task: &mut TaskDocument, packet: &ReconPacketDocument) {
+    task.root_intake_kind = Some(RootIntakeKind::Probe);
+    task.root_intake_id = Some(packet.probe_id.clone());
+    append_required_recon_references(&mut task.references, packet);
+}
+
+fn apply_probe_spec_lineage(spec: &mut SpecDocument, packet: &ReconPacketDocument) {
+    spec.source_type = SpecSourceType::Probe;
+    spec.source_id = Some(packet.probe_id.clone());
+    spec.root_intake_kind = Some(RootIntakeKind::Probe);
+    spec.root_intake_id = Some(packet.probe_id.clone());
+    if spec.root_spec_id.is_none() {
+        spec.root_spec_id = Some(spec.spec_id.clone());
+    }
+    append_required_recon_references(&mut spec.references, packet);
+}
+
+fn append_required_recon_references(references: &mut Vec<String>, packet: &ReconPacketDocument) {
+    for reference in [
+        format!("millrace-agents/probes/active/{}.md", packet.probe_id),
+        format!(
+            "millrace-agents/recon/packets/{}.md",
+            packet.recon_packet_id
+        ),
+    ] {
+        if !references.iter().any(|existing| existing == &reference) {
+            references.push(reference);
+        }
+    }
+}
+
 fn apply_closure_target_result(
     session: &mut RuntimeStartupSession,
     decision: &RouterDecision,
@@ -3111,6 +3390,7 @@ fn mark_active_work_item_complete(
     let queue = QueueStore::from_paths(paths.clone());
     Ok(match stage_result.work_item_kind {
         WorkItemKind::Task => queue.mark_task_done(&stage_result.work_item_id)?,
+        WorkItemKind::Probe => queue.mark_probe_done(&stage_result.work_item_id)?,
         WorkItemKind::Spec => queue.mark_spec_done(&stage_result.work_item_id)?,
         WorkItemKind::Incident => queue.mark_incident_resolved(&stage_result.work_item_id)?,
         WorkItemKind::LearningRequest => {
@@ -3126,6 +3406,7 @@ fn mark_active_work_item_blocked(
     let queue = QueueStore::from_paths(paths.clone());
     Ok(match stage_result.work_item_kind {
         WorkItemKind::Task => queue.mark_task_blocked(&stage_result.work_item_id)?,
+        WorkItemKind::Probe => queue.mark_probe_blocked(&stage_result.work_item_id)?,
         WorkItemKind::Spec => queue.mark_spec_blocked(&stage_result.work_item_id)?,
         WorkItemKind::Incident => queue.mark_incident_blocked(&stage_result.work_item_id)?,
         WorkItemKind::LearningRequest => {
@@ -3408,6 +3689,8 @@ fn enqueue_handoff_incident(
         summary,
         root_idea_id,
         root_spec_id,
+        root_intake_kind: None,
+        root_intake_id: None,
         source_task_id,
         source_spec_id,
         source_stage: stage_result.stage,
@@ -3515,7 +3798,7 @@ fn work_item_lineage_for_stage_result(
                 source_spec_id: document.source_spec_id,
             })
         }
-        WorkItemKind::LearningRequest => Ok(WorkItemLineage::default()),
+        WorkItemKind::Probe | WorkItemKind::LearningRequest => Ok(WorkItemLineage::default()),
     }
 }
 
@@ -3870,6 +4153,14 @@ fn route_planning_stage_result(
         outcome,
         transition.terminal_state_id.as_deref(),
     ) {
+        ("recon", "RECON_TO_EXECUTION", _) => Ok(idle_decision("recon_to_execution")),
+        ("recon", "RECON_TO_PLANNING", _) => Ok(idle_decision("recon_to_planning")),
+        ("recon", "RECON_NOOP", _) => Ok(idle_decision("recon_noop")),
+        ("recon", "RECON_BLOCKED" | "BLOCKED", _) => Ok(blocked_decision(
+            "recon_blocked",
+            resolve_failure_class(snapshot, stage_result, "recon_blocked").ok(),
+            None,
+        )),
         ("manager", "MANAGER_COMPLETE", _) => Ok(idle_decision("manager_complete")),
         ("arbiter", "ARBITER_COMPLETE", _) => Ok(idle_decision("arbiter_complete")),
         ("arbiter", "REMEDIATION_NEEDED", _) => Ok(RouterDecision {
@@ -4446,6 +4737,8 @@ fn normalize_idea_watch_event(
         parent_spec_id: None,
         root_idea_id: Some(spec_id.clone()),
         root_spec_id: Some(spec_id.clone()),
+        root_intake_kind: None,
+        root_intake_id: None,
         goals: vec![summary],
         non_goals: Vec::new(),
         scope: Vec::new(),
@@ -4716,6 +5009,35 @@ fn apply_mailbox_command(
                 now,
             )?;
             Ok(mailbox_result_with_path(true, "task queued", relative_path))
+        }
+        MailboxCommand::AddProbe => {
+            let payload =
+                MailboxAddProbePayload::from_json_value(Value::Object(envelope.payload.clone()))
+                    .map_err(|source| RuntimeTickError::InvalidState {
+                        message: format!("mailbox add_probe payload is invalid: {source}"),
+                    })?;
+            let destination =
+                QueueStore::from_paths(session.paths.clone()).enqueue_probe(&payload.document)?;
+            refresh_queue_depths(&session.paths, &mut session.snapshot)?;
+            session.snapshot.updated_at = now.clone();
+            let relative_path = workspace_relative(&session.paths, &destination);
+            write_runtime_event(
+                &session.paths,
+                "mailbox_add_probe_applied",
+                mailbox_event_data(
+                    envelope,
+                    json_object([
+                        ("probe_id", Value::String(payload.document.probe_id.clone())),
+                        ("path", Value::String(relative_path.clone())),
+                    ]),
+                ),
+                now,
+            )?;
+            Ok(mailbox_result_with_path(
+                true,
+                "probe queued",
+                relative_path,
+            ))
         }
         MailboxCommand::AddSpec => {
             let payload =
@@ -5397,6 +5719,11 @@ fn requeue_all_active_items(
             requeued_count += 1;
         }
     }
+    for probe_id in markdown_stems(&paths.probes_active_dir)? {
+        if ignore_invalid_queue_state(queue.requeue_probe(&probe_id, reason))? {
+            requeued_count += 1;
+        }
+    }
     for incident_id in markdown_stems(&paths.incidents_active_dir)? {
         if ignore_invalid_queue_state(queue.requeue_incident(&incident_id, reason))? {
             requeued_count += 1;
@@ -5419,6 +5746,7 @@ fn requeue_active_item(
 ) -> Result<PathBuf, QueueStoreError> {
     match work_item_kind {
         WorkItemKind::Task => queue.requeue_task(work_item_id, reason),
+        WorkItemKind::Probe => queue.requeue_probe(work_item_id, reason),
         WorkItemKind::Spec => queue.requeue_spec(work_item_id, reason),
         WorkItemKind::Incident => queue.requeue_incident(work_item_id, reason),
         WorkItemKind::LearningRequest => queue.requeue_learning_request(work_item_id, reason),
@@ -5496,6 +5824,7 @@ fn work_item_activation_for_graph(
 ) -> RuntimeTickResult<GraphActivationDecision> {
     let (graph, entry_key) = match work_item_kind {
         WorkItemKind::Task => (&plan.execution_graph, GraphLoopEntryKey::Task),
+        WorkItemKind::Probe => (&plan.planning_graph, GraphLoopEntryKey::Probe),
         WorkItemKind::Spec => (&plan.planning_graph, GraphLoopEntryKey::Spec),
         WorkItemKind::Incident => (&plan.planning_graph, GraphLoopEntryKey::Incident),
         WorkItemKind::LearningRequest => (
@@ -5878,7 +6207,8 @@ fn refresh_queue_depths(
     set_queue_depth(
         snapshot,
         Plane::Planning,
-        count_markdown_files(&paths.specs_queue_dir)?
+        count_markdown_files(&paths.probes_queue_dir)?
+            + count_markdown_files(&paths.specs_queue_dir)?
             + count_markdown_files(&paths.incidents_incoming_dir)?,
     );
     set_queue_depth(
@@ -6062,6 +6392,7 @@ fn active_work_item_path(
     let work_item_id = work_item_id?;
     Some(match work_item_kind? {
         WorkItemKind::Task => paths.tasks_active_dir.join(format!("{work_item_id}.md")),
+        WorkItemKind::Probe => paths.probes_active_dir.join(format!("{work_item_id}.md")),
         WorkItemKind::Spec => paths.specs_active_dir.join(format!("{work_item_id}.md")),
         WorkItemKind::Incident => paths
             .incidents_active_dir

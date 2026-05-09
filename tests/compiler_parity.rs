@@ -1,6 +1,6 @@
 mod support;
 
-use std::fs;
+use std::{collections::BTreeSet, fs};
 
 use serde_json::{Map, Value};
 use support::parity::{fixture_path, read_fixture, run_rust_millrace};
@@ -87,7 +87,7 @@ fn rust_compiler_matches_python_normalized_plan_and_cli_fixtures() {
 }
 
 #[test]
-fn rust_compile_graph_cli_exports_python_v0_18_0_graph_shape() {
+fn rust_compile_graph_cli_exports_python_v0_18_1_recon_graph_shape() {
     let temp_dir = TempDir::new().expect("create compile graph workspace");
     let root = temp_dir.path().join("workspace");
     init_workspace(&root);
@@ -114,7 +114,19 @@ fn rust_compile_graph_cli_exports_python_v0_18_0_graph_shape() {
     assert_eq!(graphs[2]["plane"], "planning");
     assert_eq!(graphs[0]["nodes"][0]["node_id"], "builder");
     assert_eq!(graphs[1]["nodes"][0]["node_id"], "analyst");
-    assert_eq!(graphs[2]["nodes"][0]["node_id"], "planner");
+    assert_eq!(graphs[2]["nodes"][0]["node_id"], "recon");
+    assert!(
+        graphs[2]["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| { entry["entry_key"] == "probe" && entry["node_id"] == "recon" })
+    );
+    assert!(graphs[2]["edges"].as_array().unwrap().iter().any(|edge| {
+        edge["source_node_id"] == "recon"
+            && edge["outcome"] == "RECON_TO_EXECUTION"
+            && edge["terminal_state_id"] == "recon_to_execution"
+    }));
     assert!(graphs[0]["edges"].as_array().unwrap().iter().any(|edge| {
         edge["source_node_id"] == "builder"
             && edge["outcome"] == "BUILDER_COMPLETE"
@@ -129,20 +141,20 @@ fn compiler_parity_fixture_documents_regeneration_surface() {
             .expect("read compiler parity fixture"),
     )
     .expect("parse compiler parity fixture");
-    assert_eq!(fixture["source"]["previous_version"], "0.17.4");
-    assert_eq!(fixture["source"]["target_version"], "0.18.0");
-    assert_eq!(fixture["source"]["version"], "0.18.0");
-    assert_eq!(fixture["source"]["previous_tag"], "v0.17.4");
+    assert_eq!(fixture["source"]["previous_version"], "0.18.0");
+    assert_eq!(fixture["source"]["target_version"], "0.18.1");
+    assert_eq!(fixture["source"]["version"], "0.18.1");
+    assert_eq!(fixture["source"]["previous_tag"], "v0.18.0");
     assert_eq!(
         fixture["source"]["previous_commit"],
-        "304e537964ff772c815689b87e4c1e3b805c656c"
-    );
-    assert_eq!(fixture["source"]["target_tag"], "v0.18.0");
-    assert_eq!(
-        fixture["source"]["target_commit"],
         "e4ccf099c8345a8b8708cdaa1ac510bdc7851387"
     );
-    assert_eq!(fixture["source"]["diff_range"], "v0.17.4..v0.18.0");
+    assert_eq!(fixture["source"]["target_tag"], "v0.18.1");
+    assert_eq!(
+        fixture["source"]["target_commit"],
+        "0396c7852793b212d31345862b38a7d6f3f02854"
+    );
+    assert_eq!(fixture["source"]["diff_range"], "v0.18.0..v0.18.1");
     assert_ne!(
         fixture["source"]["target_version"], fixture["source"]["previous_version"],
         "compiler parity fixture is still pinned to the previous Python baseline as target",
@@ -152,6 +164,10 @@ fn compiler_parity_fixture_documents_regeneration_surface() {
         "src/millrace_ai/contracts/modes.py",
         "src/millrace_ai/contracts/stage_metadata.py",
         "src/millrace_ai/architecture/loop_graphs.py",
+        "src/millrace_ai/assets/entrypoints/planning/recon.md",
+        "src/millrace_ai/assets/graphs/planning/standard.json",
+        "src/millrace_ai/assets/registry/stage_kinds/planning/recon.json",
+        "src/millrace_ai/assets/skills/stage/planning/recon-core/SKILL.md",
         "src/millrace_ai/cli/commands/compile.py",
         "src/millrace_ai/cli/formatting.py",
         "src/millrace_ai/compilation/graph_exports.py",
@@ -183,6 +199,106 @@ fn compiler_parity_fixture_documents_regeneration_surface() {
             .join("tests/support/generate_python_compiler_parity_fixtures.py")
             .is_file()
     );
+}
+
+#[test]
+fn compiler_parity_scout_pins_python_v0_18_1_recon_assets_and_graph_sources() {
+    let fixture: Value = serde_json::from_str(
+        &read_fixture("compiler_parity/auto_port_v0_18_1_compiler_contract_scout.json")
+            .expect("read v0.18.1 compiler scout fixture"),
+    )
+    .expect("parse v0.18.1 compiler scout fixture");
+    assert_eq!(fixture["schema_version"], "1.0");
+    assert_eq!(fixture["kind"], "auto_port_v0_18_1_compiler_contract_scout");
+    assert_eq!(fixture["python_reference"]["previous_tag"], "v0.18.0");
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.18.1");
+    assert_eq!(
+        fixture["python_reference"]["previous_commit"],
+        "e4ccf099c8345a8b8708cdaa1ac510bdc7851387"
+    );
+    assert_eq!(
+        fixture["python_reference"]["target_commit"],
+        "0396c7852793b212d31345862b38a7d6f3f02854"
+    );
+    assert_eq!(
+        fixture["python_reference"]["diff_range"],
+        "v0.18.0..v0.18.1"
+    );
+    assert_eq!(
+        fixture["rust_reference"]["current_repo_crate_version"],
+        "0.3.1"
+    );
+    assert_eq!(
+        fixture["rust_reference"]["current_repo_version_role"],
+        "released_target_for_python_v0.18.1"
+    );
+    assert_eq!(
+        fixture["rust_reference"]["previous_repo_crate_version"],
+        "0.3.0"
+    );
+    assert_eq!(
+        fixture["rust_reference"]["previous_repo_version_role"],
+        "previous_baseline_for_python_v0.18.0"
+    );
+    assert_eq!(fixture["rust_reference"]["planned_crate_version"], "0.3.1");
+    assert_eq!(
+        fixture["rust_reference"]["planned_crate_version"],
+        fixture["rust_reference"]["current_repo_crate_version"],
+        "v0.18.1 compiler scout must treat Rust 0.3.1 as the current target"
+    );
+
+    let sources: BTreeSet<_> = fixture["compiler_source_refs"]
+        .as_array()
+        .expect("compiler source refs are present")
+        .iter()
+        .map(|value| value.as_str().expect("compiler source ref"))
+        .collect();
+    for source_path in [
+        "../millrace-py/src/millrace_ai/architecture/loop_graphs.py",
+        "../millrace-py/src/millrace_ai/assets/entrypoints/planning/recon.md",
+        "../millrace-py/src/millrace_ai/assets/graphs/planning/standard.json",
+        "../millrace-py/src/millrace_ai/assets/registry/stage_kinds/planning/recon.json",
+        "../millrace-py/src/millrace_ai/assets/skills/stage/planning/recon-core/SKILL.md",
+        "../millrace-py/src/millrace_ai/compilation/node_materialization.py",
+        "../millrace-py/tests/assets/test_entrypoints.py",
+        "../millrace-py/tests/assets/test_loop_graphs.py",
+        "../millrace-py/tests/assets/test_stage_kinds.py",
+        "../millrace-py/tests/integration/test_compiler.py",
+        "../millrace-py/tests/integration/test_single_compiled_plan.py",
+    ] {
+        assert!(
+            sources.contains(source_path),
+            "missing v0.18.1 compiler/recon source {source_path}"
+        );
+    }
+
+    let targets: BTreeSet<_> = fixture["expected_rust_targets"]
+        .as_array()
+        .expect("expected Rust targets are present")
+        .iter()
+        .map(|value| value.as_str().expect("expected Rust target"))
+        .collect();
+    for target_path in [
+        "millrace-agents/entrypoints/planning/recon.md",
+        "millrace-agents/graphs/planning/standard.json",
+        "millrace-agents/registry/stage_kinds/planning/recon.json",
+        "millrace-agents/skills/stage/planning/recon-core/SKILL.md",
+        "src/assets/baseline/entrypoints/planning/recon.md",
+        "src/assets/baseline/graphs/planning/standard.json",
+        "src/assets/baseline/registry/stage_kinds/planning/recon.json",
+        "src/assets/baseline/skills/stage/planning/recon-core/SKILL.md",
+        "src/compiler/contracts.rs",
+        "src/compiler/materialization.rs",
+        "src/compiler/graph_exports.rs",
+        "tests/compiler_contracts.rs",
+        "tests/compiler_materialization.rs",
+        "tests/compiler_parity.rs",
+    ] {
+        assert!(
+            targets.contains(target_path),
+            "missing v0.18.1 compiler/recon Rust target {target_path}"
+        );
+    }
 }
 
 fn init_workspace(root: &std::path::Path) {

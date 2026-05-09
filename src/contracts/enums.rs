@@ -109,6 +109,7 @@ string_enum! {
 string_enum! {
     /// Planning-plane stage names.
     pub enum PlanningStageName {
+        Recon => "recon",
         Planner => "planner",
         Manager => "manager",
         Mechanic => "mechanic",
@@ -136,6 +137,7 @@ string_enum! {
         Updater => "updater",
         Troubleshooter => "troubleshooter",
         Consultant => "consultant",
+        Recon => "recon",
         Planner => "planner",
         Manager => "manager",
         Mechanic => "mechanic",
@@ -159,9 +161,12 @@ impl StageName {
             | Self::Updater
             | Self::Troubleshooter
             | Self::Consultant => Plane::Execution,
-            Self::Planner | Self::Manager | Self::Mechanic | Self::Auditor | Self::Arbiter => {
-                Plane::Planning
-            }
+            Self::Recon
+            | Self::Planner
+            | Self::Manager
+            | Self::Mechanic
+            | Self::Auditor
+            | Self::Arbiter => Plane::Planning,
             Self::Analyst | Self::Professor | Self::Curator => Plane::Learning,
         }
     }
@@ -184,6 +189,7 @@ impl From<ExecutionStageName> for StageName {
 impl From<PlanningStageName> for StageName {
     fn from(value: PlanningStageName) -> Self {
         match value {
+            PlanningStageName::Recon => Self::Recon,
             PlanningStageName::Planner => Self::Planner,
             PlanningStageName::Manager => Self::Manager,
             PlanningStageName::Mechanic => Self::Mechanic,
@@ -222,6 +228,10 @@ string_enum! {
 string_enum! {
     /// Planning-plane terminal results.
     pub enum PlanningTerminalResult {
+        ReconToExecution => "RECON_TO_EXECUTION",
+        ReconToPlanning => "RECON_TO_PLANNING",
+        ReconBlocked => "RECON_BLOCKED",
+        ReconNoop => "RECON_NOOP",
         PlannerComplete => "PLANNER_COMPLETE",
         ManagerComplete => "MANAGER_COMPLETE",
         MechanicComplete => "MECHANIC_COMPLETE",
@@ -351,6 +361,7 @@ string_enum! {
     /// Work item kinds accepted by runtime queues.
     pub enum WorkItemKind {
         Task => "task",
+        Probe => "probe",
         Spec => "spec",
         Incident => "incident",
         LearningRequest => "learning_request",
@@ -364,6 +375,7 @@ string_enum! {
         Incident => "incident",
         Manual => "manual",
         DerivedSpec => "derived_spec",
+        Probe => "probe",
     }
 }
 
@@ -385,6 +397,27 @@ string_enum! {
         Active => "active",
         Blocked => "blocked",
         Done => "done",
+    }
+}
+
+string_enum! {
+    /// Probe status hints used in human-facing probe documents.
+    pub enum ProbeStatusHint {
+        Queued => "queued",
+        Active => "active",
+        Blocked => "blocked",
+        Done => "done",
+    }
+}
+
+string_enum! {
+    /// Root intake sources tracked separately from root idea/spec lineage.
+    pub enum RootIntakeKind {
+        Idea => "idea",
+        Probe => "probe",
+        Manual => "manual",
+        Incident => "incident",
+        DerivedSpec => "derived_spec",
     }
 }
 
@@ -449,6 +482,7 @@ string_enum! {
         Resume => "resume",
         ReloadConfig => "reload_config",
         AddTask => "add_task",
+        AddProbe => "add_probe",
         AddSpec => "add_spec",
         AddIdea => "add_idea",
         RetryActive => "retry_active",

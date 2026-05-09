@@ -902,6 +902,7 @@ pub fn compiled_entry_node_for_work_item(
 ) -> Option<&MaterializedGraphNodePlan> {
     let (plane, entry_key) = match work_item_kind {
         WorkItemKind::Task => (Plane::Execution, GraphLoopEntryKey::Task),
+        WorkItemKind::Probe => (Plane::Planning, GraphLoopEntryKey::Probe),
         WorkItemKind::Spec => (Plane::Planning, GraphLoopEntryKey::Spec),
         WorkItemKind::Incident => (Plane::Planning, GraphLoopEntryKey::Incident),
         WorkItemKind::LearningRequest => (Plane::Learning, GraphLoopEntryKey::LearningRequest),
@@ -1089,7 +1090,8 @@ fn project_startup_snapshot(
     now: &Timestamp,
 ) -> RuntimeStartupResult<()> {
     let execution_depth = count_markdown_files(&paths.tasks_queue_dir)?;
-    let planning_depth = count_markdown_files(&paths.specs_queue_dir)?
+    let planning_depth = count_markdown_files(&paths.probes_queue_dir)?
+        + count_markdown_files(&paths.specs_queue_dir)?
         + count_markdown_files(&paths.incidents_incoming_dir)?;
     let learning_depth = count_markdown_files(&paths.learning_requests_queue_dir)?;
 

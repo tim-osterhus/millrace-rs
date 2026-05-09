@@ -71,6 +71,8 @@ fn closure_target_state(root_spec_id: &str, root_idea_id: &str) -> ClosureTarget
         kind: "closure_target_state".to_owned(),
         root_spec_id: root_spec_id.to_owned(),
         root_idea_id: root_idea_id.to_owned(),
+        root_intake_kind: None,
+        root_intake_id: None,
         root_spec_path: format!("millrace-agents/arbiter/contracts/root-specs/{root_spec_id}.md"),
         root_idea_path: format!("millrace-agents/arbiter/contracts/ideas/{root_idea_id}.md"),
         rubric_path: format!("millrace-agents/arbiter/rubrics/{root_spec_id}.md"),
@@ -282,7 +284,7 @@ fn rust_version_command_has_millrace_shape() {
     let version_line =
         parse_version_line(output.stdout_trimmed()).expect("parse Rust version line");
     assert_eq!(version_line.binary_name, "millrace");
-    assert_eq!(version_line.version, "0.3.0");
+    assert_eq!(version_line.version, "0.3.1");
     assert_eq!(version_line.version, env!("CARGO_PKG_VERSION"));
 }
 
@@ -1626,7 +1628,42 @@ fn rust_crate_release_metadata_and_package_include_rules_are_0_2_1() {
 
 #[test]
 fn rust_crate_release_metadata_and_package_include_rules_are_0_3_0() {
-    assert_eq!(env!("CARGO_PKG_VERSION"), "0.3.0");
+    let fixture: Value = serde_json::from_str(
+        &read_fixture("cli_parity/auto_port_v0_18_0_release_parity_evidence.json")
+            .expect("read v0.18.0 release parity evidence fixture"),
+    )
+    .expect("parse v0.18.0 release parity evidence fixture");
+    assert_eq!(fixture["rust_release"]["crate_version"], "0.3.0");
+    assert_eq!(
+        fixture["rust_release"]["version_command_expectation"],
+        "millrace 0.3.0"
+    );
+
+    let include = fixture["rust_release"]["package_include_surfaces"]
+        .as_array()
+        .expect("historical v0.18.0 package include surfaces");
+    for expected in [
+        "Cargo.lock",
+        "CHANGELOG.md",
+        "README.md",
+        "ROADMAP.md",
+        "docs/**/*.md",
+        "src/assets/**/*",
+        "src/**/*.rs",
+        "tests/**/*.rs",
+        "tests/fixtures/**/*",
+        "tests/support/**/*",
+    ] {
+        assert!(
+            include.iter().any(|value| value.as_str() == Some(expected)),
+            "historical v0.18.0 release fixture missing package include surface {expected}"
+        );
+    }
+}
+
+#[test]
+fn rust_crate_release_metadata_and_package_include_rules_are_0_3_1() {
+    assert_eq!(env!("CARGO_PKG_VERSION"), "0.3.1");
 
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let manifest: toml::Value =
@@ -1638,7 +1675,7 @@ fn rust_crate_release_metadata_and_package_include_rules_are_0_3_0() {
         .expect("package table");
     assert_eq!(
         package.get("version").and_then(toml::Value::as_str),
-        Some("0.3.0")
+        Some("0.3.1")
     );
     let include = package
         .get("include")
@@ -1678,8 +1715,8 @@ fn rust_crate_release_metadata_and_package_include_rules_are_0_3_0() {
 
     let lockfile = fs::read_to_string(repo_root.join("Cargo.lock")).expect("read Cargo.lock");
     assert!(
-        lockfile.contains("[[package]]\nname = \"millrace-ai\"\nversion = \"0.3.0\"\n"),
-        "Cargo.lock package metadata must track the 0.3.0 crate version"
+        lockfile.contains("[[package]]\nname = \"millrace-ai\"\nversion = \"0.3.1\"\n"),
+        "Cargo.lock package metadata must track the 0.3.1 crate version"
     );
 }
 
@@ -2182,20 +2219,39 @@ fn committed_auto_port_v0_18_0_parity_fixture_covers_graph_trace_and_web_gap_sco
             .expect("read compiler parity fixture"),
     )
     .expect("parse compiler parity fixture");
-    assert_eq!(compiler_fixture["source"]["previous_tag"], "v0.17.4");
-    assert_eq!(compiler_fixture["source"]["target_tag"], "v0.18.0");
-    assert_eq!(
-        compiler_fixture["source"]["previous_commit"],
-        "304e537964ff772c815689b87e4c1e3b805c656c"
-    );
-    assert_eq!(
-        compiler_fixture["source"]["target_commit"],
-        "e4ccf099c8345a8b8708cdaa1ac510bdc7851387"
-    );
-    assert_eq!(
-        compiler_fixture["source"]["diff_range"],
-        fixture["python_reference"]["diff_range"]
-    );
+    match compiler_fixture["source"]["target_tag"]
+        .as_str()
+        .expect("compiler fixture target tag")
+    {
+        "v0.18.0" => {
+            assert_eq!(compiler_fixture["source"]["previous_tag"], "v0.17.4");
+            assert_eq!(
+                compiler_fixture["source"]["previous_commit"],
+                "304e537964ff772c815689b87e4c1e3b805c656c"
+            );
+            assert_eq!(
+                compiler_fixture["source"]["target_commit"],
+                "e4ccf099c8345a8b8708cdaa1ac510bdc7851387"
+            );
+            assert_eq!(
+                compiler_fixture["source"]["diff_range"],
+                fixture["python_reference"]["diff_range"]
+            );
+        }
+        "v0.18.1" => {
+            assert_eq!(compiler_fixture["source"]["previous_tag"], "v0.18.0");
+            assert_eq!(
+                compiler_fixture["source"]["previous_commit"],
+                "e4ccf099c8345a8b8708cdaa1ac510bdc7851387"
+            );
+            assert_eq!(
+                compiler_fixture["source"]["target_commit"],
+                "0396c7852793b212d31345862b38a7d6f3f02854"
+            );
+            assert_eq!(compiler_fixture["source"]["diff_range"], "v0.18.0..v0.18.1");
+        }
+        target_tag => panic!("unexpected compiler parity target tag {target_tag}"),
+    }
 
     let required_surfaces = fixture["required_surfaces"]
         .as_array()
@@ -2520,6 +2576,824 @@ fn committed_auto_port_v0_18_0_parity_fixture_covers_graph_trace_and_web_gap_sco
             "missing v0.18.0 non-live guarantee {guarantee}"
         );
     }
+}
+
+#[test]
+fn committed_auto_port_v0_18_1_parity_fixture_covers_probe_recon_release_guardrails() {
+    let fixture: Value = serde_json::from_str(
+        &read_fixture("cli_parity/auto_port_v0_18_1_parity_evidence.json")
+            .expect("read v0.18.1 auto-port parity evidence fixture"),
+    )
+    .expect("parse v0.18.1 auto-port parity evidence fixture");
+    assert_eq!(fixture["kind"], "auto_port_v0_18_1_parity_evidence");
+    assert_eq!(fixture["schema_version"], "1.0");
+    assert_eq!(fixture["python_reference"]["previous_tag"], "v0.18.0");
+    assert_eq!(
+        fixture["python_reference"]["previous_commit"],
+        "e4ccf099c8345a8b8708cdaa1ac510bdc7851387"
+    );
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.18.1");
+    assert_eq!(
+        fixture["python_reference"]["target_commit"],
+        "0396c7852793b212d31345862b38a7d6f3f02854"
+    );
+    assert_eq!(
+        fixture["python_reference"]["diff_range"],
+        "v0.18.0..v0.18.1"
+    );
+    assert_ne!(
+        fixture["python_reference"]["target_tag"], fixture["python_reference"]["previous_tag"],
+        "v0.18.1 parity fixture still treats Python v0.18.0 as the target"
+    );
+    assert_eq!(
+        fixture["rust_reference"]["current_repo_crate_version"],
+        "0.3.1"
+    );
+    assert_eq!(
+        fixture["rust_reference"]["current_repo_version_role"],
+        "released_target_for_python_v0.18.1"
+    );
+    assert_eq!(
+        fixture["rust_reference"]["previous_repo_crate_version"],
+        "0.3.0"
+    );
+    assert_eq!(
+        fixture["rust_reference"]["previous_repo_version_role"],
+        "previous_baseline_for_python_v0.18.0"
+    );
+    assert_eq!(fixture["rust_reference"]["planned_crate_version"], "0.3.1");
+    assert_eq!(
+        fixture["rust_reference"]["planned_crate_version"],
+        fixture["rust_reference"]["current_repo_crate_version"],
+        "v0.18.1 parity fixture must treat Rust 0.3.1 as the current target"
+    );
+
+    let required_surfaces = fixture["required_surfaces"]
+        .as_array()
+        .expect("required surfaces are present");
+    let required_surface_names: BTreeSet<_> = required_surfaces
+        .iter()
+        .map(|surface| surface.as_str().expect("surface name"))
+        .collect();
+    let expected_surfaces = BTreeSet::from([
+        "probe_work_documents_and_recon_packets",
+        "recon_managed_assets_compiler_graph",
+        "probe_workspace_queue_lifecycle",
+        "probe_cli_mailbox_readonly",
+        "runtime_recon_routing_result_application",
+        "docs_version_web_package_evidence",
+        "source_reference_guardrails",
+        "release_validation_guardrails",
+    ]);
+    assert_eq!(required_surface_names, expected_surfaces);
+
+    let required_axes = fixture["required_coverage_axes"]
+        .as_array()
+        .expect("required coverage axes are present");
+    let required_axis_names: BTreeSet<_> = required_axes
+        .iter()
+        .map(|axis| axis.as_str().expect("coverage axis"))
+        .collect();
+    for axis in [
+        "python_diff_pin",
+        "rust_version_transition_pin",
+        "generated_scout_changed_paths",
+        "probe_work_document_source_refs",
+        "recon_packet_source_refs",
+        "recon_asset_source_refs",
+        "compiler_graph_source_refs",
+        "queue_lifecycle_source_refs",
+        "cli_mailbox_source_refs",
+        "runtime_recon_source_refs",
+        "docs_source_refs",
+        "web_version_package_evidence",
+        "expected_rust_target_mapping",
+        "release_check_evidence",
+        "no_live_external_dependencies",
+    ] {
+        assert!(
+            required_axis_names.contains(axis),
+            "missing v0.18.1 parity coverage axis {axis}"
+        );
+    }
+
+    let mut referenced_sources = BTreeSet::new();
+    let mut referenced_targets = BTreeSet::new();
+    let mut covered_axes = BTreeSet::new();
+    for surface in fixture["source_reference_surfaces"]
+        .as_array()
+        .expect("source reference surfaces are present")
+    {
+        let surface_name = surface["surface"].as_str().expect("source surface");
+        assert!(
+            required_surface_names.contains(surface_name),
+            "v0.18.1 source surface references unknown surface {surface_name}"
+        );
+        for axis in surface["coverage"].as_array().expect("coverage array") {
+            let axis = axis.as_str().expect("coverage axis");
+            assert!(
+                required_axis_names.contains(axis),
+                "v0.18.1 source surface references unknown coverage axis {axis}"
+            );
+            covered_axes.insert(axis);
+        }
+        for source in surface["python_sources"]
+            .as_array()
+            .expect("python_sources array")
+        {
+            referenced_sources.insert(source.as_str().expect("Python source path").to_owned());
+        }
+        for target in surface["expected_rust_targets"]
+            .as_array()
+            .expect("expected_rust_targets array")
+        {
+            referenced_targets.insert(target.as_str().expect("Rust target path").to_owned());
+        }
+    }
+
+    for axis in [
+        "probe_work_document_source_refs",
+        "recon_packet_source_refs",
+        "recon_asset_source_refs",
+        "compiler_graph_source_refs",
+        "queue_lifecycle_source_refs",
+        "cli_mailbox_source_refs",
+        "runtime_recon_source_refs",
+        "docs_source_refs",
+        "web_version_package_evidence",
+        "expected_rust_target_mapping",
+        "release_check_evidence",
+    ] {
+        assert!(
+            covered_axes.contains(axis),
+            "source-reference surfaces do not cover v0.18.1 axis {axis}"
+        );
+    }
+
+    for source_path in [
+        "../millrace-py/src/millrace_ai/contracts/work_documents.py",
+        "../millrace-py/src/millrace_ai/contracts/recon.py",
+        "../millrace-py/src/millrace_ai/recon_packets.py",
+        "../millrace-py/src/millrace_ai/assets/entrypoints/planning/recon.md",
+        "../millrace-py/src/millrace_ai/assets/graphs/planning/standard.json",
+        "../millrace-py/src/millrace_ai/assets/registry/stage_kinds/planning/recon.json",
+        "../millrace-py/src/millrace_ai/assets/skills/stage/planning/recon-core/SKILL.md",
+        "../millrace-py/src/millrace_ai/workspace/queue_store.py",
+        "../millrace-py/src/millrace_ai/workspace/queue_selection.py",
+        "../millrace-py/src/millrace_ai/cli/commands/queue.py",
+        "../millrace-py/src/millrace_ai/contracts/mailbox.py",
+        "../millrace-py/src/millrace_ai/runtime/mailbox_intake.py",
+        "../millrace-py/src/millrace_ai/runtime/activation.py",
+        "../millrace-py/src/millrace_ai/runtime/recon_transitions.py",
+        "../millrace-py/src/millrace_ai/runtime/result_application.py",
+        "../millrace-py/docs/runtime/millrace-cli-reference.md",
+        "../millrace-py/docs/runtime/millrace-runtime-architecture.md",
+        "../millrace-py/packages/millrace-web/pyproject.toml",
+        "../millrace-py/packages/millrace-web/src/millrace_web/app.py",
+    ] {
+        assert!(
+            referenced_sources.contains(source_path),
+            "missing v0.18.1 Python source reference {source_path}"
+        );
+    }
+
+    for target_path in [
+        "src/contracts/work_documents.rs",
+        "src/work_documents.rs",
+        "src/workspace/queue_store.rs",
+        "src/workspace/runtime_control.rs",
+        "src/cli/intake.rs",
+        "src/cli/read_only.rs",
+        "src/runtime/startup.rs",
+        "src/runtime/tick.rs",
+        "tests/fixtures/cli_parity/web_dashboard_parity_decision.json",
+        "tests/fixtures/runtime_json/auto_port_v0_18_1_runtime_contract_scout.json",
+        "tests/fixtures/compiler_parity/auto_port_v0_18_1_compiler_contract_scout.json",
+        "tests/parity_cli.rs",
+    ] {
+        assert!(
+            referenced_targets.contains(target_path),
+            "missing v0.18.1 expected Rust target {target_path}"
+        );
+    }
+
+    let expected_changed_paths = BTreeSet::from([
+        "CHANGELOG.md",
+        "README.md",
+        "ROADMAP.md",
+        "docs/millrace-technical-overview.md",
+        "docs/runtime/millrace-cli-reference.md",
+        "docs/runtime/millrace-entrypoint-mapping.md",
+        "docs/runtime/millrace-modes-and-loops.md",
+        "docs/runtime/millrace-runtime-architecture.md",
+        "docs/skills/millrace-ops-agent-manual/SKILL.md",
+        "docs/source-package-map.md",
+        "packages/millrace-web/CHANGELOG.md",
+        "packages/millrace-web/pyproject.toml",
+        "packages/millrace-web/src/millrace_web/__init__.py",
+        "packages/millrace-web/src/millrace_web/app.py",
+        "src/millrace_ai/__init__.py",
+        "src/millrace_ai/architecture/loop_graphs.py",
+        "src/millrace_ai/assets/entrypoints/planning/recon.md",
+        "src/millrace_ai/assets/graphs/planning/standard.json",
+        "src/millrace_ai/assets/modes/default_codex.json",
+        "src/millrace_ai/assets/modes/default_pi.json",
+        "src/millrace_ai/assets/modes/learning_codex.json",
+        "src/millrace_ai/assets/modes/learning_pi.json",
+        "src/millrace_ai/assets/registry/stage_kinds/planning/recon.json",
+        "src/millrace_ai/assets/skills/skills_index.md",
+        "src/millrace_ai/assets/skills/stage/planning/recon-core/SKILL.md",
+        "src/millrace_ai/cli/app.py",
+        "src/millrace_ai/cli/commands/queue.py",
+        "src/millrace_ai/cli/shared.py",
+        "src/millrace_ai/compilation/node_materialization.py",
+        "src/millrace_ai/contracts/__init__.py",
+        "src/millrace_ai/contracts/enums.py",
+        "src/millrace_ai/contracts/mailbox.py",
+        "src/millrace_ai/contracts/recon.py",
+        "src/millrace_ai/contracts/stage_metadata.py",
+        "src/millrace_ai/contracts/work_documents.py",
+        "src/millrace_ai/recon_packets.py",
+        "src/millrace_ai/router.py",
+        "src/millrace_ai/runtime/activation.py",
+        "src/millrace_ai/runtime/control.py",
+        "src/millrace_ai/runtime/control_mutations.py",
+        "src/millrace_ai/runtime/engine.py",
+        "src/millrace_ai/runtime/graph_authority/planning.py",
+        "src/millrace_ai/runtime/graph_authority/stage_mapping.py",
+        "src/millrace_ai/runtime/mailbox_intake.py",
+        "src/millrace_ai/runtime/recon_transitions.py",
+        "src/millrace_ai/runtime/result_application.py",
+        "src/millrace_ai/runtime/stage_requests.py",
+        "src/millrace_ai/runtime/work_item_transitions.py",
+        "src/millrace_ai/workspace/initialization.py",
+        "src/millrace_ai/workspace/paths.py",
+        "src/millrace_ai/workspace/queue_reconciliation.py",
+        "src/millrace_ai/workspace/queue_selection.py",
+        "src/millrace_ai/workspace/queue_store.py",
+        "src/millrace_ai/workspace/queue_transitions.py",
+        "src/millrace_ai/workspace/state_reconciliation.py",
+        "src/millrace_ai/workspace/work_documents.py",
+        "tests/assets/test_entrypoints.py",
+        "tests/assets/test_loop_graphs.py",
+        "tests/assets/test_stage_kinds.py",
+        "tests/cli/test_cli.py",
+        "tests/integration/test_compiler.py",
+        "tests/integration/test_single_compiled_plan.py",
+        "tests/runtime/test_graph_authority.py",
+        "tests/runtime/test_result_application.py",
+        "tests/workspace/test_paths.py",
+        "tests/workspace/test_queue_store.py",
+    ]);
+    let changed_mappings = fixture["changed_path_mappings"]
+        .as_array()
+        .expect("changed path mappings are present");
+    let mapped_changed_paths: BTreeSet<_> = changed_mappings
+        .iter()
+        .map(|mapping| mapping["python_path"].as_str().expect("Python path"))
+        .collect();
+    assert_eq!(
+        mapped_changed_paths, expected_changed_paths,
+        "v0.18.1 parity fixture must map every generated scout path exactly"
+    );
+
+    let allowed_target_kinds = BTreeSet::from([
+        "implementation",
+        "test",
+        "documentation",
+        "fixture",
+        "package_evidence",
+        "unsupported_gap_evidence",
+        "reference_evidence",
+    ]);
+    let allowed_rust_targets = BTreeSet::from([
+        "Cargo.toml",
+        "Cargo.lock",
+        "CHANGELOG.md",
+        "README.md",
+        "ROADMAP.md",
+        "docs/rust-port-roadmap.md",
+        "docs/source-package-map.md",
+        "docs/runtime/",
+        "millrace-agents/outline.md",
+        "millrace-agents/auto-port/generated/auto-port-python-v0.18.0-to-v0.18.1-rust-0.3.1.md",
+        "millrace-agents/entrypoints/planning/recon.md",
+        "millrace-agents/graphs/planning/standard.json",
+        "millrace-agents/modes/default_codex.json",
+        "millrace-agents/modes/default_pi.json",
+        "millrace-agents/modes/learning_codex.json",
+        "millrace-agents/modes/learning_codex_auto_port.json",
+        "millrace-agents/modes/learning_pi.json",
+        "millrace-agents/registry/stage_kinds/planning/recon.json",
+        "millrace-agents/skills/skills_index.md",
+        "millrace-agents/skills/stage/planning/recon-core/SKILL.md",
+        "src/assets/baseline/entrypoints/planning/recon.md",
+        "src/assets/baseline/graphs/planning/standard.json",
+        "src/assets/baseline/modes/default_codex.json",
+        "src/assets/baseline/modes/default_pi.json",
+        "src/assets/baseline/modes/learning_codex.json",
+        "src/assets/baseline/modes/learning_pi.json",
+        "src/assets/baseline/registry/stage_kinds/planning/recon.json",
+        "src/assets/baseline/skills/skills_index.md",
+        "src/assets/baseline/skills/stage/planning/recon-core/SKILL.md",
+        "src/cli/intake.rs",
+        "src/cli/mod.rs",
+        "src/cli/read_only.rs",
+        "src/cli/render.rs",
+        "src/compiler/contracts.rs",
+        "src/compiler/graph_exports.rs",
+        "src/compiler/materialization.rs",
+        "src/contracts/enums.rs",
+        "src/contracts/mod.rs",
+        "src/contracts/runtime_json.rs",
+        "src/contracts/stage_metadata.rs",
+        "src/contracts/work_documents.rs",
+        "src/runtime/mod.rs",
+        "src/runtime/run_traces.rs",
+        "src/runtime/startup.rs",
+        "src/runtime/supervisor.rs",
+        "src/runtime/tick.rs",
+        "src/runners/contracts.rs",
+        "src/work_documents.rs",
+        "src/workspace.rs",
+        "src/workspace/queue_store.rs",
+        "src/workspace/runtime_control.rs",
+        "src/workspace/state_store.rs",
+        "tests/compiler_contracts.rs",
+        "tests/compiler_materialization.rs",
+        "tests/compiler_parity.rs",
+        "tests/contracts_runtime_json.rs",
+        "tests/fixtures/cli_parity/auto_port_v0_18_1_parity_evidence.json",
+        "tests/fixtures/cli_parity/web_dashboard_parity_decision.json",
+        "tests/fixtures/compiler_parity/auto_port_v0_18_1_compiler_contract_scout.json",
+        "tests/fixtures/runtime_json/auto_port_v0_18_1_runtime_contract_scout.json",
+        "tests/fixtures/work_documents/",
+        "tests/parity_cli.rs",
+        "tests/runtime_daemon.rs",
+        "tests/runtime_serial.rs",
+    ]);
+    let mut covered_mapping_surfaces = BTreeSet::new();
+    for mapping in changed_mappings {
+        let python_path = mapping["python_path"].as_str().expect("Python path");
+        assert!(!python_path.is_empty(), "mapping has empty Python path");
+        let surface_name = mapping["surface"].as_str().expect("mapping surface");
+        assert!(
+            required_surface_names.contains(surface_name),
+            "v0.18.1 path mapping uses unknown surface {surface_name}"
+        );
+        covered_mapping_surfaces.insert(surface_name);
+        assert!(
+            mapping["change_role"]
+                .as_str()
+                .is_some_and(is_snake_case_rust_test_name),
+            "v0.18.1 path mapping has malformed change_role: {mapping:?}"
+        );
+        let rust_targets = mapping["rust_targets"]
+            .as_array()
+            .expect("rust target mappings are present");
+        assert!(
+            !rust_targets.is_empty(),
+            "v0.18.1 path mapping has no Rust target: {mapping:?}"
+        );
+        let mut has_unsupported_gap = false;
+        for target in rust_targets {
+            let kind = target["kind"].as_str().expect("Rust target kind");
+            assert!(
+                allowed_target_kinds.contains(kind),
+                "v0.18.1 path mapping uses unknown Rust target kind {kind}"
+            );
+            let path = target["path"].as_str().expect("Rust target path");
+            assert!(
+                allowed_rust_targets.contains(path),
+                "v0.18.1 path mapping uses unknown Rust target path {path}"
+            );
+            has_unsupported_gap |= kind == "unsupported_gap_evidence";
+        }
+        if python_path.starts_with("packages/millrace-web/") {
+            assert!(
+                has_unsupported_gap
+                    || rust_targets.iter().any(|target| {
+                        target["kind"].as_str() == Some("package_evidence")
+                            && target["path"].as_str()
+                                == Some(
+                                    "tests/fixtures/cli_parity/web_dashboard_parity_decision.json",
+                                )
+                    }),
+                "web package mapping must remain explicit package or unsupported-gap evidence"
+            );
+        }
+    }
+    assert_eq!(covered_mapping_surfaces, expected_surfaces);
+
+    let available_tests = rust_test_functions_by_file(&[
+        "tests/compiler_parity.rs",
+        "tests/contracts_runtime_json.rs",
+        "tests/parity_cli.rs",
+    ]);
+    for guardrail in fixture["active_guardrail_tests"]
+        .as_array()
+        .expect("active guardrail tests are present")
+    {
+        let test_file = guardrail["file"].as_str().expect("guardrail file");
+        let test_name = guardrail["name"].as_str().expect("guardrail name");
+        assert!(
+            available_tests.contains_key(test_file),
+            "v0.18.1 fixture references unsupported guardrail test file {test_file}"
+        );
+        assert!(
+            is_snake_case_rust_test_name(test_name),
+            "v0.18.1 fixture references malformed guardrail test name {test_name}"
+        );
+        assert!(
+            available_tests[test_file].contains(test_name),
+            "v0.18.1 fixture references stale guardrail test {test_file}::{test_name}"
+        );
+    }
+
+    let required_release_checks = fixture["required_release_checks"]
+        .as_array()
+        .expect("required release checks are present");
+    for command in [
+        "cargo fmt --check",
+        "cargo test --test parity_cli",
+        "cargo metadata --no-deps --format-version 1",
+        "cargo run --quiet -- --version",
+        "cargo package --allow-dirty --offline",
+    ] {
+        assert!(
+            required_release_checks
+                .iter()
+                .any(|value| value.as_str() == Some(command)),
+            "missing v0.18.1 required release check {command}"
+        );
+    }
+
+    let dashboard_fixture: Value = serde_json::from_str(
+        &read_fixture("cli_parity/web_dashboard_parity_decision.json")
+            .expect("read web dashboard parity decision fixture"),
+    )
+    .expect("parse web dashboard parity decision fixture");
+    assert_eq!(
+        dashboard_fixture["v0_18_1_version_package_evidence"]["python_target_tag"],
+        "v0.18.1"
+    );
+    assert_eq!(
+        dashboard_fixture["v0_18_1_version_package_evidence"]["diff_range"],
+        "v0.18.0..v0.18.1"
+    );
+    let web_sources =
+        dashboard_fixture["v0_18_1_version_package_evidence"]["changed_python_sources"]
+            .as_array()
+            .expect("v0.18.1 web package source list");
+    for source_path in [
+        "../millrace-py/packages/millrace-web/CHANGELOG.md",
+        "../millrace-py/packages/millrace-web/pyproject.toml",
+        "../millrace-py/packages/millrace-web/src/millrace_web/__init__.py",
+        "../millrace-py/packages/millrace-web/src/millrace_web/app.py",
+    ] {
+        assert!(
+            web_sources
+                .iter()
+                .any(|value| value.as_str() == Some(source_path)),
+            "missing v0.18.1 web package evidence source {source_path}"
+        );
+    }
+
+    let non_live_guarantees = fixture["non_live_guarantees"]
+        .as_array()
+        .expect("non-live guarantees are present");
+    for guarantee in [
+        "no live Codex runner",
+        "no live Pi runner",
+        "no network",
+        "no credentials",
+        "no web server",
+        "no release upload",
+        "no publishing",
+    ] {
+        assert!(
+            non_live_guarantees
+                .iter()
+                .any(|value| value.as_str() == Some(guarantee)),
+            "missing v0.18.1 non-live guarantee {guarantee}"
+        );
+    }
+}
+
+#[test]
+fn committed_auto_port_v0_18_1_release_parity_evidence_covers_version_docs_package_recon_and_web_gap()
+ {
+    let fixture: Value = serde_json::from_str(
+        &read_fixture("cli_parity/auto_port_v0_18_1_release_parity_evidence.json")
+            .expect("read v0.18.1 release parity evidence fixture"),
+    )
+    .expect("parse v0.18.1 release parity evidence fixture");
+    assert_eq!(fixture["kind"], "auto_port_v0_18_1_release_parity_evidence");
+    assert_eq!(fixture["schema_version"], "1.0");
+    assert_eq!(fixture["python_reference"]["previous_tag"], "v0.18.0");
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.18.1");
+    assert_eq!(
+        fixture["python_reference"]["target_commit"],
+        "0396c7852793b212d31345862b38a7d6f3f02854"
+    );
+    assert_eq!(
+        fixture["python_reference"]["diff_range"],
+        "v0.18.0..v0.18.1"
+    );
+    assert_eq!(fixture["rust_release"]["crate_version"], "0.3.1");
+    assert_eq!(fixture["rust_release"]["previous_crate_version"], "0.3.0");
+    assert_eq!(
+        fixture["rust_release"]["version_command_expectation"],
+        "millrace 0.3.1"
+    );
+
+    let include = fixture["rust_release"]["package_include_surfaces"]
+        .as_array()
+        .expect("package include surfaces are present");
+    for expected in [
+        "Cargo.lock",
+        "CHANGELOG.md",
+        "README.md",
+        "ROADMAP.md",
+        "docs/**/*.md",
+        "src/assets/**/*",
+        "src/**/*.rs",
+        "tests/**/*.rs",
+        "tests/fixtures/**/*",
+        "tests/support/**/*",
+    ] {
+        assert!(
+            include.iter().any(|value| value.as_str() == Some(expected)),
+            "missing v0.18.1 release package include surface {expected}"
+        );
+    }
+
+    let readiness = fixture["rust_release"]["package_readiness_evidence"]
+        .as_array()
+        .expect("package readiness evidence is present");
+    for expected in [
+        "Recon managed assets included under src/assets/baseline/entrypoints/planning/recon.md",
+        "Recon stage-kind registry included under src/assets/baseline/registry/stage_kinds/planning/recon.json",
+        "Recon core skill included under src/assets/baseline/skills/stage/planning/recon-core/SKILL.md",
+        "mode runner bindings included under src/assets/baseline/modes/",
+        "probe/recon parity fixtures included under tests/fixtures/",
+        "release fixture included under tests/fixtures/cli_parity/auto_port_v0_18_1_release_parity_evidence.json",
+        "version-visible CLI output checked by cargo run --quiet -- --version",
+        "plain cargo publish --dry-run checked and blocked only by the Builder dirty worktree",
+        "cargo publish --dry-run --allow-dirty checked the release candidate without uploading",
+        "package content checked by cargo package --allow-dirty --offline",
+    ] {
+        assert!(
+            readiness
+                .iter()
+                .any(|value| value.as_str() == Some(expected)),
+            "missing v0.18.1 package readiness evidence {expected}"
+        );
+    }
+
+    let required_surfaces = fixture["required_surfaces"]
+        .as_array()
+        .expect("required surfaces are present");
+    let required_surface_names: BTreeSet<_> = required_surfaces
+        .iter()
+        .map(|surface| surface.as_str().expect("surface name"))
+        .collect();
+    let expected_surfaces = BTreeSet::from([
+        "probe_recon_release_docs",
+        "package_release_evidence",
+        "web_dashboard_version_package_gap",
+        "final_release_validation",
+    ]);
+    assert_eq!(required_surface_names, expected_surfaces);
+
+    let available_tests = rust_test_functions_by_file(&[
+        "tests/parity_cli.rs",
+        "tests/compiler_parity.rs",
+        "tests/contracts_runtime_json.rs",
+        "tests/runtime_serial.rs",
+        "tests/runtime_daemon.rs",
+    ]);
+    let required_rust_refs = BTreeSet::from([
+        "tests/parity_cli.rs::rust_version_command_has_millrace_shape",
+        "tests/parity_cli.rs::rust_version_subcommand_matches_version_flag",
+        "tests/parity_cli.rs::rust_crate_release_metadata_and_package_include_rules_are_0_3_1",
+        "tests/parity_cli.rs::committed_auto_port_v0_18_1_parity_fixture_covers_probe_recon_release_guardrails",
+        "tests/parity_cli.rs::committed_web_dashboard_parity_decision_records_unsupported_gap_with_sources",
+        "tests/parity_cli.rs::committed_auto_port_v0_18_1_release_parity_evidence_covers_version_docs_package_recon_and_web_gap",
+        "tests/compiler_parity.rs::compiler_parity_scout_pins_python_v0_18_1_recon_assets_and_graph_sources",
+        "tests/contracts_runtime_json.rs::auto_port_v0_18_1_runtime_contract_scout_pins_probe_recon_sources",
+        "tests/runtime_serial.rs::serial_tick_claims_probe_for_recon_stage_request_metadata",
+        "tests/runtime_serial.rs::recon_to_execution_persists_packet_marks_probe_done_enqueues_task_and_traces",
+        "tests/runtime_serial.rs::recon_to_planning_persists_packet_marks_probe_done_enqueues_spec",
+        "tests/runtime_daemon.rs::daemon_mailbox_drains_control_and_intake_commands_into_processed_archives",
+    ]);
+
+    let surfaces = fixture["surfaces"]
+        .as_array()
+        .expect("surface entries are present");
+    let mut covered_surfaces = BTreeSet::new();
+    let mut referenced_paths = BTreeSet::new();
+    let mut seen_rust_refs = BTreeSet::new();
+    for surface in surfaces {
+        let surface_name = surface["surface"].as_str().expect("surface name");
+        assert!(
+            required_surface_names.contains(surface_name),
+            "v0.18.1 release fixture references unknown surface {surface_name}"
+        );
+        covered_surfaces.insert(surface_name);
+        for source in surface["python_sources"]
+            .as_array()
+            .expect("python_sources array")
+        {
+            referenced_paths.insert(source.as_str().expect("Python source path"));
+        }
+        for rust_test in surface["rust_tests"].as_array().expect("rust_tests array") {
+            let test_file = rust_test["file"].as_str().expect("Rust test file");
+            let test_name = rust_test["name"].as_str().expect("Rust test name");
+            assert!(
+                available_tests.contains_key(test_file),
+                "v0.18.1 release fixture references unsupported Rust test file {test_file}"
+            );
+            assert!(
+                available_tests[test_file].contains(test_name),
+                "v0.18.1 release fixture references stale Rust test {test_file}::{test_name}"
+            );
+            let rust_ref = format!("{test_file}::{test_name}");
+            assert!(
+                required_rust_refs.contains(rust_ref.as_str()),
+                "v0.18.1 release fixture references unknown Rust test {rust_ref}"
+            );
+            seen_rust_refs.insert(rust_ref);
+        }
+    }
+    assert_eq!(covered_surfaces, expected_surfaces);
+    for rust_ref in &required_rust_refs {
+        assert!(
+            seen_rust_refs.contains(*rust_ref),
+            "missing required v0.18.1 release Rust test {rust_ref}"
+        );
+    }
+
+    for source_path in [
+        "../millrace-py/CHANGELOG.md",
+        "../millrace-py/README.md",
+        "../millrace-py/ROADMAP.md",
+        "../millrace-py/docs/source-package-map.md",
+        "../millrace-py/docs/runtime/millrace-cli-reference.md",
+        "../millrace-py/docs/runtime/millrace-modes-and-loops.md",
+        "../millrace-py/docs/runtime/millrace-runtime-architecture.md",
+        "../millrace-py/src/millrace_ai/contracts/work_documents.py",
+        "../millrace-py/src/millrace_ai/recon_packets.py",
+        "../millrace-py/src/millrace_ai/runtime/recon_transitions.py",
+        "../millrace-py/packages/millrace-web/pyproject.toml",
+        "../millrace-py/packages/millrace-web/src/millrace_web/app.py",
+    ] {
+        assert!(
+            referenced_paths.contains(source_path),
+            "missing v0.18.1 release Python source reference {source_path}"
+        );
+    }
+
+    let local_docs = fixture["local_docs"]
+        .as_array()
+        .expect("local docs list is present");
+    for doc_path in [
+        "README.md",
+        "CHANGELOG.md",
+        "ROADMAP.md",
+        "docs/rust-port-roadmap.md",
+        "docs/source-package-map.md",
+        "docs/runtime/README.md",
+        "docs/runtime/millrace-cli-reference.md",
+        "docs/runtime/millrace-compiler-and-frozen-plans.md",
+        "docs/runtime/millrace-modes-and-loops.md",
+        "docs/runtime/millrace-runtime-architecture.md",
+        "millrace-agents/outline.md",
+        "tests/fixtures/cli_parity/README.md",
+        "tests/fixtures/compiler_parity/README.md",
+        "tests/fixtures/runtime_json/README.md",
+    ] {
+        assert!(
+            local_docs
+                .iter()
+                .any(|value| value.as_str() == Some(doc_path)),
+            "missing v0.18.1 release local doc reference {doc_path}"
+        );
+    }
+
+    let validation = fixture["release_readiness_commands"]
+        .as_array()
+        .expect("release-readiness commands are present");
+    for command in [
+        "cargo fmt --check",
+        "cargo clippy --all-targets --all-features -- -D warnings",
+        "cargo test --all",
+        "cargo test --test parity_cli",
+        "cargo metadata --no-deps --format-version 1",
+        "cargo run --quiet -- --version",
+        "cargo publish --dry-run",
+        "cargo publish --dry-run --allow-dirty",
+        "cargo package --allow-dirty --offline",
+    ] {
+        assert!(
+            validation
+                .iter()
+                .any(|value| value.as_str() == Some(command)),
+            "missing v0.18.1 release validation command {command}"
+        );
+    }
+    let forbidden = fixture["forbidden_release_actions"]
+        .as_array()
+        .expect("forbidden release actions are present");
+    for command in validation {
+        let command = command.as_str().expect("release command");
+        assert!(
+            !forbidden
+                .iter()
+                .any(|value| value.as_str() == Some(command)),
+            "release-readiness command must not be a forbidden release action: {command}"
+        );
+    }
+
+    let results = fixture["release_readiness_results"]
+        .as_array()
+        .expect("release-readiness results are present");
+    let results_by_command: BTreeMap<_, _> = results
+        .iter()
+        .map(|result| (result["command"].as_str().expect("result command"), result))
+        .collect();
+    for command in validation {
+        let command = command.as_str().expect("release command");
+        assert!(
+            results_by_command.contains_key(command),
+            "missing v0.18.1 release result for {command}"
+        );
+    }
+    assert_eq!(
+        results_by_command["cargo clippy --all-targets --all-features -- -D warnings"]["status"],
+        "passed"
+    );
+    assert_eq!(results_by_command["cargo test --all"]["status"], "passed");
+    assert_eq!(
+        results_by_command["cargo metadata --no-deps --format-version 1"]["observed_package_version"],
+        "0.3.1"
+    );
+    assert_eq!(
+        results_by_command["cargo run --quiet -- --version"]["observed_stdout"],
+        "millrace 0.3.1"
+    );
+    assert_eq!(
+        results_by_command["cargo publish --dry-run"]["status"],
+        "blocked_by_dirty_worktree"
+    );
+    assert_eq!(
+        results_by_command["cargo publish --dry-run"]["exit_code"],
+        101
+    );
+    assert_eq!(
+        results_by_command["cargo publish --dry-run --allow-dirty"]["status"],
+        "passed_dry_run_without_upload"
+    );
+    assert_eq!(
+        results_by_command["cargo package --allow-dirty --offline"]["status"],
+        "passed"
+    );
+
+    let closure_guard = &fixture["arbiter_closure_guard"];
+    assert_eq!(closure_guard["crate_version_gate"], "0.3.1");
+    let completion_withheld_until = closure_guard["completion_withheld_until"]
+        .as_array()
+        .expect("completion guard reasons are present");
+    assert!(completion_withheld_until.iter().any(|reason| {
+        reason.as_str().is_some_and(|reason| {
+            reason.contains("same-lineage work is done and Checker validates")
+        })
+    }));
+
+    let gaps = fixture["explicit_gaps"]
+        .as_array()
+        .expect("explicit gaps are present");
+    assert!(gaps.iter().any(|gap| {
+        gap["surface"].as_str() == Some("python_packages_millrace_web")
+            && gap["status"].as_str() == Some("deferred_unsupported_gap")
+            && gap["v0_18_1_version_package_gap"].as_bool() == Some(true)
+            && gap["evidence_fixture"].as_str()
+                == Some("tests/fixtures/cli_parity/web_dashboard_parity_decision.json")
+    }));
+
+    let dashboard_fixture: Value = serde_json::from_str(
+        &read_fixture("cli_parity/web_dashboard_parity_decision.json")
+            .expect("read web dashboard parity decision fixture"),
+    )
+    .expect("parse web dashboard parity decision fixture");
+    assert_eq!(
+        dashboard_fixture["v0_18_1_version_package_evidence"]["python_target_tag"],
+        "v0.18.1"
+    );
+    assert_eq!(
+        dashboard_fixture["v0_18_1_version_package_evidence"]["rust_release_handling"],
+        "Recorded as v0.18.1 package/version evidence for the existing unsupported dashboard gap; no Rust web server, static shell, SSE stream, or separate dashboard package is added."
+    );
 }
 
 #[test]
@@ -5019,6 +5893,50 @@ fn rust_queue_intake_commands_write_canonical_artifacts_and_are_visible() {
     assert!(queued_spec.contains("Spec-ID: spec-cli-intake\n"));
     assert!(queued_spec.contains("Root-Idea-ID: idea-cli-intake\n"));
 
+    let probe_path = temp_dir.path().join("probe-cli-intake.json");
+    fs::write(
+        &probe_path,
+        serde_json::to_string_pretty(&json!({
+            "schema_version": "1.0",
+            "kind": "probe",
+            "probe_id": "probe-cli-intake",
+            "title": "Probe CLI intake",
+            "summary": "Import through Rust CLI JSON intake",
+            "request": "Research the current codebase and route the smallest safe change.",
+            "target_paths": ["src/cli/intake.rs"],
+            "constraints": ["Do not implement during recon."],
+            "acceptance": ["queue add-probe imports JSON"],
+            "risk_notes": ["probe intake can drift from task/spec intake"],
+            "references": ["tests/parity_cli.rs"],
+            "created_at": "2026-04-15T00:00:00Z",
+            "created_by": "tests"
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+
+    let probe = run_rust_millrace([
+        "add-probe",
+        probe_path.to_str().unwrap(),
+        "--workspace",
+        root.to_str().unwrap(),
+    ])
+    .expect("run Rust millrace add-probe alias");
+    probe.assert_success();
+    assert_eq!(
+        probe.stdout,
+        format!(
+            "enqueued_probe: {}\n",
+            paths.probes_queue_dir.join("probe-cli-intake.md").display()
+        )
+    );
+    assert_eq!(probe.stderr, "");
+    let queued_probe =
+        fs::read_to_string(paths.probes_queue_dir.join("probe-cli-intake.md")).unwrap();
+    assert!(queued_probe.starts_with("# Probe CLI intake\n"));
+    assert!(queued_probe.contains("Probe-ID: probe-cli-intake\n"));
+    assert!(queued_probe.contains("Request: Research the current codebase"));
+
     let idea_path = temp_dir.path().join("idea-cli-intake.md");
     fs::write(
         &idea_path,
@@ -5051,10 +5969,15 @@ fn rust_queue_intake_commands_write_canonical_artifacts_and_are_visible() {
     list.assert_success();
     for expected in [
         "execution_queue_depth: 1\n",
-        "planning_queue_depth: 1\n",
+        "planning_queue_depth: 2\n",
+        "probe_queue_depth: 1\n",
+        "spec_queue_depth: 1\n",
+        "incident_queue_depth: 0\n",
         "task_queue_count: 1\n",
+        "probe_queue_count: 1\n",
         "spec_queue_count: 1\n",
         "work_item: kind=task state=queue id=task-cli-intake path=",
+        "work_item: kind=probe state=queue id=probe-cli-intake path=",
         "work_item: kind=spec state=queue id=spec-cli-intake path=",
     ] {
         assert!(
@@ -5107,15 +6030,61 @@ fn rust_queue_intake_routes_to_mailbox_when_daemon_lock_is_active() {
     }
     assert!(!paths.tasks_queue_dir.join("task-mailbox-cli.md").exists());
 
+    let probe_path = temp_dir.path().join("probe-mailbox-cli.md");
+    let probe_raw = read_fixture("work_documents/probe.md")
+        .unwrap()
+        .replace("probe-fixture", "probe-mailbox-cli");
+    fs::write(&probe_path, probe_raw).unwrap();
+
+    let probe_output = run_rust_millrace([
+        "queue",
+        "add-probe",
+        probe_path.to_str().unwrap(),
+        "--workspace",
+        root.to_str().unwrap(),
+    ])
+    .expect("run Rust millrace queue add-probe mailbox");
+    probe_output.assert_success();
+    assert_eq!(probe_output.stderr, "");
+    for expected in [
+        "action: add_probe\n",
+        "mode: mailbox\n",
+        "applied: false\n",
+        "detail: queued for daemon processing\n",
+        "command_id: add_probe-",
+        "mailbox_path: ",
+    ] {
+        assert!(
+            probe_output.stdout.contains(expected),
+            "missing expected mailbox output fragment: {expected}\nstdout:\n{}",
+            probe_output.stdout
+        );
+    }
+    assert!(!paths.probes_queue_dir.join("probe-mailbox-cli.md").exists());
+
     let mailbox_paths = mailbox_json_paths(&paths.mailbox_incoming_dir);
-    assert_eq!(mailbox_paths.len(), 1);
-    let envelope: Value =
-        serde_json::from_str(&fs::read_to_string(&mailbox_paths[0]).unwrap()).unwrap();
-    assert_eq!(envelope["kind"], "mailbox_command");
-    assert_eq!(envelope["command"], "add_task");
+    assert_eq!(mailbox_paths.len(), 2);
+    let envelopes: Vec<Value> = mailbox_paths
+        .iter()
+        .map(|path| serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap())
+        .collect();
+    let add_task = envelopes
+        .iter()
+        .find(|envelope| envelope["command"] == "add_task")
+        .unwrap();
+    assert_eq!(add_task["kind"], "mailbox_command");
     assert_eq!(
-        envelope["payload"]["document"]["task_id"],
+        add_task["payload"]["document"]["task_id"],
         "task-mailbox-cli"
+    );
+    let add_probe = envelopes
+        .iter()
+        .find(|envelope| envelope["command"] == "add_probe")
+        .unwrap();
+    assert_eq!(add_probe["kind"], "mailbox_command");
+    assert_eq!(
+        add_probe["payload"]["document"]["probe_id"],
+        "probe-mailbox-cli"
     );
 }
 
@@ -5221,6 +6190,39 @@ fn rust_queue_intake_rejects_invalid_duplicate_mismatched_and_uninitialized_inpu
             .contains("task task-duplicate-cli already exists")
     );
 
+    let duplicate_probe_path = temp_dir.path().join("probe-duplicate-cli.md");
+    fs::write(
+        &duplicate_probe_path,
+        read_fixture("work_documents/probe.md")
+            .unwrap()
+            .replace("probe-fixture", "probe-duplicate-cli"),
+    )
+    .unwrap();
+    run_rust_millrace([
+        "queue",
+        "add-probe",
+        duplicate_probe_path.to_str().unwrap(),
+        "--workspace",
+        root.to_str().unwrap(),
+    ])
+    .expect("run Rust millrace add-probe duplicate first")
+    .assert_success();
+    let duplicate_probe = run_rust_millrace([
+        "queue",
+        "add-probe",
+        duplicate_probe_path.to_str().unwrap(),
+        "--workspace",
+        root.to_str().unwrap(),
+    ])
+    .expect("run Rust millrace add-probe duplicate second");
+    assert_exit_code(&duplicate_probe, 1);
+    assert!(duplicate_probe.stdout.contains("failed to add probe"));
+    assert!(
+        duplicate_probe
+            .stdout
+            .contains("probe probe-duplicate-cli already exists")
+    );
+
     let uninitialized_root = temp_dir.path().join("uninitialized");
     let uninitialized_path = temp_dir.path().join("task-uninitialized-cli.md");
     fs::write(
@@ -5273,6 +6275,24 @@ fn rust_read_only_queue_commands_render_documents_without_mutation() {
     )
     .unwrap();
 
+    let probe = read_fixture("work_documents/probe.md").unwrap();
+    fs::write(paths.probes_queue_dir.join("probe-fixture.md"), &probe).unwrap();
+    fs::write(
+        paths.probes_active_dir.join("probe-active.md"),
+        probe.replace("probe-fixture", "probe-active"),
+    )
+    .unwrap();
+    fs::write(
+        paths.probes_done_dir.join("probe-done.md"),
+        probe.replace("probe-fixture", "probe-done"),
+    )
+    .unwrap();
+    fs::write(
+        paths.probes_blocked_dir.join("probe-blocked.md"),
+        probe.replace("probe-fixture", "probe-blocked"),
+    )
+    .unwrap();
+
     let spec = read_fixture("work_documents/spec.md").unwrap();
     fs::write(paths.specs_queue_dir.join("spec-fixture.md"), &spec).unwrap();
     fs::write(
@@ -5301,13 +6321,21 @@ fn rust_read_only_queue_commands_render_documents_without_mutation() {
     assert_eq!(output.stderr, "");
     for expected in [
         "execution_queue_depth: 1\n",
-        "planning_queue_depth: 2\n",
+        "planning_queue_depth: 3\n",
+        "probe_queue_depth: 1\n",
+        "spec_queue_depth: 1\n",
+        "incident_queue_depth: 1\n",
+        "planning_active: 1\n",
         "active_task_count: 1\n",
+        "active_probe_count: 1\n",
         "task_done_count: 1\n",
         "task_blocked_count: 1\n",
+        "probe_done_count: 1\n",
+        "probe_blocked_count: 1\n",
         "spec_blocked_count: 1\n",
         "incident_resolved_count: 1\n",
         "work_item: kind=task state=queue id=task-fixture path=",
+        "work_item: kind=probe state=done id=probe-done path=",
     ] {
         assert!(
             output.stdout.contains(expected),
@@ -5332,6 +6360,34 @@ fn rust_read_only_queue_commands_render_documents_without_mutation() {
     assert!(output.stdout.contains("work_item_kind: task\n"));
     assert!(output.stdout.contains("work_item_state: queue\n"));
     assert!(output.stdout.contains("title: Fixture task\n"));
+    assert_eq!(runtime_tree_snapshot(&root), before);
+
+    let output = run_rust_millrace([
+        "queue",
+        "show",
+        "probe-done",
+        "--workspace",
+        root.to_str().unwrap(),
+    ])
+    .expect("run Rust millrace queue show probe");
+
+    output.assert_success();
+    assert_eq!(output.stderr, "");
+    assert!(output.stdout.contains("work_item_id: probe-done\n"));
+    assert!(output.stdout.contains("work_item_kind: probe\n"));
+    assert!(output.stdout.contains("work_item_state: done\n"));
+    assert!(output.stdout.contains("title: Fixture probe\n"));
+    assert!(
+        output
+            .stdout
+            .contains("request: Research the current codebase and route the smallest safe change.")
+    );
+    assert!(output.stdout.contains("status_hint: queued\n"));
+    assert!(
+        output
+            .stdout
+            .contains("target_paths: [\"src/example/parser.py\"]\n")
+    );
     assert_eq!(runtime_tree_snapshot(&root), before);
 
     fs::write(

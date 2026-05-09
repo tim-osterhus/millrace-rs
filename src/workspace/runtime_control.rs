@@ -12,10 +12,10 @@ use serde_json::{Map, Value};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 use crate::contracts::{
-    ActiveRunState, MailboxAddIdeaPayload, MailboxAddSpecPayload, MailboxAddTaskPayload,
-    MailboxCommand, MailboxCommandEnvelope, PauseSource, Plane, RecoveryCounters,
-    RuntimeJsonContract, RuntimeJsonError, RuntimeSnapshot, SpecDocument, TaskDocument, Timestamp,
-    WorkItemKind,
+    ActiveRunState, MailboxAddIdeaPayload, MailboxAddProbePayload, MailboxAddSpecPayload,
+    MailboxAddTaskPayload, MailboxCommand, MailboxCommandEnvelope, PauseSource, Plane,
+    ProbeDocument, RecoveryCounters, RuntimeJsonContract, RuntimeJsonError, RuntimeSnapshot,
+    SpecDocument, TaskDocument, Timestamp, WorkItemKind,
 };
 
 use super::{
@@ -471,6 +471,35 @@ impl RuntimeControl {
         })
     }
 
+    /// Add a probe to the planning probe queue or enqueue a daemon-owned add-probe command.
+    pub fn add_probe(
+        &self,
+        document: &ProbeDocument,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        self.add_probe_with_issuer(document, DEFAULT_ISSUER)
+    }
+
+    /// Add a probe to the planning probe queue or enqueue a daemon-owned add-probe command with an issuer.
+    pub fn add_probe_with_issuer(
+        &self,
+        document: &ProbeDocument,
+        issuer: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        let mut payload_model = MailboxAddProbePayload {
+            document: document.clone(),
+        };
+        payload_model.validate().map_err(|source| {
+            RuntimeControlError::runtime_json(self.paths.mailbox_incoming_dir.clone(), source)
+        })?;
+        let payload = payload_map(&self.paths.mailbox_incoming_dir, &payload_model)?;
+        self.dispatch(
+            MailboxCommand::AddProbe,
+            issuer,
+            Some(payload),
+            |snapshot| self.add_probe_direct(snapshot, document),
+        )
+    }
+
     /// Add a spec to the planning queue or enqueue a daemon-owned add-spec command.
     pub fn add_spec(
         &self,
@@ -799,6 +828,24 @@ impl RuntimeControl {
         ))
     }
 
+    fn add_probe_direct(
+        &self,
+        mut snapshot: RuntimeSnapshot,
+        document: &ProbeDocument,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        let queue = QueueStore::from_paths(self.paths.clone());
+        let destination = queue.enqueue_probe(document)?;
+        let depth = planning_queue_depth(&self.paths)?;
+        set_queue_depth(&mut snapshot, Plane::Planning, depth);
+        snapshot.updated_at = now_timestamp("updated_at")?;
+        save_snapshot(&self.paths, &snapshot)?;
+        Ok(RuntimeControlActionResult::direct_artifact(
+            MailboxCommand::AddProbe,
+            "probe queued directly",
+            destination,
+        ))
+    }
+
     fn add_idea_direct(
         &self,
         mut snapshot: RuntimeSnapshot,
@@ -918,6 +965,11 @@ impl RuntimeControl {
         }
         for spec_id in markdown_stems(&self.paths.specs_active_dir)? {
             if ignore_invalid_state(queue.requeue_spec(&spec_id, reason))? {
+                requeued_count += 1;
+            }
+        }
+        for probe_id in markdown_stems(&self.paths.probes_active_dir)? {
+            if ignore_invalid_state(queue.requeue_probe(&probe_id, reason))? {
                 requeued_count += 1;
             }
         }
@@ -1246,6 +1298,7 @@ fn requeue_active_item(
 ) -> Result<PathBuf, QueueStoreError> {
     match work_item_kind {
         WorkItemKind::Task => queue.requeue_task(work_item_id, reason),
+        WorkItemKind::Probe => queue.requeue_probe(work_item_id, reason),
         WorkItemKind::Spec => queue.requeue_spec(work_item_id, reason),
         WorkItemKind::Incident => queue.requeue_incident(work_item_id, reason),
         WorkItemKind::LearningRequest => queue.requeue_learning_request(work_item_id, reason),
@@ -1280,7 +1333,8 @@ fn count_markdown_files(directory: &Path) -> RuntimeControlResult<u64> {
 }
 
 fn planning_queue_depth(paths: &WorkspacePaths) -> RuntimeControlResult<u64> {
-    Ok(count_markdown_files(&paths.specs_queue_dir)?
+    Ok(count_markdown_files(&paths.probes_queue_dir)?
+        + count_markdown_files(&paths.specs_queue_dir)?
         + count_markdown_files(&paths.incidents_incoming_dir)?)
 }
 

@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "kind": "recon_packet",
+  "recon_packet_id": "recon-probe-001",
+  "probe_id": "probe-001",
+  "decision": "to_execution",
+  "confidence": "high",
+  "risk_level": "medium",
+  "request_summary": "Research before routing.",
+  "interpreted_goal": "Route this work through the smallest safe lane.",
+  "relevant_paths": [
+    {
+      "path": "src/example.rs",
+      "reason": "Likely behavior owner."
+    }
+  ],
+  "relevant_symbols": [
+    "parse_example"
+  ],
+  "relevant_tests": [
+    {
+      "path": "tests/example.rs",
+      "reason": "Focused regression coverage."
+    }
+  ],
+  "semantic_invariants": [
+    "Preserve adjacent behavior."
+  ],
+  "edge_cases_to_preserve": [
+    "Empty input remains rejected."
+  ],
+  "verification_plan": {
+    "required_commands": [
+      "cargo test --test contracts_runtime_json"
+    ],
+    "focused_checks": [
+      "Run adjacent tests."
+    ],
+    "fallback_checks": [
+      "cargo test --all"
+    ]
+  },
+  "open_questions": [
+    "Confirm owner module before editing."
+  ],
+  "handoff_target": "execution",
+  "emitted_task_id": "task-from-probe",
+  "emitted_spec_id": null,
+  "created_at": "2026-04-15T00:00:00Z",
+  "created_by": "recon"
+}

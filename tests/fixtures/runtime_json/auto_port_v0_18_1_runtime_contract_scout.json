@@ -1,0 +1,62 @@
+{
+  "contract_sources": [
+    "../millrace-py/src/millrace_ai/contracts/enums.py",
+    "../millrace-py/src/millrace_ai/contracts/mailbox.py",
+    "../millrace-py/src/millrace_ai/contracts/recon.py",
+    "../millrace-py/src/millrace_ai/contracts/stage_metadata.py",
+    "../millrace-py/src/millrace_ai/contracts/work_documents.py",
+    "../millrace-py/src/millrace_ai/recon_packets.py",
+    "../millrace-py/src/millrace_ai/runtime/activation.py",
+    "../millrace-py/src/millrace_ai/runtime/graph_authority/planning.py",
+    "../millrace-py/src/millrace_ai/runtime/graph_authority/stage_mapping.py",
+    "../millrace-py/src/millrace_ai/runtime/mailbox_intake.py",
+    "../millrace-py/src/millrace_ai/runtime/recon_transitions.py",
+    "../millrace-py/src/millrace_ai/runtime/result_application.py",
+    "../millrace-py/src/millrace_ai/runtime/stage_requests.py",
+    "../millrace-py/src/millrace_ai/runtime/work_item_transitions.py",
+    "../millrace-py/src/millrace_ai/workspace/paths.py",
+    "../millrace-py/src/millrace_ai/workspace/queue_selection.py",
+    "../millrace-py/src/millrace_ai/workspace/queue_store.py",
+    "../millrace-py/src/millrace_ai/workspace/queue_transitions.py",
+    "../millrace-py/src/millrace_ai/workspace/work_documents.py",
+    "../millrace-py/tests/runtime/test_graph_authority.py",
+    "../millrace-py/tests/runtime/test_result_application.py",
+    "../millrace-py/tests/workspace/test_paths.py",
+    "../millrace-py/tests/workspace/test_queue_store.py"
+  ],
+  "expected_rust_contract_targets": [
+    "src/contracts/enums.rs",
+    "src/contracts/stage_metadata.rs",
+    "src/contracts/work_documents.rs",
+    "src/contracts/runtime_json.rs",
+    "src/work_documents.rs",
+    "src/workspace.rs",
+    "src/workspace/queue_store.rs",
+    "src/workspace/runtime_control.rs",
+    "src/runtime/startup.rs",
+    "src/runtime/tick.rs",
+    "src/runtime/supervisor.rs",
+    "tests/contracts_runtime_json.rs",
+    "tests/runtime_serial.rs",
+    "tests/runtime_daemon.rs",
+    "tests/parity_cli.rs"
+  ],
+  "kind": "auto_port_v0_18_1_runtime_contract_scout",
+  "no_live_guarantees": [
+    "no live Codex runner",
+    "no live Pi runner",
+    "no network",
+    "no credentials",
+    "no web server",
+    "no release upload",
+    "no publishing"
+  ],
+  "python_reference": {
+    "diff_range": "v0.18.0..v0.18.1",
+    "previous_commit": "e4ccf099c8345a8b8708cdaa1ac510bdc7851387",
+    "previous_tag": "v0.18.0",
+    "target_commit": "0396c7852793b212d31345862b38a7d6f3f02854",
+    "target_tag": "v0.18.1"
+  },
+  "schema_version": "1.0"
+}

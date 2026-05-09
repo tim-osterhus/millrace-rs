@@ -3,14 +3,17 @@
 use std::fmt::Debug;
 
 use serde_json::{Value, json};
+use tempfile::TempDir;
 
 use millrace_ai::contracts::{
-    CompileDiagnostics, ExecutionTerminalResult, LearningTerminalResult, MailboxCommandEnvelope,
-    Plane, PlanningTerminalResult, RecoveryCounters, ResultClass, RunTraceGraph,
+    CompileDiagnostics, ExecutionTerminalResult, LearningTerminalResult, MailboxAddProbePayload,
+    MailboxCommandEnvelope, Plane, PlanningTerminalResult, ReconDecision, ReconHandoffTarget,
+    ReconPacketDocument, ReconPacketError, RecoveryCounters, ResultClass, RunTraceGraph,
     RuntimeErrorContext, RuntimeJsonContract, RuntimeJsonError, RuntimeSnapshot, StageName,
     StageResultEnvelope, TerminalResult, TokenUsage, UsageGovernanceLedgerEntry,
     UsageGovernanceState, UsageGovernanceSubscriptionWindow,
 };
+use millrace_ai::recon_packets::{parse_recon_packet, read_recon_packet, render_recon_packet};
 
 const NOW: &str = "2026-04-15T00:00:00Z";
 
@@ -496,6 +499,255 @@ fn auto_port_v0_18_0_runtime_contract_scout_pins_graph_and_trace_sources() {
             "missing v0.18.0 runtime contract scout guarantee {guarantee}"
         );
     }
+}
+
+#[test]
+fn auto_port_v0_18_1_runtime_contract_scout_pins_probe_recon_sources() {
+    let fixture: Value = python_model_dump_fixture(include_str!(
+        "fixtures/runtime_json/auto_port_v0_18_1_runtime_contract_scout.json"
+    ));
+    assert_eq!(fixture["schema_version"], "1.0");
+    assert_eq!(fixture["kind"], "auto_port_v0_18_1_runtime_contract_scout");
+    assert_eq!(fixture["python_reference"]["previous_tag"], "v0.18.0");
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.18.1");
+    assert_eq!(
+        fixture["python_reference"]["previous_commit"],
+        "e4ccf099c8345a8b8708cdaa1ac510bdc7851387"
+    );
+    assert_eq!(
+        fixture["python_reference"]["target_commit"],
+        "0396c7852793b212d31345862b38a7d6f3f02854"
+    );
+    assert_eq!(
+        fixture["python_reference"]["diff_range"],
+        "v0.18.0..v0.18.1"
+    );
+
+    let sources = fixture["contract_sources"]
+        .as_array()
+        .expect("contract source references are present");
+    for source_path in [
+        "../millrace-py/src/millrace_ai/contracts/enums.py",
+        "../millrace-py/src/millrace_ai/contracts/mailbox.py",
+        "../millrace-py/src/millrace_ai/contracts/recon.py",
+        "../millrace-py/src/millrace_ai/contracts/stage_metadata.py",
+        "../millrace-py/src/millrace_ai/contracts/work_documents.py",
+        "../millrace-py/src/millrace_ai/recon_packets.py",
+        "../millrace-py/src/millrace_ai/runtime/activation.py",
+        "../millrace-py/src/millrace_ai/runtime/graph_authority/planning.py",
+        "../millrace-py/src/millrace_ai/runtime/graph_authority/stage_mapping.py",
+        "../millrace-py/src/millrace_ai/runtime/mailbox_intake.py",
+        "../millrace-py/src/millrace_ai/runtime/recon_transitions.py",
+        "../millrace-py/src/millrace_ai/runtime/result_application.py",
+        "../millrace-py/src/millrace_ai/runtime/stage_requests.py",
+        "../millrace-py/src/millrace_ai/workspace/paths.py",
+        "../millrace-py/src/millrace_ai/workspace/queue_selection.py",
+        "../millrace-py/src/millrace_ai/workspace/queue_store.py",
+        "../millrace-py/src/millrace_ai/workspace/queue_transitions.py",
+        "../millrace-py/src/millrace_ai/workspace/work_documents.py",
+        "../millrace-py/tests/runtime/test_graph_authority.py",
+        "../millrace-py/tests/runtime/test_result_application.py",
+        "../millrace-py/tests/workspace/test_paths.py",
+        "../millrace-py/tests/workspace/test_queue_store.py",
+    ] {
+        assert!(
+            sources
+                .iter()
+                .any(|value| value.as_str() == Some(source_path)),
+            "missing v0.18.1 runtime/probe/recon source {source_path}"
+        );
+    }
+
+    let targets = fixture["expected_rust_contract_targets"]
+        .as_array()
+        .expect("expected Rust contract targets are present");
+    for target_path in [
+        "src/contracts/enums.rs",
+        "src/contracts/stage_metadata.rs",
+        "src/contracts/work_documents.rs",
+        "src/contracts/runtime_json.rs",
+        "src/work_documents.rs",
+        "src/workspace.rs",
+        "src/workspace/queue_store.rs",
+        "src/workspace/runtime_control.rs",
+        "src/runtime/startup.rs",
+        "src/runtime/tick.rs",
+        "src/runtime/supervisor.rs",
+        "tests/contracts_runtime_json.rs",
+        "tests/runtime_serial.rs",
+        "tests/runtime_daemon.rs",
+        "tests/parity_cli.rs",
+    ] {
+        assert!(
+            targets
+                .iter()
+                .any(|value| value.as_str() == Some(target_path)),
+            "missing v0.18.1 Rust contract target {target_path}"
+        );
+    }
+
+    let guarantees = fixture["no_live_guarantees"]
+        .as_array()
+        .expect("non-live guarantees are present");
+    for guarantee in [
+        "no live Codex runner",
+        "no live Pi runner",
+        "no network",
+        "no credentials",
+        "no web server",
+        "no release upload",
+        "no publishing",
+    ] {
+        assert!(
+            guarantees
+                .iter()
+                .any(|value| value.as_str() == Some(guarantee)),
+            "missing v0.18.1 runtime contract scout guarantee {guarantee}"
+        );
+    }
+}
+
+#[test]
+fn recon_packet_json_fixture_and_markdown_round_trip_exactly() {
+    let expected = python_model_dump_fixture(include_str!(
+        "fixtures/runtime_json/recon_packet_to_execution.json"
+    ));
+
+    let packet = ReconPacketDocument::from_json_value(expected.clone()).unwrap();
+    assert_eq!(packet.decision, ReconDecision::ToExecution);
+    assert_eq!(packet.handoff_target, ReconHandoffTarget::Execution);
+    assert_eq!(packet.emitted_task_id.as_deref(), Some("task-from-probe"));
+    assert_eq!(serde_json::to_value(&packet).unwrap(), expected);
+
+    let rendered = render_recon_packet(&packet);
+    assert!(rendered.starts_with("# Recon Packet recon-probe-001\n"));
+    assert!(rendered.contains("Recon-Packet-ID: recon-probe-001\n"));
+    assert!(rendered.contains("Relevant-Paths:\n- src/example.rs | Likely behavior owner.\n"));
+    assert!(rendered.contains("Required-Commands:\n- cargo test --test contracts_runtime_json\n"));
+
+    let parsed = parse_recon_packet(&rendered).unwrap();
+    assert_eq!(parsed, packet);
+
+    let temp_dir = TempDir::new().unwrap();
+    let path = temp_dir.path().join("recon-probe-001.md");
+    std::fs::write(&path, rendered).unwrap();
+    assert_eq!(read_recon_packet(&path).unwrap(), packet);
+}
+
+#[test]
+fn recon_packet_contract_rejects_mismatched_or_empty_fields() {
+    let fixture = || {
+        python_model_dump_fixture(include_str!(
+            "fixtures/runtime_json/recon_packet_to_execution.json"
+        ))
+    };
+
+    let mut bad_handoff = fixture();
+    bad_handoff["handoff_target"] = json!("planning");
+    let error = ReconPacketDocument::from_json_value(bad_handoff).unwrap_err();
+    assert!(matches!(error, ReconPacketError::InvalidDocument { .. }));
+    assert!(error.to_string().contains("handoff_target"));
+
+    let mut missing_emitted_task = fixture();
+    missing_emitted_task["emitted_task_id"] = Value::Null;
+    let error = ReconPacketDocument::from_json_value(missing_emitted_task).unwrap_err();
+    assert!(error.to_string().contains("emitted_task_id"));
+
+    let mut invalid_emitted_task = fixture();
+    invalid_emitted_task["emitted_task_id"] = json!("-bad-task");
+    let error = ReconPacketDocument::from_json_value(invalid_emitted_task).unwrap_err();
+    assert!(matches!(error, ReconPacketError::Contract(_)));
+
+    let mut empty_summary = fixture();
+    empty_summary["request_summary"] = json!("");
+    let error = ReconPacketDocument::from_json_value(empty_summary).unwrap_err();
+    assert!(matches!(
+        error,
+        ReconPacketError::MissingRequiredField {
+            field_name: "request_summary"
+        }
+    ));
+
+    let mut empty_paths = fixture();
+    empty_paths["relevant_paths"] = json!([]);
+    let error = ReconPacketDocument::from_json_value(empty_paths).unwrap_err();
+    assert!(matches!(
+        error,
+        ReconPacketError::EmptyRequiredList {
+            field_name: "relevant_paths"
+        }
+    ));
+
+    let mut bad_path_finding = fixture();
+    bad_path_finding["relevant_paths"][0]["reason"] = json!("");
+    let error = ReconPacketDocument::from_json_value(bad_path_finding).unwrap_err();
+    assert!(error.to_string().contains("reason"));
+
+    let mut malformed_markdown = render_recon_packet(
+        &ReconPacketDocument::from_json_value(fixture()).expect("fixture packet"),
+    );
+    malformed_markdown = malformed_markdown.replace(
+        "- src/example.rs | Likely behavior owner.",
+        "- src/example.rs",
+    );
+    let error = parse_recon_packet(&malformed_markdown).unwrap_err();
+    assert!(error.to_string().contains("path | reason"));
+}
+
+#[test]
+fn python_v0_18_1_probe_mailbox_and_recon_stage_json_contracts_round_trip() {
+    let payload_value = python_model_dump_fixture(include_str!(
+        "fixtures/runtime_json/mailbox_add_probe_payload.json"
+    ));
+    let payload = MailboxAddProbePayload::from_json_value(payload_value).unwrap();
+    assert_eq!(payload.document.kind().as_str(), "probe");
+    assert_eq!(payload.document.probe_id, "probe-001");
+    assert_eq!(
+        payload.document.status_hint.map(|status| status.as_str()),
+        Some("queued")
+    );
+
+    let add_probe = round_trip_contract::<MailboxCommandEnvelope>(json!({
+        "schema_version": "1.0",
+        "kind": "mailbox_command",
+        "command_id": "cmd-add-probe",
+        "command": "add_probe",
+        "issued_at": NOW,
+        "issuer": "operator",
+        "payload": {
+            "document": {
+                "probe_id": "probe-001",
+                "title": "Probe mailbox payload",
+                "summary": "research before routing",
+                "request": "Research the repo surface and route this work safely.",
+                "target_paths": ["src/example.rs"],
+                "created_at": NOW,
+                "created_by": "tests"
+            }
+        }
+    }));
+    assert_eq!(add_probe.command.as_str(), "add_probe");
+
+    let mut recon_stage = stage_result_json();
+    recon_stage["plane"] = json!("planning");
+    recon_stage["stage"] = json!("recon");
+    recon_stage["node_id"] = json!("recon");
+    recon_stage["stage_kind_id"] = json!("recon");
+    recon_stage["work_item_kind"] = json!("probe");
+    recon_stage["work_item_id"] = json!("probe-001");
+    recon_stage["terminal_result"] = json!("RECON_TO_EXECUTION");
+    recon_stage["result_class"] = json!("success");
+    recon_stage["summary_status_marker"] = json!("### RECON_TO_EXECUTION");
+    recon_stage["detected_marker"] = json!("### RECON_TO_EXECUTION");
+    recon_stage["artifact_paths"] = json!(["recon_packet.md", "generated_task.md"]);
+
+    let decoded = round_trip_stage_result(recon_stage);
+    assert_eq!(decoded.stage, StageName::Recon);
+    assert_eq!(
+        decoded.terminal_result,
+        TerminalResult::Planning(PlanningTerminalResult::ReconToExecution)
+    );
+    assert_eq!(decoded.work_item_kind.as_str(), "probe");
 }
 
 #[test]

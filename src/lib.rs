@@ -25,6 +25,9 @@ pub mod workspace;
 /// Headed markdown work-document parsing and rendering helpers.
 pub mod work_documents;
 
+/// Recon packet markdown parsing and rendering helpers.
+pub mod recon_packets;
+
 /// Compiler contract boundary and frozen-plan models.
 pub mod compiler;
 

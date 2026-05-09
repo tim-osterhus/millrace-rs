@@ -38,8 +38,9 @@ command set; `tests/parity_cli.rs` rejects unknown, malformed, stale, or
 missing Rust test references in that fixture. `web_dashboard_parity_decision.json`
 records the Python v0.17.3 optional `packages/millrace-web` surface as an
 intentional unsupported Rust parity gap, records the Python v0.17.4 package
-version/dependency sync, and records the Python v0.18.0 graph/trace dashboard
-evidence for that same gap. It names
+version/dependency sync, records the Python v0.18.0 graph/trace dashboard
+evidence for that same gap, and records the Python v0.18.1 package/runtime app
+version sync without authorizing a Rust web implementation. It names
 the workspace registry, summary DTO, queue/run/snapshot/baseline/compiled-plan/
 Arbiter/usage-governance/event readers, static shell, CLI/server boundary, and
 package-boundary tests, while documenting that Rust currently keeps the
@@ -87,6 +88,23 @@ v0.18.0 `millrace-web` compiled graph/run-trace/Flow overlay unsupported-gap
 evidence. `tests/parity_cli.rs` rejects missing, malformed, unknown, stale, or
 omitted Rust test references in that release fixture and confirms release
 evidence does not require publish, upload, push, tag, or deployment commands.
+`auto_port_v0_18_1_parity_evidence.json` records target-facing guardrails for
+the Python `v0.18.0..v0.18.1` to Rust `0.3.1` auto-port. It maps every
+generated scout changed path to an expected Rust implementation, test,
+documentation, fixture, package evidence, or unsupported-gap evidence target;
+pins probe work documents, Recon packets/assets, queue, CLI, mailbox, runtime
+activation/result-application, docs, and `millrace-web` version/package source
+references; and requires the release-check command set before Arbiter can treat
+the lineage as complete.
+`auto_port_v0_18_1_release_parity_evidence.json` records the final Rust
+`0.3.1` release evidence for version-visible CLI metadata, package include
+rules, README/changelog/roadmap/runtime docs, Recon/probe package-readiness
+evidence, release-readiness command results, the plain publish dry-run
+dirty-worktree limitation, allow-dirty dry-run/offline package verification,
+and the Python v0.18.1 `millrace-web` package/version unsupported-gap evidence.
+`tests/parity_cli.rs` rejects missing, malformed, unknown, stale, or omitted
+Rust test references in that release fixture and confirms release evidence does
+not require publish, upload, push, tag, or deployment commands.
 
 The evidence is intentionally not a byte-for-byte transcript. Paths, generated
 ids, timestamps, package versions, command ids, run ids, compact run handles,

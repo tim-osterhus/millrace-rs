@@ -1,0 +1,264 @@
+{
+  "schema_version": "1.0",
+  "kind": "auto_port_v0_18_1_release_parity_evidence",
+  "summary": "Final Rust 0.3.1 release-parity evidence for the Python v0.18.0..v0.18.1 auto-port, covering version metadata, probe/Recon contracts and runtime behavior, docs, package include readiness, release-readiness commands, and the millrace-web v0.18.1 package/version unsupported-gap evidence.",
+  "python_reference": {
+    "previous_tag": "v0.18.0",
+    "previous_commit": "e4ccf099c8345a8b8708cdaa1ac510bdc7851387",
+    "target_tag": "v0.18.1",
+    "target_commit": "0396c7852793b212d31345862b38a7d6f3f02854",
+    "diff_range": "v0.18.0..v0.18.1",
+    "changed_path_families": [
+      "probe_work_documents_and_recon_packets",
+      "recon_managed_assets_compiler_graph",
+      "probe_workspace_queue_lifecycle",
+      "probe_cli_mailbox_readonly",
+      "runtime_recon_routing_result_application",
+      "docs_version_web_package_evidence",
+      "release_metadata_docs_package"
+    ]
+  },
+  "rust_release": {
+    "crate_version": "0.3.1",
+    "previous_crate_version": "0.3.0",
+    "package_name": "millrace-ai",
+    "binary_name": "millrace",
+    "version_command_expectation": "millrace 0.3.1",
+    "package_include_surfaces": [
+      "Cargo.lock",
+      "CHANGELOG.md",
+      "README.md",
+      "ROADMAP.md",
+      "docs/**/*.md",
+      "src/assets/**/*",
+      "src/**/*.rs",
+      "tests/**/*.rs",
+      "tests/fixtures/**/*",
+      "tests/support/**/*"
+    ],
+    "package_readiness_evidence": [
+      "Recon managed assets included under src/assets/baseline/entrypoints/planning/recon.md",
+      "Recon stage-kind registry included under src/assets/baseline/registry/stage_kinds/planning/recon.json",
+      "Recon core skill included under src/assets/baseline/skills/stage/planning/recon-core/SKILL.md",
+      "mode runner bindings included under src/assets/baseline/modes/",
+      "probe/recon parity fixtures included under tests/fixtures/",
+      "release fixture included under tests/fixtures/cli_parity/auto_port_v0_18_1_release_parity_evidence.json",
+      "web-dashboard unsupported-gap evidence included under tests/fixtures/cli_parity/web_dashboard_parity_decision.json",
+      "version-visible CLI output checked by cargo run --quiet -- --version",
+      "plain cargo publish --dry-run checked and blocked only by the Builder dirty worktree",
+      "cargo publish --dry-run --allow-dirty checked the release candidate without uploading",
+      "package content checked by cargo package --allow-dirty --offline"
+    ]
+  },
+  "required_surfaces": [
+    "probe_recon_release_docs",
+    "package_release_evidence",
+    "web_dashboard_version_package_gap",
+    "final_release_validation"
+  ],
+  "surfaces": [
+    {
+      "surface": "probe_recon_release_docs",
+      "rust_status": "implemented",
+      "python_sources": [
+        "../millrace-py/CHANGELOG.md",
+        "../millrace-py/README.md",
+        "../millrace-py/ROADMAP.md",
+        "../millrace-py/docs/millrace-technical-overview.md",
+        "../millrace-py/docs/runtime/millrace-cli-reference.md",
+        "../millrace-py/docs/runtime/millrace-modes-and-loops.md",
+        "../millrace-py/docs/runtime/millrace-runtime-architecture.md",
+        "../millrace-py/docs/source-package-map.md",
+        "../millrace-py/src/millrace_ai/contracts/work_documents.py",
+        "../millrace-py/src/millrace_ai/recon_packets.py",
+        "../millrace-py/src/millrace_ai/runtime/recon_transitions.py"
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "committed_auto_port_v0_18_1_parity_fixture_covers_probe_recon_release_guardrails"
+        },
+        {
+          "file": "tests/compiler_parity.rs",
+          "name": "compiler_parity_scout_pins_python_v0_18_1_recon_assets_and_graph_sources"
+        },
+        {
+          "file": "tests/contracts_runtime_json.rs",
+          "name": "auto_port_v0_18_1_runtime_contract_scout_pins_probe_recon_sources"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "serial_tick_claims_probe_for_recon_stage_request_metadata"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "recon_to_execution_persists_packet_marks_probe_done_enqueues_task_and_traces"
+        },
+        {
+          "file": "tests/runtime_serial.rs",
+          "name": "recon_to_planning_persists_packet_marks_probe_done_enqueues_spec"
+        },
+        {
+          "file": "tests/runtime_daemon.rs",
+          "name": "daemon_mailbox_drains_control_and_intake_commands_into_processed_archives"
+        }
+      ]
+    },
+    {
+      "surface": "package_release_evidence",
+      "rust_status": "implemented",
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/__init__.py",
+        "../millrace-py/docs/source-package-map.md"
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "rust_version_command_has_millrace_shape"
+        },
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "rust_version_subcommand_matches_version_flag"
+        },
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "rust_crate_release_metadata_and_package_include_rules_are_0_3_1"
+        }
+      ]
+    },
+    {
+      "surface": "web_dashboard_version_package_gap",
+      "rust_status": "arbiter_visible_unsupported_gap",
+      "python_sources": [
+        "../millrace-py/packages/millrace-web/CHANGELOG.md",
+        "../millrace-py/packages/millrace-web/pyproject.toml",
+        "../millrace-py/packages/millrace-web/src/millrace_web/__init__.py",
+        "../millrace-py/packages/millrace-web/src/millrace_web/app.py"
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "committed_web_dashboard_parity_decision_records_unsupported_gap_with_sources"
+        }
+      ]
+    },
+    {
+      "surface": "final_release_validation",
+      "rust_status": "implemented",
+      "python_sources": [
+        "../millrace-py/CHANGELOG.md",
+        "../millrace-py/ROADMAP.md"
+      ],
+      "rust_tests": [
+        {
+          "file": "tests/parity_cli.rs",
+          "name": "committed_auto_port_v0_18_1_release_parity_evidence_covers_version_docs_package_recon_and_web_gap"
+        }
+      ]
+    }
+  ],
+  "local_docs": [
+    "README.md",
+    "CHANGELOG.md",
+    "ROADMAP.md",
+    "docs/rust-port-roadmap.md",
+    "docs/source-package-map.md",
+    "docs/runtime/README.md",
+    "docs/runtime/millrace-cli-reference.md",
+    "docs/runtime/millrace-compiler-and-frozen-plans.md",
+    "docs/runtime/millrace-modes-and-loops.md",
+    "docs/runtime/millrace-runtime-architecture.md",
+    "millrace-agents/outline.md",
+    "tests/fixtures/cli_parity/README.md",
+    "tests/fixtures/compiler_parity/README.md",
+    "tests/fixtures/runtime_json/README.md"
+  ],
+  "explicit_gaps": [
+    {
+      "surface": "python_packages_millrace_web",
+      "status": "deferred_unsupported_gap",
+      "version_sync_only": true,
+      "graph_trace_gap": true,
+      "v0_18_1_version_package_gap": true,
+      "evidence_fixture": "tests/fixtures/cli_parity/web_dashboard_parity_decision.json",
+      "reason": "Python v0.18.1 syncs the optional millrace-web package version, millrace-ai dependency floor, and FastAPI app version to 0.18.1. Rust records this as package/version evidence for the existing unsupported dashboard gap because no Rust web server, static shell, SSE stream, dashboard HTTP API, or separate dashboard package target is accepted."
+    }
+  ],
+  "release_readiness_commands": [
+    "cargo fmt --check",
+    "cargo clippy --all-targets --all-features -- -D warnings",
+    "cargo test --all",
+    "cargo test --test parity_cli",
+    "cargo metadata --no-deps --format-version 1",
+    "cargo run --quiet -- --version",
+    "cargo publish --dry-run",
+    "cargo publish --dry-run --allow-dirty",
+    "cargo package --allow-dirty --offline"
+  ],
+  "release_readiness_results": [
+    {
+      "command": "cargo fmt --check",
+      "status": "passed"
+    },
+    {
+      "command": "cargo clippy --all-targets --all-features -- -D warnings",
+      "status": "passed"
+    },
+    {
+      "command": "cargo test --all",
+      "status": "passed",
+      "notes": "Full suite passed with only explicitly ignored live-smoke/Python-reference tests skipped by their test gates."
+    },
+    {
+      "command": "cargo test --test parity_cli",
+      "status": "passed"
+    },
+    {
+      "command": "cargo metadata --no-deps --format-version 1",
+      "status": "passed",
+      "observed_package_version": "0.3.1"
+    },
+    {
+      "command": "cargo run --quiet -- --version",
+      "status": "passed",
+      "observed_stdout": "millrace 0.3.1"
+    },
+    {
+      "command": "cargo publish --dry-run",
+      "status": "blocked_by_dirty_worktree",
+      "exit_code": 101,
+      "remediation": "Re-run on the committed release candidate, or use the recorded allow-dirty dry-run/package checks for this uncommitted Builder pass."
+    },
+    {
+      "command": "cargo publish --dry-run --allow-dirty",
+      "status": "passed_dry_run_without_upload",
+      "observed_warning": "aborting upload due to dry run"
+    },
+    {
+      "command": "cargo package --allow-dirty --offline",
+      "status": "passed",
+      "packaged_files": 224,
+      "compressed_size": "578.9KiB"
+    }
+  ],
+  "arbiter_closure_guard": {
+    "completion_withheld_until": [
+      "same-lineage work is done and Checker validates the final v0.18.1 release evidence",
+      "the plain cargo publish --dry-run dirty-worktree limitation is resolved on a committed release candidate or accepted as stage-local remediation evidence",
+      "Cargo metadata and version-visible CLI output report 0.3.1",
+      "explicit millrace-web unsupported-gap evidence remains adjudicated",
+      "remaining parity gaps are explicitly accepted or routed"
+    ],
+    "crate_version_gate": "0.3.1",
+    "remaining_parity_gap": "python_packages_millrace_web deferred_unsupported_gap"
+  },
+  "forbidden_release_actions": [
+    "cargo publish",
+    "publish",
+    "tag",
+    "git push",
+    "push",
+    "upload",
+    "deploy"
+  ]
+}

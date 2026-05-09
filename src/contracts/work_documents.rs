@@ -6,8 +6,8 @@ use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 use super::{
     ContractError, IncidentDecision, IncidentSeverity, LearningRequestAction, LearningStageName,
-    Plane, SpecSourceType, StageName, TaskStatusHint, WorkItemKind, stage_plane,
-    validate_safe_identifier,
+    Plane, ProbeStatusHint, RootIntakeKind, SpecSourceType, StageName, TaskStatusHint,
+    WorkItemKind, stage_plane, validate_safe_identifier,
 };
 
 /// Canonical work-document schema version used by the Python reference.
@@ -146,6 +146,8 @@ pub struct TaskDocument {
     pub summary: String,
     pub root_idea_id: Option<String>,
     pub root_spec_id: Option<String>,
+    pub root_intake_kind: Option<RootIntakeKind>,
+    pub root_intake_id: Option<String>,
     pub spec_id: Option<String>,
     pub parent_task_id: Option<String>,
     pub incident_id: Option<String>,
@@ -184,6 +186,7 @@ impl TaskDocument {
         validate_safe_identifier(&self.task_id, "task_id")?;
         validate_optional_identifier("root_idea_id", &self.root_idea_id)?;
         validate_optional_identifier("root_spec_id", &self.root_spec_id)?;
+        validate_optional_identifier("root_intake_id", &self.root_intake_id)?;
         validate_optional_identifier("spec_id", &self.spec_id)?;
         validate_optional_identifier("parent_task_id", &self.parent_task_id)?;
         validate_optional_identifier("incident_id", &self.incident_id)?;
@@ -207,6 +210,8 @@ pub struct SpecDocument {
     pub parent_spec_id: Option<String>,
     pub root_idea_id: Option<String>,
     pub root_spec_id: Option<String>,
+    pub root_intake_kind: Option<RootIntakeKind>,
+    pub root_intake_id: Option<String>,
     pub goals: Vec<String>,
     #[serde(default)]
     pub non_goals: Vec<String>,
@@ -252,10 +257,61 @@ impl SpecDocument {
         validate_optional_identifier("parent_spec_id", &self.parent_spec_id)?;
         validate_optional_identifier("root_idea_id", &self.root_idea_id)?;
         validate_optional_identifier("root_spec_id", &self.root_spec_id)?;
+        validate_optional_identifier("root_intake_id", &self.root_intake_id)?;
         validate_required_list("goals", &self.goals)?;
         validate_required_list("constraints", &self.constraints)?;
         validate_required_list("acceptance", &self.acceptance)?;
         validate_required_list("references", &self.references)?;
+        Ok(())
+    }
+}
+
+/// Probe planning document for ambiguous requests routed through Recon.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProbeDocument {
+    pub probe_id: String,
+    pub title: String,
+    pub summary: String,
+    pub request: String,
+    #[serde(default)]
+    pub target_paths: Vec<String>,
+    #[serde(default)]
+    pub constraints: Vec<String>,
+    #[serde(default)]
+    pub acceptance: Vec<String>,
+    #[serde(default)]
+    pub risk_notes: Vec<String>,
+    #[serde(default)]
+    pub references: Vec<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    pub status_hint: Option<ProbeStatusHint>,
+    pub created_at: Timestamp,
+    pub created_by: String,
+    pub updated_at: Option<Timestamp>,
+}
+
+impl ProbeDocument {
+    /// Returns the document kind token.
+    #[must_use]
+    pub const fn kind(&self) -> WorkItemKind {
+        WorkItemKind::Probe
+    }
+
+    /// Returns the fixed schema version.
+    #[must_use]
+    pub const fn schema_version(&self) -> &'static str {
+        WORK_DOCUMENT_SCHEMA_VERSION
+    }
+
+    /// Validates the Python-reference probe contract.
+    pub fn validate(&self) -> Result<(), WorkDocumentError> {
+        validate_safe_identifier(&self.probe_id, "probe_id")?;
+        if self.request.trim().is_empty() {
+            return Err(WorkDocumentError::MissingRequiredField {
+                field_name: "request",
+            });
+        }
         Ok(())
     }
 }
@@ -268,6 +324,8 @@ pub struct IncidentDocument {
     pub summary: String,
     pub root_idea_id: Option<String>,
     pub root_spec_id: Option<String>,
+    pub root_intake_kind: Option<RootIntakeKind>,
+    pub root_intake_id: Option<String>,
     pub source_task_id: Option<String>,
     pub source_spec_id: Option<String>,
     pub source_stage: StageName,
@@ -306,6 +364,7 @@ impl IncidentDocument {
         validate_safe_identifier(&self.incident_id, "incident_id")?;
         validate_optional_identifier("root_idea_id", &self.root_idea_id)?;
         validate_optional_identifier("root_spec_id", &self.root_spec_id)?;
+        validate_optional_identifier("root_intake_id", &self.root_intake_id)?;
         validate_optional_identifier("source_task_id", &self.source_task_id)?;
         validate_optional_identifier("source_spec_id", &self.source_spec_id)?;
         if stage_plane(self.source_stage) != self.source_plane {
@@ -378,6 +437,10 @@ pub struct ClosureTargetState {
     pub kind: String,
     pub root_spec_id: String,
     pub root_idea_id: String,
+    #[serde(default)]
+    pub root_intake_kind: Option<RootIntakeKind>,
+    #[serde(default)]
+    pub root_intake_id: Option<String>,
     pub root_spec_path: String,
     pub root_idea_path: String,
     pub rubric_path: String,
@@ -415,6 +478,7 @@ impl ClosureTargetState {
         validate_literal("kind", &self.kind, "closure_target_state")?;
         validate_safe_identifier(&self.root_spec_id, "root_spec_id")?;
         validate_safe_identifier(&self.root_idea_id, "root_idea_id")?;
+        validate_optional_identifier("root_intake_id", &self.root_intake_id)?;
         validate_optional_identifier("last_arbiter_run_id", &self.last_arbiter_run_id)?;
         for work_item_id in &self.blocking_work_ids {
             validate_safe_identifier(work_item_id, "blocking_work_ids")?;
@@ -447,6 +511,7 @@ impl ClosureTargetState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorkDocument {
     Task(TaskDocument),
+    Probe(ProbeDocument),
     Spec(SpecDocument),
     Incident(IncidentDocument),
     LearningRequest(LearningRequestDocument),
@@ -458,6 +523,7 @@ impl WorkDocument {
     pub const fn kind(&self) -> WorkItemKind {
         match self {
             Self::Task(document) => document.kind(),
+            Self::Probe(document) => document.kind(),
             Self::Spec(document) => document.kind(),
             Self::Incident(document) => document.kind(),
             Self::LearningRequest(document) => document.kind(),
@@ -475,6 +541,7 @@ impl WorkDocument {
     pub fn title(&self) -> &str {
         match self {
             Self::Task(document) => &document.title,
+            Self::Probe(document) => &document.title,
             Self::Spec(document) => &document.title,
             Self::Incident(document) => &document.title,
             Self::LearningRequest(document) => &document.title,
@@ -485,6 +552,7 @@ impl WorkDocument {
     pub fn validate(&self) -> Result<(), WorkDocumentError> {
         match self {
             Self::Task(document) => document.validate(),
+            Self::Probe(document) => document.validate(),
             Self::Spec(document) => document.validate(),
             Self::Incident(document) => document.validate(),
             Self::LearningRequest(document) => document.validate(),
@@ -495,6 +563,12 @@ impl WorkDocument {
 impl From<TaskDocument> for WorkDocument {
     fn from(value: TaskDocument) -> Self {
         Self::Task(value)
+    }
+}
+
+impl From<ProbeDocument> for WorkDocument {
+    fn from(value: ProbeDocument) -> Self {
+        Self::Probe(value)
     }
 }
 

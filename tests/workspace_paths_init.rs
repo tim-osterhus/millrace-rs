@@ -45,6 +45,18 @@ fn workspace_paths_resolve_python_shaped_contract_surfaces() {
         root.join("millrace-agents/tasks/queue")
     );
     assert_eq!(
+        paths.probes_queue_dir,
+        root.join("millrace-agents/probes/queue")
+    );
+    assert_eq!(
+        paths.probes_active_dir,
+        root.join("millrace-agents/probes/active")
+    );
+    assert_eq!(
+        paths.recon_packets_dir,
+        root.join("millrace-agents/recon/packets")
+    );
+    assert_eq!(
         paths.specs_active_dir,
         root.join("millrace-agents/specs/active")
     );
@@ -149,6 +161,14 @@ fn directories_cover_the_canonical_workspace_tree_without_legacy_roles() {
         "millrace-agents/loops/learning",
         "millrace-agents/loops/planning",
         "millrace-agents/modes",
+        "millrace-agents/probes",
+        "millrace-agents/probes/active",
+        "millrace-agents/probes/blocked",
+        "millrace-agents/probes/done",
+        "millrace-agents/probes/queue",
+        "millrace-agents/recon",
+        "millrace-agents/recon/packets",
+        "millrace-agents/recon/reports",
         "millrace-agents/registry",
         "millrace-agents/registry/stage_kinds",
         "millrace-agents/registry/stage_kinds/execution",

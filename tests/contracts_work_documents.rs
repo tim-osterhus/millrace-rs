@@ -4,13 +4,15 @@ use serde_json::json;
 
 use millrace_ai::contracts::{
     IncidentDecision, IncidentDocument, IncidentSeverity, LearningRequestAction,
-    LearningRequestDocument, LearningStageName, Plane, SpecDocument, SpecSourceType, StageName,
-    TaskDocument, TaskStatusHint, Timestamp, WorkDocument, WorkItemKind,
+    LearningRequestDocument, LearningStageName, Plane, ProbeDocument, ProbeStatusHint,
+    RootIntakeKind, SpecDocument, SpecSourceType, StageName, TaskDocument, TaskStatusHint,
+    Timestamp, WorkDocument, WorkItemKind,
 };
 use millrace_ai::work_documents::{
-    parse_incident_document, parse_spec_json_import, parse_task_document, parse_task_json_import,
-    parse_work_document_with_source, render_incident_document, render_learning_request_document,
-    render_spec_document, render_task_document, render_work_document,
+    parse_incident_document, parse_probe_json_import, parse_spec_json_import, parse_task_document,
+    parse_task_json_import, parse_work_document_with_source, render_incident_document,
+    render_learning_request_document, render_probe_document, render_spec_document,
+    render_task_document, render_work_document,
 };
 
 use support::parity::{fixture_path, read_fixture};
@@ -28,6 +30,8 @@ fn task_document() -> TaskDocument {
         summary: "queue test".to_owned(),
         root_idea_id: Some("idea-001".to_owned()),
         root_spec_id: Some("spec-root-001".to_owned()),
+        root_intake_kind: Some(RootIntakeKind::Idea),
+        root_intake_id: Some("idea-001".to_owned()),
         spec_id: Some("spec-root-001".to_owned()),
         parent_task_id: None,
         incident_id: None,
@@ -56,6 +60,8 @@ fn spec_document() -> SpecDocument {
         parent_spec_id: None,
         root_idea_id: Some("idea-001".to_owned()),
         root_spec_id: Some("spec-root-001".to_owned()),
+        root_intake_kind: Some(RootIntakeKind::Idea),
+        root_intake_id: Some("idea-001".to_owned()),
         goals: vec!["define typed models".to_owned()],
         non_goals: vec!["implement scheduling".to_owned()],
         scope: vec!["contract parsing".to_owned()],
@@ -74,6 +80,25 @@ fn spec_document() -> SpecDocument {
     }
 }
 
+fn probe_document() -> ProbeDocument {
+    ProbeDocument {
+        probe_id: "probe-roundtrip".to_owned(),
+        title: "Route ambiguous request".to_owned(),
+        summary: "research before routing".to_owned(),
+        request: "Research the repo surface and route this work safely.".to_owned(),
+        target_paths: vec!["src/example.rs".to_owned()],
+        constraints: vec!["Do not implement during recon.".to_owned()],
+        acceptance: vec!["Recon packet is produced.".to_owned()],
+        risk_notes: vec!["Ambiguous scope can route to the wrong plane.".to_owned()],
+        references: vec!["operator request".to_owned()],
+        tags: vec!["probe".to_owned()],
+        status_hint: Some(ProbeStatusHint::Queued),
+        created_at: timestamp(NOW),
+        created_by: "tests".to_owned(),
+        updated_at: None,
+    }
+}
+
 fn incident_document() -> IncidentDocument {
     IncidentDocument {
         incident_id: "inc-roundtrip".to_owned(),
@@ -81,6 +106,8 @@ fn incident_document() -> IncidentDocument {
         summary: "Closure needs remediation".to_owned(),
         root_idea_id: Some("idea-001".to_owned()),
         root_spec_id: Some("spec-root-001".to_owned()),
+        root_intake_kind: Some(RootIntakeKind::Idea),
+        root_intake_id: Some("idea-001".to_owned()),
         source_task_id: Some("task-roundtrip".to_owned()),
         source_spec_id: Some("spec-roundtrip".to_owned()),
         source_stage: StageName::Auditor,
@@ -133,6 +160,7 @@ fn learning_request_document() -> LearningRequestDocument {
 fn work_documents_round_trip_for_task_spec_incident_and_learning_request() {
     let documents = [
         WorkDocument::Task(task_document()),
+        WorkDocument::Probe(probe_document()),
         WorkDocument::Spec(spec_document()),
         WorkDocument::Incident(incident_document()),
         WorkDocument::LearningRequest(learning_request_document()),
@@ -144,7 +172,7 @@ fn work_documents_round_trip_for_task_spec_incident_and_learning_request() {
         assert!(raw.starts_with(&format!("# {}\n", document.title())));
         assert!(!raw.contains("---"));
         assert!(!raw.contains("Schema-Version:"));
-        assert!(!raw.contains("Kind:"));
+        assert!(!raw.lines().any(|line| line == "Kind:"));
 
         let parsed = parse_work_document_with_source(&raw, document.kind().as_str()).unwrap();
         assert_eq!(parsed, document);
@@ -155,6 +183,11 @@ fn work_documents_round_trip_for_task_spec_incident_and_learning_request() {
 fn python_rendered_work_document_fixtures_round_trip_exactly() {
     let fixtures = [
         ("work_documents/task.md", WorkItemKind::Task, "Fixture task"),
+        (
+            "work_documents/probe.md",
+            WorkItemKind::Probe,
+            "Fixture probe",
+        ),
         ("work_documents/spec.md", WorkItemKind::Spec, "Fixture spec"),
         (
             "work_documents/incident.md",
@@ -190,16 +223,24 @@ fn renderers_preserve_root_lineage_and_omit_empty_relationship_blocks() {
 
     let rendered = (
         render_task_document(&task),
+        render_probe_document(&probe_document()),
         render_spec_document(&spec_document()),
         render_incident_document(&incident_document()),
     );
 
     assert!(rendered.0.contains("Root-Idea-ID: idea-001"));
     assert!(rendered.0.contains("Root-Spec-ID: spec-root-001"));
-    assert!(rendered.1.contains("Root-Idea-ID: idea-001"));
-    assert!(rendered.1.contains("Root-Spec-ID: spec-root-001"));
+    assert!(rendered.0.contains("Root-Intake-Kind: idea"));
+    assert!(rendered.0.contains("Root-Intake-ID: idea-001"));
+    assert!(rendered.1.contains("Probe-ID: probe-roundtrip"));
     assert!(rendered.2.contains("Root-Idea-ID: idea-001"));
     assert!(rendered.2.contains("Root-Spec-ID: spec-root-001"));
+    assert!(rendered.2.contains("Root-Intake-Kind: idea"));
+    assert!(rendered.2.contains("Root-Intake-ID: idea-001"));
+    assert!(rendered.3.contains("Root-Idea-ID: idea-001"));
+    assert!(rendered.3.contains("Root-Spec-ID: spec-root-001"));
+    assert!(rendered.3.contains("Root-Intake-Kind: idea"));
+    assert!(rendered.3.contains("Root-Intake-ID: idea-001"));
     assert!(!rendered.0.contains("Depends-On:"));
     assert!(!rendered.0.contains("Blocks:"));
 }
@@ -213,6 +254,8 @@ fn parse_task_document_treats_blank_optional_scalars_as_omitted() {
          Summary: queue test\n\
          Root-Idea-ID:\n\n\
          Root-Spec-ID:\n\n\
+         Root-Intake-Kind:\n\n\
+         Root-Intake-ID:\n\n\
          Spec-ID: spec-001\n\
          Parent-Task-ID:\n\n\
          Incident-ID:\n\n\
@@ -236,6 +279,8 @@ fn parse_task_document_treats_blank_optional_scalars_as_omitted() {
     assert_eq!(document.task_id, "queue-task");
     assert_eq!(document.root_idea_id, None);
     assert_eq!(document.root_spec_id, None);
+    assert_eq!(document.root_intake_kind, None);
+    assert_eq!(document.root_intake_id, None);
     assert_eq!(document.spec_id.as_deref(), Some("spec-001"));
     assert_eq!(document.parent_task_id, None);
     assert_eq!(document.incident_id, None);
@@ -311,6 +356,8 @@ fn json_imports_validate_task_spec_metadata_and_render_canonical_markdown() {
         "summary": "json intake",
         "root_idea_id": "idea-json-import",
         "root_spec_id": "spec-json-import",
+        "root_intake_kind": "probe",
+        "root_intake_id": "probe-json-import",
         "spec_id": "spec-json-import",
         "target_paths": ["src/work_documents.rs"],
         "acceptance": ["json import works"],
@@ -324,6 +371,29 @@ fn json_imports_validate_task_spec_metadata_and_render_canonical_markdown() {
     let task = parse_task_json_import(&task_json).unwrap();
     assert_eq!(task.task_id, "task-json-import");
     assert!(render_task_document(&task).contains("Root-Idea-ID: idea-json-import\n"));
+    assert!(render_task_document(&task).contains("Root-Intake-Kind: probe\n"));
+
+    let probe_json = serde_json::to_string(&json!({
+        "schema_version": "1.0",
+        "kind": "probe",
+        "probe_id": "probe-json-import",
+        "title": "Probe JSON import",
+        "summary": "json intake",
+        "request": "Research before routing.",
+        "target_paths": ["src/work_documents.rs"],
+        "constraints": ["Do not implement during recon"],
+        "acceptance": ["Recon packet is produced"],
+        "risk_notes": ["route drift"],
+        "references": ["tests/contracts_work_documents.rs"],
+        "tags": ["probe"],
+        "status_hint": "queued",
+        "created_at": NOW,
+        "created_by": "tests"
+    }))
+    .unwrap();
+    let probe = parse_probe_json_import(&probe_json).unwrap();
+    assert_eq!(probe.probe_id, "probe-json-import");
+    assert!(render_probe_document(&probe).contains("Request: Research before routing.\n"));
 
     let spec_json = serde_json::to_string(&json!({
         "schema_version": "1.0",
@@ -331,9 +401,12 @@ fn json_imports_validate_task_spec_metadata_and_render_canonical_markdown() {
         "spec_id": "spec-json-import",
         "title": "Spec JSON import",
         "summary": "json intake",
-        "source_type": "manual",
+        "source_type": "probe",
+        "source_id": "probe-json-import",
         "root_idea_id": "idea-json-import",
         "root_spec_id": "spec-json-import",
+        "root_intake_kind": "probe",
+        "root_intake_id": "probe-json-import",
         "goals": ["parse spec JSON"],
         "constraints": ["stay deterministic"],
         "acceptance": ["json import works"],
@@ -344,7 +417,8 @@ fn json_imports_validate_task_spec_metadata_and_render_canonical_markdown() {
     .unwrap();
     let spec = parse_spec_json_import(&spec_json).unwrap();
     assert_eq!(spec.spec_id, "spec-json-import");
-    assert!(render_spec_document(&spec).contains("Source-Type: manual\n"));
+    assert!(render_spec_document(&spec).contains("Source-Type: probe\n"));
+    assert!(render_spec_document(&spec).contains("Root-Intake-ID: probe-json-import\n"));
 
     let wrong_kind = parse_task_json_import(&spec_json).unwrap_err();
     assert!(wrong_kind.to_string().contains("kind"));

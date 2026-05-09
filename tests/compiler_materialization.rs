@@ -61,7 +61,7 @@ fn default_codex_materializes_execution_and_planning_graphs() {
     assert_eq!(plan.planning_graph.loop_id, "planning.standard");
     assert!(plan.learning_graph.is_none());
     assert_eq!(plan.execution_graph.nodes.len(), 7);
-    assert_eq!(plan.planning_graph.nodes.len(), 5);
+    assert_eq!(plan.planning_graph.nodes.len(), 6);
     assert_eq!(
         plan.graphs_by_plane.get(&Plane::Execution),
         Some(&plan.execution_graph)
@@ -112,6 +112,45 @@ fn default_codex_materializes_execution_and_planning_graphs() {
                     && transition.outcome == "FIX_NEEDED"
                     && transition.target_node_id.as_deref() == Some("fixer")
             })
+    );
+
+    let recon = node(&plan.planning_graph, "recon");
+    assert_eq!(recon.stage_kind_id, "recon");
+    assert_eq!(recon.entrypoint_path, "entrypoints/planning/recon.md");
+    assert_eq!(
+        recon.entrypoint_contract_id.as_deref(),
+        Some("recon.contract.v1")
+    );
+    assert_eq!(recon.running_status_marker, "RECON_RUNNING");
+    assert_eq!(
+        recon.allowed_result_classes_by_outcome["RECON_TO_EXECUTION"],
+        vec![ResultClass::Success]
+    );
+    assert_eq!(
+        recon.allowed_result_classes_by_outcome["RECON_NOOP"],
+        vec![ResultClass::NoOp]
+    );
+    assert_eq!(
+        recon.required_skill_paths,
+        vec!["skills/stage/planning/recon-core/SKILL.md".to_owned()]
+    );
+    assert_eq!(recon.runner_name.as_deref(), Some("codex_cli"));
+    assert_eq!(recon.timeout_seconds, 3600);
+    assert!(
+        plan.planning_graph
+            .compiled_entries
+            .iter()
+            .any(|entry| entry.entry_key.as_str() == "probe"
+                && entry.node_id == "recon"
+                && entry.stage_kind_id == "recon")
+    );
+    assert!(
+        plan.planning_graph
+            .compiled_transitions
+            .iter()
+            .any(|transition| transition.source_node_id == "recon"
+                && transition.outcome == "RECON_TO_EXECUTION"
+                && transition.terminal_state_id.as_deref() == Some("recon_to_execution"))
     );
     assert_eq!(
         threshold(&plan.execution_graph, "execution.fix-needed.exhaustion").threshold,
@@ -330,7 +369,31 @@ fn default_mode_graph_exports_project_execution_and_planning_from_compiled_plan(
             .iter()
             .map(|entry| (entry.entry_key.as_str(), entry.node_id.as_str()))
             .collect::<Vec<_>>(),
-        vec![("spec", "planner"), ("incident", "auditor")]
+        vec![
+            ("probe", "recon"),
+            ("spec", "planner"),
+            ("incident", "auditor")
+        ]
+    );
+    let recon = planning
+        .nodes
+        .iter()
+        .find(|node| node.node_id == "recon")
+        .unwrap();
+    assert_eq!(recon.entrypoint_path, "entrypoints/planning/recon.md");
+    assert_eq!(
+        recon.required_skill_paths,
+        ["skills/stage/planning/recon-core/SKILL.md".to_owned()]
+    );
+    assert_eq!(recon.runner_name.as_deref(), Some("codex_cli"));
+    assert_eq!(recon.timeout_seconds, 3600);
+    assert!(
+        planning
+            .edges
+            .iter()
+            .any(|edge| edge.source_node_id == "recon"
+                && edge.outcome == "RECON_TO_PLANNING"
+                && edge.terminal_state_id.as_deref() == Some("recon_to_planning"))
     );
     assert!(
         planning
@@ -339,6 +402,14 @@ fn default_mode_graph_exports_project_execution_and_planning_from_compiled_plan(
             .any(|edge| edge.source_node_id == "mechanic"
                 && edge.outcome == "BLOCKED"
                 && edge.target_node_id.as_deref() == Some("mechanic"))
+    );
+    assert!(
+        planning
+            .terminal_states
+            .iter()
+            .any(|state| state.terminal_state_id == "recon_noop"
+                && state.terminal_class == "no_op"
+                && state.writes_status == "RECON_NOOP")
     );
     assert!(
         planning
@@ -392,7 +463,7 @@ fn learning_mode_graph_exports_use_stable_plane_order_and_learning_edges() {
             .unwrap()
             .entries
             .iter()
-            .any(|entry| entry.entry_key == "spec" && entry.node_id == "planner")
+            .any(|entry| entry.entry_key == "probe" && entry.node_id == "recon")
     );
     assert_eq!(learning.loop_id, "learning.standard");
     assert_eq!(

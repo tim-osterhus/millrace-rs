@@ -3,6 +3,7 @@
 mod enums;
 mod error;
 mod graph_exports;
+mod recon;
 mod run_trace;
 mod runtime_json;
 mod stage_metadata;
@@ -11,14 +12,18 @@ mod work_documents;
 pub use enums::{
     ExecutionStageName, ExecutionTerminalResult, IncidentDecision, IncidentSeverity,
     LearningRequestAction, LearningStageName, LearningTerminalResult, LoopEdgeKind, MailboxCommand,
-    Plane, PlanningStageName, PlanningTerminalResult, ReloadOutcome, ResultClass, RuntimeErrorCode,
-    RuntimeMode, SpecSourceType, StageName, TaskStatusHint, TerminalResult, WatcherMode,
-    WorkItemKind,
+    Plane, PlanningStageName, PlanningTerminalResult, ProbeStatusHint, ReloadOutcome, ResultClass,
+    RootIntakeKind, RuntimeErrorCode, RuntimeMode, SpecSourceType, StageName, TaskStatusHint,
+    TerminalResult, WatcherMode, WorkItemKind,
 };
 pub use error::{ContractError, IdentifierErrorReason};
 pub use graph_exports::{
     CompiledStageGraphExport, GraphExportContract, GraphExportContractError, GraphExportEdge,
     GraphExportEntry, GraphExportNode, GraphExportTerminalState,
+};
+pub use recon::{
+    ReconConfidence, ReconDecision, ReconHandoffTarget, ReconPacketDocument, ReconPacketError,
+    ReconPathFinding, ReconRiskLevel, ReconVerificationPlan,
 };
 pub use run_trace::{
     RunTraceArtifactRef, RunTraceEdge, RunTraceGraph, RunTraceNode, RunTraceSpawnedWorkKind,
@@ -26,8 +31,8 @@ pub use run_trace::{
 };
 pub use runtime_json::{
     ActiveRunRequestKind, ActiveRunState, CompileDiagnostics, MailboxAddIdeaPayload,
-    MailboxAddSpecPayload, MailboxAddTaskPayload, MailboxCommandEnvelope, PauseSource,
-    RecoveryCounterEntry, RecoveryCounters, RuntimeErrorContext, RuntimeJsonContract,
+    MailboxAddProbePayload, MailboxAddSpecPayload, MailboxAddTaskPayload, MailboxCommandEnvelope,
+    PauseSource, RecoveryCounterEntry, RecoveryCounters, RuntimeErrorContext, RuntimeJsonContract,
     RuntimeJsonError, RuntimeSnapshot, StageResultEnvelope, SubscriptionQuotaStatus,
     SubscriptionQuotaTelemetryState, SubscriptionQuotaWindowReading, TokenUsage,
     UsageGovernanceBlocker, UsageGovernanceBlockerSource, UsageGovernanceDegradedPolicy,
@@ -46,6 +51,6 @@ pub use stage_metadata::{
     validate_terminal_marker_for_stage,
 };
 pub use work_documents::{
-    ClosureTargetState, IncidentDocument, LearningRequestDocument, SpecDocument, TaskDocument,
-    Timestamp, WORK_DOCUMENT_SCHEMA_VERSION, WorkDocument, WorkDocumentError,
+    ClosureTargetState, IncidentDocument, LearningRequestDocument, ProbeDocument, SpecDocument,
+    TaskDocument, Timestamp, WORK_DOCUMENT_SCHEMA_VERSION, WorkDocument, WorkDocumentError,
 };
