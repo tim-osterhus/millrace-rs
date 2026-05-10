@@ -4,12 +4,12 @@ use millrace_ai::contracts::{
     LearningTerminalResult, LoopEdgeKind, MailboxCommand, Plane, PlanningStageName,
     PlanningTerminalResult, ProbeStatusHint, ReloadOutcome, ResultClass, RootIntakeKind,
     RuntimeErrorCode, RuntimeMode, StageName, TaskStatusHint, TerminalResult, WatcherMode,
-    WorkItemKind, allowed_result_classes_by_outcome, blocked_terminal_for_plane,
-    known_stage_values, known_stage_values_for_plane, legal_terminal_markers,
-    legal_terminal_results, parse_terminal_marker_for_plane, running_status_marker, stage_metadata,
-    stage_metadata_for_value, stage_name_for_plane, stage_name_for_value, stage_plane,
-    terminal_result_for_plane, validate_safe_identifier, validate_stage_result_class,
-    validate_terminal_marker_for_stage,
+    WorkItemKind, allowed_result_classes_by_outcome, allowed_work_item_kinds,
+    blocked_terminal_for_plane, known_stage_values, known_stage_values_for_plane,
+    legal_terminal_markers, legal_terminal_results, parse_terminal_marker_for_plane,
+    running_status_marker, stage_allows_work_item_kind, stage_metadata, stage_metadata_for_value,
+    stage_name_for_plane, stage_name_for_value, stage_plane, terminal_result_for_plane,
+    validate_safe_identifier, validate_stage_result_class, validate_terminal_marker_for_stage,
 };
 
 fn values<T: Copy>(items: &'static [T], as_str: impl Fn(T) -> &'static str) -> Vec<&'static str> {
@@ -26,6 +26,7 @@ fn enum_values_match_python_reference_contracts() {
         values(ExecutionStageName::ALL, ExecutionStageName::as_str),
         [
             "builder",
+            "integrator",
             "checker",
             "fixer",
             "doublechecker",
@@ -51,6 +52,7 @@ fn enum_values_match_python_reference_contracts() {
         ),
         [
             "BUILDER_COMPLETE",
+            "INTEGRATION_COMPLETE",
             "CHECKER_PASS",
             "FIX_NEEDED",
             "FIXER_COMPLETE",
@@ -148,6 +150,8 @@ fn enum_values_match_python_reference_contracts() {
             "execution_work_item_completion_conflict",
             "planning_post_stage_apply_failed",
             "execution_post_stage_apply_failed",
+            "recon_handoff_invalid",
+            "stage_work_item_ownership_invalid",
         ]
     );
     assert_eq!(
@@ -168,6 +172,58 @@ fn enum_values_match_python_reference_contracts() {
     assert_eq!(
         values(LoopEdgeKind::ALL, LoopEdgeKind::as_str),
         ["normal", "retry", "escalation", "handoff", "terminal"]
+    );
+}
+
+#[test]
+fn stage_work_item_ownership_matrix_matches_runtime_contracts() {
+    for stage in [
+        StageName::Builder,
+        StageName::Integrator,
+        StageName::Checker,
+        StageName::Fixer,
+        StageName::Doublechecker,
+        StageName::Updater,
+        StageName::Troubleshooter,
+        StageName::Consultant,
+    ] {
+        assert_eq!(allowed_work_item_kinds(stage), [WorkItemKind::Task]);
+        assert!(stage_allows_work_item_kind(stage, WorkItemKind::Task));
+        assert!(!stage_allows_work_item_kind(stage, WorkItemKind::Spec));
+    }
+
+    assert_eq!(
+        allowed_work_item_kinds(StageName::Recon),
+        [WorkItemKind::Probe]
+    );
+    assert_eq!(
+        allowed_work_item_kinds(StageName::Planner),
+        [WorkItemKind::Spec, WorkItemKind::Incident]
+    );
+    assert_eq!(
+        allowed_work_item_kinds(StageName::Manager),
+        [WorkItemKind::Spec, WorkItemKind::Incident]
+    );
+    assert_eq!(
+        allowed_work_item_kinds(StageName::Mechanic),
+        [WorkItemKind::Spec, WorkItemKind::Incident]
+    );
+    assert_eq!(
+        allowed_work_item_kinds(StageName::Auditor),
+        [WorkItemKind::Incident]
+    );
+    assert!(allowed_work_item_kinds(StageName::Arbiter).is_empty());
+    assert_eq!(
+        allowed_work_item_kinds(StageName::Analyst),
+        [WorkItemKind::LearningRequest]
+    );
+    assert_eq!(
+        allowed_work_item_kinds(StageName::Professor),
+        [WorkItemKind::LearningRequest]
+    );
+    assert_eq!(
+        allowed_work_item_kinds(StageName::Curator),
+        [WorkItemKind::LearningRequest]
     );
 }
 
@@ -211,6 +267,7 @@ fn every_stage_has_metadata_and_plane() {
         known_stage_values_for_plane(Plane::Execution),
         [
             "builder",
+            "integrator",
             "checker",
             "fixer",
             "doublechecker",
@@ -234,10 +291,21 @@ fn every_stage_has_metadata_and_plane() {
 #[test]
 fn legal_markers_and_running_markers_derive_from_metadata() {
     assert_eq!(running_status_marker(StageName::Builder), "BUILDER_RUNNING");
+    assert_eq!(
+        running_status_marker(StageName::Integrator),
+        "INTEGRATOR_RUNNING"
+    );
     assert_eq!(running_status_marker(StageName::Curator), "CURATOR_RUNNING");
     assert_eq!(
         legal_terminal_markers(StageName::Builder),
         vec!["### BUILDER_COMPLETE".to_owned(), "### BLOCKED".to_owned()]
+    );
+    assert_eq!(
+        legal_terminal_markers(StageName::Integrator),
+        vec![
+            "### INTEGRATION_COMPLETE".to_owned(),
+            "### BLOCKED".to_owned()
+        ]
     );
     assert_eq!(
         legal_terminal_markers(StageName::Consultant),
@@ -384,6 +452,18 @@ fn legal_stage_result_class_combinations_validate() {
     .unwrap();
     validate_stage_result_class(
         StageName::Builder,
+        TerminalResult::Execution(ExecutionTerminalResult::Blocked),
+        ResultClass::RecoverableFailure,
+    )
+    .unwrap();
+    validate_stage_result_class(
+        StageName::Integrator,
+        TerminalResult::Execution(ExecutionTerminalResult::IntegrationComplete),
+        ResultClass::Success,
+    )
+    .unwrap();
+    validate_stage_result_class(
+        StageName::Integrator,
         TerminalResult::Execution(ExecutionTerminalResult::Blocked),
         ResultClass::RecoverableFailure,
     )

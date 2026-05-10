@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use serde_json::Value;
+use serde_json::{Number, Value};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 use crate::{
@@ -16,9 +16,10 @@ use crate::{
         inspect_workspace_plan_currentness_for_paths,
     },
     contracts::{
-        ClosureTargetState, PauseSource, Plane, RunTraceGraph, RuntimeSnapshot,
-        StageResultEnvelope, SubscriptionQuotaTelemetryState, TokenUsage,
-        UsageGovernanceBlockerSource, WorkDocument, WorkItemKind, validate_safe_identifier,
+        ClosureTargetState, PauseSource, Plane, ReadOnlyStatusPayload, RunTraceGraph,
+        RuntimeErrorContext, RuntimeSnapshot, StageResultEnvelope, SubscriptionQuotaTelemetryState,
+        TokenUsage, UsageGovernanceBlockerSource, WorkDocument, WorkItemKind,
+        validate_safe_identifier,
     },
     runtime::{StageRunRequest, inspect_run_trace_id, load_runtime_startup_config},
     work_documents::read_work_document,
@@ -248,6 +249,14 @@ pub fn queue_show_lines(paths: &WorkspacePaths, work_item_id: &str) -> Result<Ve
 
 pub fn status_lines(paths: &WorkspacePaths) -> Result<Vec<String>, String> {
     render_status_lines(paths)
+}
+
+pub fn status_json(paths: &WorkspacePaths) -> Result<String, String> {
+    let status = inspect_status(paths)?;
+    let value = serde_json::to_value(&status.payload)
+        .map_err(|error| format!("failed to encode status JSON: {error}"))?;
+    serde_json::to_string_pretty(&value)
+        .map_err(|error| format!("failed to render status JSON: {error}"))
 }
 
 pub fn status_watch_lines(
@@ -548,81 +557,81 @@ fn render_statuses(paths_list: &[WorkspacePaths]) -> Result<Vec<String>, String>
 }
 
 fn render_status_lines(paths: &WorkspacePaths) -> Result<Vec<String>, String> {
-    let snapshot = load_snapshot(paths).map_err(|error| error.to_string())?;
-    let baseline_manifest = load_baseline_manifest(paths).ok();
-    let currentness = inspect_workspace_plan_currentness_for_paths(paths, None);
-    let lock_status = inspect_runtime_ownership_lock(paths);
-    let process_running = snapshot.process_running && lock_status.state.as_str() == "active";
-
-    let execution_queue_depth = count_markdown_files(&paths.tasks_queue_dir)?;
-    let planning_queue_depth = count_markdown_files(&paths.specs_queue_dir)?
-        + count_markdown_files(&paths.incidents_incoming_dir)?;
-    let learning_queue_depth = count_markdown_files(&paths.learning_requests_queue_dir)?;
-
+    let status = inspect_status(paths)?;
+    let payload = &status.payload;
     let mut lines = vec![
-        format!("workspace: {}", paths.root.display()),
-        format!("runtime_mode: {}", snapshot.runtime_mode.as_str()),
-        format!("process_running: {}", bool_text(process_running)),
-        format!("runtime_ownership_lock: {}", lock_status.state.as_str()),
-        format!("paused: {}", bool_text(snapshot.paused)),
-        format!("pause_sources: {}", pause_sources_label(&snapshot)),
-        format!("stop_requested: {}", bool_text(snapshot.stop_requested)),
-        format!("active_mode_id: {}", snapshot.active_mode_id),
-        format!("compiled_plan_id: {}", snapshot.compiled_plan_id),
+        format!("workspace: {}", payload.workspace),
+        format!("runtime_mode: {}", payload.runtime_mode.as_str()),
+        format!("process_running: {}", bool_text(payload.process_running)),
+        format!("runtime_ownership_lock: {}", payload.runtime_ownership_lock),
+        format!("paused: {}", bool_text(payload.paused)),
+        format!("pause_sources: {}", payload.pause_sources),
+        format!("stop_requested: {}", bool_text(payload.stop_requested)),
+        format!("active_mode_id: {}", payload.active_mode_id),
+        format!("compiled_plan_id: {}", payload.compiled_plan_id),
         format!(
             "compiled_plan_currentness: {}",
-            compiled_plan_currentness_value(currentness.as_ref())
+            payload.compiled_plan_currentness
         ),
-        format!("active_plane: {}", option_value(snapshot.active_plane)),
-        format!("active_stage: {}", option_value(snapshot.active_stage)),
+        format!("active_plane: {}", option_value(payload.active_plane)),
+        format!("active_stage: {}", option_value(payload.active_stage)),
         format!(
             "active_node_id: {}",
-            option_str(snapshot.active_node_id.as_deref())
+            option_str(payload.active_node_id.as_deref())
         ),
         format!(
             "active_stage_kind_id: {}",
-            option_str(snapshot.active_stage_kind_id.as_deref())
+            option_str(payload.active_stage_kind_id.as_deref())
         ),
         format!(
             "active_work_item_kind: {}",
-            option_value(snapshot.active_work_item_kind)
+            option_value(payload.active_work_item_kind)
         ),
         format!(
             "active_work_item_id: {}",
-            option_str(snapshot.active_work_item_id.as_deref())
+            option_str(payload.active_work_item_id.as_deref())
         ),
-        format!("active_run_count: {}", snapshot.active_runs_by_plane.len()),
-        format!("execution_queue_depth: {execution_queue_depth}"),
-        format!("planning_queue_depth: {planning_queue_depth}"),
-        format!("learning_queue_depth: {learning_queue_depth}"),
+        format!("active_run_count: {}", payload.active_run_count),
+        format!("execution_queue_depth: {}", payload.execution_queue_depth),
+        format!("planning_queue_depth: {}", payload.planning_queue_depth),
+        format!("learning_queue_depth: {}", payload.learning_queue_depth),
         format!(
             "execution_status_marker: {}",
-            snapshot.execution_status_marker
+            payload.execution_status_marker
         ),
+        format!("planning_status_marker: {}", payload.planning_status_marker),
+        format!("learning_status_marker: {}", payload.learning_status_marker),
+        format!("blocked_idle: {}", bool_text(payload.blocked_idle)),
         format!(
-            "planning_status_marker: {}",
-            snapshot.planning_status_marker
-        ),
-        format!(
-            "learning_status_marker: {}",
-            snapshot.learning_status_marker
+            "latest_runtime_error_report_path: {}",
+            option_str(payload.latest_runtime_error_report_path.as_deref())
         ),
     ];
-    lines.extend(render_active_run_lines(&snapshot));
-    lines.extend(render_baseline_manifest_lines(baseline_manifest.as_ref()));
-    lines.extend(render_compile_currentness_lines(currentness.as_ref()));
-    lines.extend(render_usage_governance_lines(paths, &snapshot)?);
-    lines.extend(render_closure_target_lines(paths)?);
-    if let Some(failure_class) = &snapshot.current_failure_class {
+    lines.extend(render_active_run_lines(&status.snapshot));
+    lines.extend(render_baseline_manifest_lines(
+        status.baseline_manifest.as_ref(),
+    ));
+    lines.extend(render_compile_currentness_lines(
+        status.currentness.as_ref(),
+    ));
+    lines.extend(render_usage_governance_lines(paths, &status.snapshot)?);
+    lines.extend(render_closure_target_lines_from_payload(payload));
+    if let Some(failure_class) = &status.snapshot.current_failure_class {
         lines.push(format!("current_failure_class: {failure_class}"));
         for (label, count) in [
             (
                 "troubleshoot_attempt_count",
-                snapshot.troubleshoot_attempt_count,
+                status.snapshot.troubleshoot_attempt_count,
             ),
-            ("mechanic_attempt_count", snapshot.mechanic_attempt_count),
-            ("fix_cycle_count", snapshot.fix_cycle_count),
-            ("consultant_invocations", snapshot.consultant_invocations),
+            (
+                "mechanic_attempt_count",
+                status.snapshot.mechanic_attempt_count,
+            ),
+            ("fix_cycle_count", status.snapshot.fix_cycle_count),
+            (
+                "consultant_invocations",
+                status.snapshot.consultant_invocations,
+            ),
         ] {
             if count > 0 {
                 lines.push(format!("{label}: {count}"));
@@ -630,6 +639,74 @@ fn render_status_lines(paths: &WorkspacePaths) -> Result<Vec<String>, String> {
         }
     }
     Ok(lines)
+}
+
+struct StatusInspection {
+    snapshot: RuntimeSnapshot,
+    baseline_manifest: Option<crate::workspace::BaselineManifest>,
+    currentness: Result<CompiledPlanCurrentness, crate::compiler::CompilerPersistenceError>,
+    payload: ReadOnlyStatusPayload,
+}
+
+fn inspect_status(paths: &WorkspacePaths) -> Result<StatusInspection, String> {
+    let snapshot = load_snapshot(paths).map_err(|error| error.to_string())?;
+    let baseline_manifest = load_baseline_manifest(paths).ok();
+    let currentness = inspect_workspace_plan_currentness_for_paths(paths, None);
+    let lock_status = inspect_runtime_ownership_lock(paths);
+    let process_running = snapshot.process_running && lock_status.state.as_str() == "active";
+    let queue_depths = status_queue_depths(paths)?;
+    let closure_status = closure_target_status(paths)?;
+    let latest_runtime_error_report_path = latest_runtime_error_report_path(paths)?;
+    let active_run_count = snapshot.active_runs_by_plane.len() as u64;
+    let blocked_idle = blocked_idle(
+        process_running,
+        active_run_count,
+        &queue_depths,
+        &closure_status,
+        &snapshot,
+    );
+
+    let payload = ReadOnlyStatusPayload {
+        workspace: paths.root.display().to_string(),
+        runtime_mode: snapshot.runtime_mode,
+        process_running,
+        runtime_ownership_lock: lock_status.state.as_str().to_owned(),
+        paused: snapshot.paused,
+        pause_sources: pause_sources_label(&snapshot),
+        stop_requested: snapshot.stop_requested,
+        active_mode_id: snapshot.active_mode_id.clone(),
+        compiled_plan_id: snapshot.compiled_plan_id.clone(),
+        compiled_plan_currentness: compiled_plan_currentness_value(currentness.as_ref()).to_owned(),
+        active_plane: snapshot.active_plane,
+        active_stage: snapshot.active_stage,
+        active_node_id: snapshot.active_node_id.clone(),
+        active_stage_kind_id: snapshot.active_stage_kind_id.clone(),
+        active_work_item_kind: snapshot.active_work_item_kind,
+        active_work_item_id: snapshot.active_work_item_id.clone(),
+        active_run_count,
+        execution_queue_depth: queue_depths.execution,
+        planning_queue_depth: queue_depths.planning,
+        learning_queue_depth: queue_depths.learning,
+        execution_status_marker: snapshot.execution_status_marker.clone(),
+        planning_status_marker: snapshot.planning_status_marker.clone(),
+        learning_status_marker: snapshot.learning_status_marker.clone(),
+        blocked_idle,
+        current_failure_class: snapshot.current_failure_class.clone(),
+        latest_runtime_error_report_path,
+        closure_target_root_spec_id: closure_status.root_spec_id,
+        closure_target_open: closure_status.open,
+        closure_target_blocked_by_lineage_work: closure_status.blocked_by_lineage_work,
+        planning_root_specs_deferred_by_closure_target: closure_status.deferred_root_spec_count,
+        closure_target_latest_verdict_path: closure_status.latest_verdict_path,
+        closure_target_latest_report_path: closure_status.latest_report_path,
+    };
+
+    Ok(StatusInspection {
+        snapshot,
+        baseline_manifest,
+        currentness,
+        payload,
+    })
 }
 
 fn render_active_run_lines(snapshot: &RuntimeSnapshot) -> Vec<String> {
@@ -809,39 +886,64 @@ fn format_metric_value(value: f64) -> String {
     }
 }
 
-fn render_closure_target_default_lines() -> Vec<String> {
-    vec![
-        "closure_target_root_spec_id: none".to_owned(),
-        "closure_target_open: none".to_owned(),
-        "closure_target_blocked_by_lineage_work: none".to_owned(),
-        "planning_root_specs_deferred_by_closure_target: 0".to_owned(),
-        "closure_target_latest_verdict_path: none".to_owned(),
-        "closure_target_latest_report_path: none".to_owned(),
-    ]
+struct StatusQueueDepths {
+    execution: u64,
+    planning: u64,
+    learning: u64,
 }
 
-fn render_closure_target_invalid_lines() -> Vec<String> {
-    vec![
-        "closure_target_root_spec_id: invalid_multiple_actionable_open_targets".to_owned(),
-        "closure_target_open: invalid".to_owned(),
-        "closure_target_blocked_by_lineage_work: invalid".to_owned(),
-        "planning_root_specs_deferred_by_closure_target: invalid".to_owned(),
-        "closure_target_latest_verdict_path: none".to_owned(),
-        "closure_target_latest_report_path: none".to_owned(),
-    ]
+fn status_queue_depths(paths: &WorkspacePaths) -> Result<StatusQueueDepths, String> {
+    Ok(StatusQueueDepths {
+        execution: count_markdown_files(&paths.tasks_queue_dir)? as u64,
+        planning: (count_markdown_files(&paths.specs_queue_dir)?
+            + count_markdown_files(&paths.probes_queue_dir)?
+            + count_markdown_files(&paths.incidents_incoming_dir)?) as u64,
+        learning: count_markdown_files(&paths.learning_requests_queue_dir)? as u64,
+    })
 }
 
-fn render_closure_target_lines(paths: &WorkspacePaths) -> Result<Vec<String>, String> {
+struct ClosureTargetStatus {
+    root_spec_id: Value,
+    open: Value,
+    blocked_by_lineage_work: Value,
+    deferred_root_spec_count: Value,
+    latest_verdict_path: Value,
+    latest_report_path: Value,
+}
+
+fn closure_target_default_status() -> ClosureTargetStatus {
+    ClosureTargetStatus {
+        root_spec_id: Value::Null,
+        open: Value::Null,
+        blocked_by_lineage_work: Value::Null,
+        deferred_root_spec_count: Value::Number(Number::from(0)),
+        latest_verdict_path: Value::Null,
+        latest_report_path: Value::Null,
+    }
+}
+
+fn closure_target_invalid_status() -> ClosureTargetStatus {
+    ClosureTargetStatus {
+        root_spec_id: Value::String("invalid_multiple_actionable_open_targets".to_owned()),
+        open: Value::String("invalid".to_owned()),
+        blocked_by_lineage_work: Value::String("invalid".to_owned()),
+        deferred_root_spec_count: Value::String("invalid".to_owned()),
+        latest_verdict_path: Value::Null,
+        latest_report_path: Value::Null,
+    }
+}
+
+fn closure_target_status(paths: &WorkspacePaths) -> Result<ClosureTargetStatus, String> {
     let open_targets = list_open_closure_targets(paths)?;
     let actionable_targets: Vec<&ClosureTargetState> = open_targets
         .iter()
         .filter(|target| !target.closure_blocked_by_lineage_work)
         .collect();
     if actionable_targets.len() > 1 {
-        return Ok(render_closure_target_invalid_lines());
+        return Ok(closure_target_invalid_status());
     }
     if open_targets.is_empty() {
-        return Ok(render_closure_target_default_lines());
+        return Ok(closure_target_default_status());
     }
 
     let target = actionable_targets
@@ -850,26 +952,96 @@ fn render_closure_target_lines(paths: &WorkspacePaths) -> Result<Vec<String>, St
         .unwrap_or_else(|| &open_targets[0]);
     let deferred_root_spec_ids = list_deferred_root_spec_ids(paths, &target.root_spec_id)
         .map_err(|error| error.to_string())?;
-    Ok(vec![
-        format!("closure_target_root_spec_id: {}", target.root_spec_id),
-        format!("closure_target_open: {}", bool_text(target.closure_open)),
+    Ok(ClosureTargetStatus {
+        root_spec_id: Value::String(target.root_spec_id.clone()),
+        open: Value::Bool(target.closure_open),
+        blocked_by_lineage_work: Value::Bool(target.closure_blocked_by_lineage_work),
+        deferred_root_spec_count: Value::Number(Number::from(deferred_root_spec_ids.len() as u64)),
+        latest_verdict_path: option_string_value(target.latest_verdict_path.as_deref()),
+        latest_report_path: option_string_value(target.latest_report_path.as_deref()),
+    })
+}
+
+fn render_closure_target_lines_from_payload(payload: &ReadOnlyStatusPayload) -> Vec<String> {
+    vec![
+        format!(
+            "closure_target_root_spec_id: {}",
+            status_value_text(&payload.closure_target_root_spec_id)
+        ),
+        format!(
+            "closure_target_open: {}",
+            status_value_text(&payload.closure_target_open)
+        ),
         format!(
             "closure_target_blocked_by_lineage_work: {}",
-            bool_text(target.closure_blocked_by_lineage_work)
+            status_value_text(&payload.closure_target_blocked_by_lineage_work)
         ),
         format!(
             "planning_root_specs_deferred_by_closure_target: {}",
-            deferred_root_spec_ids.len()
+            status_value_text(&payload.planning_root_specs_deferred_by_closure_target)
         ),
         format!(
             "closure_target_latest_verdict_path: {}",
-            option_str(target.latest_verdict_path.as_deref())
+            status_value_text(&payload.closure_target_latest_verdict_path)
         ),
         format!(
             "closure_target_latest_report_path: {}",
-            option_str(target.latest_report_path.as_deref())
+            status_value_text(&payload.closure_target_latest_report_path)
         ),
-    ])
+    ]
+}
+
+fn status_value_text(value: &Value) -> String {
+    match value {
+        Value::Null => "none".to_owned(),
+        Value::Bool(value) => bool_text(*value).to_owned(),
+        Value::Number(value) => value.to_string(),
+        Value::String(value) => value.clone(),
+        other => other.to_string(),
+    }
+}
+
+fn option_string_value(value: Option<&str>) -> Value {
+    value
+        .map(|value| Value::String(value.to_owned()))
+        .unwrap_or(Value::Null)
+}
+
+fn latest_runtime_error_report_path(paths: &WorkspacePaths) -> Result<Option<String>, String> {
+    if !paths.runtime_error_context_file.is_file() {
+        return Ok(None);
+    }
+    let raw = fs::read_to_string(&paths.runtime_error_context_file).map_err(|error| {
+        format!(
+            "failed to read runtime error context {}: {error}",
+            paths.runtime_error_context_file.display()
+        )
+    })?;
+    let context = RuntimeErrorContext::from_json_str(&raw).map_err(|error| {
+        format!(
+            "failed to decode runtime error context {}: {error}",
+            paths.runtime_error_context_file.display()
+        )
+    })?;
+    Ok(Some(context.report_path))
+}
+
+fn blocked_idle(
+    process_running: bool,
+    active_run_count: u64,
+    queue_depths: &StatusQueueDepths,
+    closure_status: &ClosureTargetStatus,
+    snapshot: &RuntimeSnapshot,
+) -> bool {
+    process_running
+        && active_run_count == 0
+        && queue_depths.execution == 0
+        && queue_depths.planning == 0
+        && queue_depths.learning == 0
+        && closure_status.open == Value::Bool(true)
+        && closure_status.blocked_by_lineage_work == Value::Bool(true)
+        && snapshot.planning_status_marker == "### BLOCKED"
+        && snapshot.current_failure_class.is_some()
 }
 
 fn list_open_closure_targets(paths: &WorkspacePaths) -> Result<Vec<ClosureTargetState>, String> {

@@ -186,6 +186,138 @@ fn default_codex_materializes_execution_and_planning_graphs() {
 }
 
 #[test]
+fn opt_in_integrated_execution_graph_materializes_and_exports_integrator_node() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+
+    let plan = compile_compiled_run_plan(
+        &paths,
+        Some("default_codex_integrated"),
+        fixed_compiled_at(),
+    )
+    .unwrap();
+
+    assert_eq!(plan.mode_id, "default_codex_integrated");
+    assert_eq!(plan.execution_graph.loop_id, "execution.with_integrator");
+    assert_eq!(plan.execution_graph.nodes.len(), 8);
+    assert_eq!(
+        plan.loop_ids_by_plane
+            .get(&Plane::Execution)
+            .map(String::as_str),
+        Some("execution.with_integrator")
+    );
+
+    let integrator = node(&plan.execution_graph, "integrator");
+    assert_eq!(integrator.stage_kind_id, "integrator");
+    assert_eq!(
+        integrator.entrypoint_path,
+        "entrypoints/execution/integrator.md"
+    );
+    assert_eq!(
+        integrator.entrypoint_contract_id.as_deref(),
+        Some("integrator.contract.v1")
+    );
+    assert_eq!(integrator.running_status_marker, "INTEGRATOR_RUNNING");
+    assert_eq!(
+        integrator.required_skill_paths,
+        vec!["skills/stage/execution/integrator-core/SKILL.md".to_owned()]
+    );
+    assert_eq!(integrator.runner_name.as_deref(), Some("codex_cli"));
+    assert_eq!(integrator.timeout_seconds, 3600);
+    assert_eq!(
+        integrator.allowed_result_classes_by_outcome["INTEGRATION_COMPLETE"],
+        vec![ResultClass::Success]
+    );
+    assert_eq!(
+        integrator.allowed_result_classes_by_outcome["BLOCKED"],
+        vec![ResultClass::Blocked, ResultClass::RecoverableFailure]
+    );
+    assert_eq!(
+        integrator.declared_output_artifacts,
+        vec!["stage_result".to_owned(), "integration_report".to_owned()]
+    );
+
+    assert!(
+        plan.execution_graph
+            .compiled_transitions
+            .iter()
+            .any(|transition| {
+                transition.edge_id == "builder-complete-to-integrator"
+                    && transition.source_node_id == "builder"
+                    && transition.outcome == "BUILDER_COMPLETE"
+                    && transition.target_node_id.as_deref() == Some("integrator")
+            })
+    );
+    assert!(
+        plan.execution_graph
+            .compiled_transitions
+            .iter()
+            .any(|transition| {
+                transition.edge_id == "integrator-complete-to-checker"
+                    && transition.source_node_id == "integrator"
+                    && transition.outcome == "INTEGRATION_COMPLETE"
+                    && transition.target_node_id.as_deref() == Some("checker")
+            })
+    );
+    assert!(
+        threshold(&plan.execution_graph, "execution.blocked.recovery")
+            .source_node_ids
+            .contains(&"integrator".to_owned())
+    );
+
+    let export =
+        export_compiled_stage_graph_at(&plan, Plane::Execution, fixed_compiled_at()).unwrap();
+    assert_eq!(export.loop_id, "execution.with_integrator");
+    let exported_integrator = export
+        .nodes
+        .iter()
+        .find(|node| node.node_id == "integrator")
+        .unwrap();
+    assert_eq!(
+        exported_integrator.required_skill_paths,
+        ["skills/stage/execution/integrator-core/SKILL.md".to_owned()]
+    );
+    assert_eq!(
+        exported_integrator.allowed_result_classes_by_outcome["INTEGRATION_COMPLETE"],
+        vec![ResultClass::Success]
+    );
+    assert!(export.edges.iter().any(|edge| {
+        edge.edge_id == "integrator-complete-to-checker"
+            && edge.outcome == "INTEGRATION_COMPLETE"
+            && edge.target_node_id.as_deref() == Some("checker")
+    }));
+}
+
+#[test]
+fn learning_integrated_mode_materializes_learning_graph_with_integrated_execution() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+
+    let plan = compile_compiled_run_plan(
+        &paths,
+        Some("learning_codex_integrated"),
+        fixed_compiled_at(),
+    )
+    .unwrap();
+
+    assert_eq!(plan.mode_id, "learning_codex_integrated");
+    assert_eq!(plan.execution_graph.loop_id, "execution.with_integrator");
+    assert_eq!(plan.learning_loop_id.as_deref(), Some("learning.standard"));
+    assert!(plan.learning_graph.is_some());
+    assert_eq!(plan.learning_trigger_rules.len(), 3);
+    let concurrency = plan.concurrency_policy.as_ref().unwrap();
+    assert_eq!(concurrency.mutually_exclusive_planes.len(), 1);
+    assert_eq!(concurrency.may_run_concurrently.len(), 2);
+    assert!(plan.execution_graph.nodes.iter().any(
+        |node| node.node_id == "integrator" && node.runner_name.as_deref() == Some("codex_cli")
+    ));
+    assert!(
+        plan.source_refs
+            .contains(&"mode:learning_codex_integrated".to_owned())
+    );
+}
+
+#[test]
 fn pi_mode_and_standard_plain_alias_materialize_normalized_authority() {
     let temp_dir = TempDir::new().unwrap();
     let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();

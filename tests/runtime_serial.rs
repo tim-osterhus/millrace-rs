@@ -11,11 +11,12 @@ use millrace_ai::contracts::{
     IncidentDecision, IncidentDocument, IncidentSeverity, LearningRequestAction,
     LearningRequestDocument, LearningTerminalResult, Plane, PlanningTerminalResult, ProbeDocument,
     ReconConfidence, ReconDecision, ReconPacketDocument, ReconPathFinding, ReconRiskLevel,
-    ReconVerificationPlan, ResultClass, RootIntakeKind, RunTraceGraph, RuntimeErrorContext,
-    RuntimeJsonContract, RuntimeMode, SpecDocument, SpecSourceType, StageName, StageResultEnvelope,
-    SubscriptionQuotaWindowReading, TaskDocument, TerminalResult, Timestamp, TokenUsage,
-    UsageGovernanceDegradedPolicy, UsageGovernanceRuntimeTokenMetric,
-    UsageGovernanceRuntimeTokenWindow, UsageGovernanceSubscriptionWindow, WorkItemKind,
+    ReconVerificationPlan, RecoveryCounterEntry, RecoveryCounters, ResultClass, RootIntakeKind,
+    RunTraceGraph, RuntimeErrorContext, RuntimeJsonContract, RuntimeMode, SpecDocument,
+    SpecSourceType, StageName, StageResultEnvelope, SubscriptionQuotaWindowReading, TaskDocument,
+    TerminalResult, Timestamp, TokenUsage, UsageGovernanceDegradedPolicy,
+    UsageGovernanceRuntimeTokenMetric, UsageGovernanceRuntimeTokenWindow,
+    UsageGovernanceSubscriptionWindow, WorkItemKind,
 };
 use millrace_ai::recon_packets::render_recon_packet;
 use millrace_ai::work_documents::{
@@ -27,7 +28,7 @@ use millrace_ai::workspace::{
     acquire_runtime_ownership_lock_with_options, initialize_workspace,
     inspect_runtime_ownership_lock, load_execution_status, load_learning_status,
     load_planning_status, load_recovery_counters, load_snapshot, load_usage_governance_ledger,
-    load_usage_governance_state, save_closure_target_state, save_snapshot,
+    load_usage_governance_state, save_closure_target_state, save_recovery_counters, save_snapshot,
 };
 use millrace_ai::{
     FakeRunner, FakeRunnerConfig, FakeRunnerOutput, FakeRunnerResult, ProcessExecutionResult,
@@ -846,6 +847,147 @@ fn active_run_state(
     }
 }
 
+fn install_single_active_run(
+    paths: &millrace_ai::WorkspacePaths,
+    session: &mut millrace_ai::RuntimeStartupSession,
+    active_run: ActiveRunState,
+) {
+    session.snapshot.active_runs_by_plane.clear();
+    session
+        .snapshot
+        .active_runs_by_plane
+        .insert(active_run.plane, active_run.clone());
+    session.snapshot.active_plane = Some(active_run.plane);
+    session.snapshot.active_stage = Some(active_run.stage);
+    session.snapshot.active_node_id = Some(active_run.node_id.clone());
+    session.snapshot.active_stage_kind_id = Some(active_run.stage_kind_id.clone());
+    session.snapshot.active_run_id = Some(active_run.run_id.clone());
+    session.snapshot.active_work_item_kind = active_run.work_item_kind;
+    session.snapshot.active_work_item_id = active_run.work_item_id.clone();
+    session.snapshot.active_since = Some(active_run.active_since.clone());
+    save_snapshot(paths, &session.snapshot).unwrap();
+}
+
+fn active_item_path(
+    paths: &millrace_ai::WorkspacePaths,
+    work_item_kind: WorkItemKind,
+    work_item_id: &str,
+) -> PathBuf {
+    match work_item_kind {
+        WorkItemKind::Task => paths.tasks_active_dir.join(format!("{work_item_id}.md")),
+        WorkItemKind::Probe => paths.probes_active_dir.join(format!("{work_item_id}.md")),
+        WorkItemKind::Spec => paths.specs_active_dir.join(format!("{work_item_id}.md")),
+        WorkItemKind::Incident => paths
+            .incidents_active_dir
+            .join(format!("{work_item_id}.md")),
+        WorkItemKind::LearningRequest => paths
+            .learning_requests_active_dir
+            .join(format!("{work_item_id}.md")),
+    }
+}
+
+fn queued_item_path(
+    paths: &millrace_ai::WorkspacePaths,
+    work_item_kind: WorkItemKind,
+    work_item_id: &str,
+) -> PathBuf {
+    match work_item_kind {
+        WorkItemKind::Task => paths.tasks_queue_dir.join(format!("{work_item_id}.md")),
+        WorkItemKind::Probe => paths.probes_queue_dir.join(format!("{work_item_id}.md")),
+        WorkItemKind::Spec => paths.specs_queue_dir.join(format!("{work_item_id}.md")),
+        WorkItemKind::Incident => paths
+            .incidents_incoming_dir
+            .join(format!("{work_item_id}.md")),
+        WorkItemKind::LearningRequest => paths
+            .learning_requests_queue_dir
+            .join(format!("{work_item_id}.md")),
+    }
+}
+
+fn assert_stage_work_item_ownership_guard_requeues(
+    case_id: &str,
+    plane: Plane,
+    stage: StageName,
+    request_kind: ActiveRunRequestKind,
+    work_item_kind: WorkItemKind,
+    work_item_id: &str,
+    claim_active: impl FnOnce(&QueueStore),
+) {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    let queue = QueueStore::from_paths(paths.clone());
+    claim_active(&queue);
+    assert!(active_item_path(&paths, work_item_kind, work_item_id).is_file());
+
+    let mut session =
+        startup_runtime_once_for_paths(&paths, startup_options(&format!("tick-{case_id}")))
+            .unwrap();
+    install_single_active_run(
+        &paths,
+        &mut session,
+        active_run_state(
+            plane,
+            stage,
+            stage.as_str(),
+            &format!("run-{case_id}"),
+            request_kind,
+            Some(work_item_kind),
+            Some(work_item_id),
+        ),
+    );
+
+    let outcome = run_serial_runtime_tick(
+        &mut session,
+        tick_options(
+            &format!("ignored-run-{case_id}"),
+            &format!("request-{case_id}"),
+        ),
+    )
+    .unwrap();
+
+    assert_eq!(outcome.kind, RuntimeTickOutcomeKind::Blocked);
+    assert_eq!(outcome.reason, "stage_work_item_ownership_invalid");
+    assert!(outcome.stage_request.is_none());
+    assert!(!active_item_path(&paths, work_item_kind, work_item_id).exists());
+    assert!(queued_item_path(&paths, work_item_kind, work_item_id).is_file());
+
+    let snapshot = load_snapshot(&paths).unwrap();
+    assert!(snapshot.active_runs_by_plane.is_empty());
+    assert!(snapshot.active_stage.is_none());
+    assert_eq!(
+        snapshot.current_failure_class.as_deref(),
+        Some("stage_work_item_ownership_invalid")
+    );
+    assert_eq!(load_execution_status(&paths).unwrap(), "### IDLE");
+    assert_eq!(load_planning_status(&paths).unwrap(), "### IDLE");
+    assert_eq!(load_learning_status(&paths).unwrap(), "### IDLE");
+
+    let context = RuntimeErrorContext::from_json_str(
+        &fs::read_to_string(&paths.runtime_error_context_file).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        context.error_code.as_str(),
+        "stage_work_item_ownership_invalid"
+    );
+    assert_eq!(context.failed_stage, stage);
+    assert_eq!(context.work_item_kind, work_item_kind);
+    assert_eq!(context.work_item_id, work_item_id);
+    assert!(Path::new(&context.report_path).is_file());
+
+    let events = runtime_events(&paths);
+    let event = events
+        .iter()
+        .find(|event| event["event_type"] == "runtime_stage_work_item_ownership_invalid")
+        .unwrap();
+    assert_eq!(event["data"]["stage"], stage.as_str());
+    assert_eq!(event["data"]["work_item_kind"], work_item_kind.as_str());
+    assert_eq!(event["data"]["work_item_id"], work_item_id);
+    assert_eq!(event["data"]["requeued_count"], 1);
+
+    session.finish().unwrap();
+}
+
 fn tick_options(run_id: &str, request_id: &str) -> RuntimeTickOptions {
     RuntimeTickOptions {
         now: Some(timestamp("2026-04-28T20:10:00Z")),
@@ -1545,6 +1687,56 @@ impl StageRunnerAdapter for ReconArtifactRunner {
     }
 }
 
+struct RawReconPacketRunner {
+    marker: &'static str,
+    packet_text: &'static str,
+}
+
+impl StageRunnerAdapter for RawReconPacketRunner {
+    fn run(&self, request: &StageRunRequest) -> RunnerResult<RunnerRawResult> {
+        let run_dir = Path::new(&request.run_dir);
+        fs::create_dir_all(run_dir).map_err(|error| RunnerError::Io {
+            path: run_dir.display().to_string(),
+            message: error.to_string(),
+        })?;
+
+        let packet_path = run_dir.join("recon_packet.md");
+        fs::write(&packet_path, self.packet_text).map_err(|error| RunnerError::Io {
+            path: packet_path.display().to_string(),
+            message: error.to_string(),
+        })?;
+
+        let stdout_path = run_dir.join(format!("recon-{}.stdout.txt", request.request_id));
+        fs::write(&stdout_path, format!("{}\n", self.marker)).map_err(|error| RunnerError::Io {
+            path: stdout_path.display().to_string(),
+            message: error.to_string(),
+        })?;
+
+        let raw_result = RunnerRawResult {
+            request_id: request.request_id.clone(),
+            run_id: request.run_id.clone(),
+            stage: request.stage,
+            runner_name: "raw-recon-packet-runner".to_owned(),
+            model_name: request.model_name.clone(),
+            thinking_level: request.thinking_level.clone(),
+            model_reasoning_effort: request.model_reasoning_effort.clone(),
+            exit_kind: RunnerExitKind::Completed,
+            exit_code: Some(0),
+            observed_exit_kind: None,
+            observed_exit_code: None,
+            stdout_path: Some(stdout_path.display().to_string()),
+            stderr_path: None,
+            terminal_result_path: None,
+            event_log_path: None,
+            token_usage: None,
+            started_at: timestamp("2026-04-28T20:10:00Z"),
+            ended_at: timestamp("2026-04-28T20:10:01Z"),
+        };
+        raw_result.validate()?;
+        Ok(raw_result)
+    }
+}
+
 #[derive(Clone, Copy)]
 enum ScriptedStageOutput {
     Terminal(&'static str),
@@ -1831,6 +2023,39 @@ fn stage_run_request_serializes_python_compatible_context_fields() {
     unknown_field["unsupported"] = json!(true);
     let error = StageRunRequest::from_json_value(unknown_field).unwrap_err();
     assert!(error.to_string().contains("unknown field"));
+}
+
+#[test]
+fn stage_run_request_rejects_stage_work_item_ownership_mismatch() {
+    let temp = TempDir::new().unwrap();
+    let mut request = sample_request(temp.path());
+    request.stage = StageName::Builder;
+    request.active_work_item_kind = Some(WorkItemKind::Spec);
+    request.active_work_item_id = Some("spec-wrong".to_owned());
+    request.active_work_item_path = Some("millrace-agents/specs/active/spec-wrong.md".to_owned());
+
+    let error = request.validate().unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("stage builder does not allow active_work_item_kind spec")
+    );
+
+    let mut recon_request = sample_request(temp.path());
+    recon_request.plane = Plane::Planning;
+    recon_request.stage = StageName::Recon;
+    recon_request.node_id = "recon".to_owned();
+    recon_request.stage_kind_id = "recon".to_owned();
+    recon_request.running_status_marker = "RECON_RUNNING".to_owned();
+    recon_request.legal_terminal_markers.clear();
+    recon_request.allowed_result_classes_by_outcome = Default::default();
+    recon_request.summary_status_path = "millrace-agents/state/planning_status.md".to_owned();
+    let error = recon_request.validate().unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("stage recon does not allow active_work_item_kind task")
+    );
 }
 
 #[test]
@@ -2951,7 +3176,7 @@ fn recon_generic_blocked_persists_packet_marks_probe_blocked() {
 }
 
 #[test]
-fn recon_packet_decision_mismatch_schedules_planning_recovery_without_moving_probe() {
+fn recon_packet_decision_mismatch_blocks_probe_with_invalid_handoff_evidence() {
     let temp = TempDir::new().unwrap();
     let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
     QueueStore::from_paths(paths.clone())
@@ -2975,37 +3200,52 @@ fn recon_packet_decision_mismatch_schedules_planning_recovery_without_moving_pro
     .unwrap();
 
     let decision = outcome.router_decision.as_ref().unwrap();
-    assert_eq!(decision.action, RouterAction::RunStage);
-    assert_eq!(decision.next_stage, Some(StageName::Mechanic));
-    assert_eq!(
-        decision.failure_class.as_deref(),
-        Some("planning_post_stage_apply_failed")
-    );
-    assert_eq!(
-        outcome.runtime_error_context_path.as_ref().unwrap(),
-        &paths.runtime_error_context_file
-    );
-    assert!(paths.probes_active_dir.join("probe-001.md").is_file());
+    assert_eq!(decision.action, RouterAction::Idle);
+    assert_eq!(decision.next_stage, None);
+    assert_eq!(outcome.runtime_error_context_path, None);
+    assert!(!paths.probes_active_dir.join("probe-001.md").exists());
     assert!(!paths.probes_done_dir.join("probe-001.md").exists());
-    assert!(!paths.probes_blocked_dir.join("probe-001.md").exists());
+    assert!(paths.probes_blocked_dir.join("probe-001.md").is_file());
     assert!(!paths.recon_packets_dir.join("recon-probe-001.md").exists());
     assert!(!paths.tasks_queue_dir.join("task-from-probe.md").exists());
+    assert_eq!(load_planning_status(&paths).unwrap(), "### BLOCKED");
     let snapshot = load_snapshot(&paths).unwrap();
-    assert_eq!(snapshot.active_stage, Some(StageName::Mechanic));
+    assert!(snapshot.active_runs_by_plane.is_empty());
     assert_eq!(
         snapshot.current_failure_class.as_deref(),
-        Some("planning_post_stage_apply_failed")
+        Some("recon_handoff_invalid")
     );
-    assert!(runtime_events(&paths).iter().any(|event| {
-        event["event_type"] == "runtime_post_stage_recovery_scheduled"
-            && event["data"]["error_code"] == "planning_post_stage_apply_failed"
-    }));
+    let context = RuntimeErrorContext::from_json_str(
+        &fs::read_to_string(&paths.runtime_error_context_file).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(context.error_code.as_str(), "recon_handoff_invalid");
+    assert_eq!(context.failed_stage, StageName::Recon);
+    assert_eq!(context.repair_stage, StageName::Recon);
+    assert_eq!(context.router_action.as_deref(), Some("idle"));
+    assert!(
+        context
+            .exception_message
+            .contains("recon packet decision must match terminal result")
+    );
+    let report = fs::read_to_string(
+        paths
+            .runs_dir
+            .join("run-recon-mismatch/runtime_error_report.md"),
+    )
+    .unwrap();
+    assert!(report.contains("Error-Code: recon_handoff_invalid"));
+    assert!(
+        !runtime_events(&paths)
+            .iter()
+            .any(|event| { event["event_type"] == "runtime_post_stage_recovery_scheduled" })
+    );
 
     session.finish().unwrap();
 }
 
 #[test]
-fn recon_generated_task_id_mismatch_schedules_recovery_without_moving_probe() {
+fn recon_generated_task_id_mismatch_blocks_probe_without_enqueuing_work() {
     let temp = TempDir::new().unwrap();
     let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
     QueueStore::from_paths(paths.clone())
@@ -3029,32 +3269,136 @@ fn recon_generated_task_id_mismatch_schedules_recovery_without_moving_probe() {
     .unwrap();
 
     let decision = outcome.router_decision.as_ref().unwrap();
-    assert_eq!(decision.action, RouterAction::RunStage);
-    assert_eq!(decision.next_stage, Some(StageName::Mechanic));
-    assert_eq!(
-        decision.failure_class.as_deref(),
-        Some("planning_post_stage_apply_failed")
-    );
-    assert!(paths.probes_active_dir.join("probe-001.md").is_file());
+    assert_eq!(decision.action, RouterAction::Idle);
+    assert_eq!(decision.next_stage, None);
+    assert!(!paths.probes_active_dir.join("probe-001.md").exists());
     assert!(!paths.probes_done_dir.join("probe-001.md").exists());
+    assert!(paths.probes_blocked_dir.join("probe-001.md").is_file());
+    assert!(paths.recon_packets_dir.join("recon-probe-001.md").is_file());
+    assert_eq!(fs::read_dir(&paths.tasks_queue_dir).unwrap().count(), 0);
+    let snapshot = load_snapshot(&paths).unwrap();
+    assert!(snapshot.active_runs_by_plane.is_empty());
+    assert_eq!(
+        snapshot.current_failure_class.as_deref(),
+        Some("recon_handoff_invalid")
+    );
+    let context = RuntimeErrorContext::from_json_str(
+        &fs::read_to_string(&paths.runtime_error_context_file).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(context.error_code.as_str(), "recon_handoff_invalid");
+    assert_eq!(context.failed_stage, StageName::Recon);
+    assert_eq!(context.repair_stage, StageName::Recon);
+    assert!(
+        context
+            .exception_message
+            .contains("generated task id must match recon packet emitted_task_id")
+    );
+    assert!(
+        !runtime_events(&paths)
+            .iter()
+            .any(|event| { event["event_type"] == "runtime_post_stage_recovery_scheduled" })
+    );
+
+    session.finish().unwrap();
+}
+
+#[test]
+fn recon_missing_generated_task_artifact_blocks_probe_without_enqueuing_work() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    QueueStore::from_paths(paths.clone())
+        .enqueue_probe(&probe_document_for_recon("probe-001"))
+        .unwrap();
+    let runner = ReconArtifactRunner::new(
+        "### RECON_TO_EXECUTION",
+        recon_packet_for("probe-001", ReconDecision::ToExecution),
+        None,
+    );
+    let mut session =
+        startup_runtime_once_for_paths(&paths, startup_options("tick-recon-missing-generated"))
+            .unwrap();
+
+    let outcome = run_serial_runtime_tick_with_runner(
+        &mut session,
+        tick_options(
+            "run-recon-missing-generated",
+            "request-recon-missing-generated",
+        ),
+        &runner,
+    )
+    .unwrap();
+
+    let decision = outcome.router_decision.as_ref().unwrap();
+    assert_eq!(decision.action, RouterAction::Idle);
+    assert!(!paths.probes_active_dir.join("probe-001.md").exists());
+    assert!(paths.probes_blocked_dir.join("probe-001.md").is_file());
+    assert!(paths.recon_packets_dir.join("recon-probe-001.md").is_file());
+    assert_eq!(fs::read_dir(&paths.tasks_queue_dir).unwrap().count(), 0);
+    let snapshot = load_snapshot(&paths).unwrap();
+    assert!(snapshot.active_runs_by_plane.is_empty());
+    assert_eq!(
+        snapshot.current_failure_class.as_deref(),
+        Some("recon_handoff_invalid")
+    );
+    let context = RuntimeErrorContext::from_json_str(
+        &fs::read_to_string(&paths.runtime_error_context_file).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(context.error_code.as_str(), "recon_handoff_invalid");
+    assert!(context.exception_message.contains("generated_task.md"));
+
+    session.finish().unwrap();
+}
+
+#[test]
+fn recon_malformed_packet_artifact_blocks_probe_without_planning_recovery() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    QueueStore::from_paths(paths.clone())
+        .enqueue_probe(&probe_document_for_recon("probe-001"))
+        .unwrap();
+    let runner = RawReconPacketRunner {
+        marker: "### RECON_TO_EXECUTION",
+        packet_text: "Decision: to_execution\n",
+    };
+    let mut session =
+        startup_runtime_once_for_paths(&paths, startup_options("tick-recon-malformed")).unwrap();
+
+    let outcome = run_serial_runtime_tick_with_runner(
+        &mut session,
+        tick_options("run-recon-malformed", "request-recon-malformed"),
+        &runner,
+    )
+    .unwrap();
+
+    let decision = outcome.router_decision.as_ref().unwrap();
+    assert_eq!(decision.action, RouterAction::Idle);
+    assert!(!paths.probes_active_dir.join("probe-001.md").exists());
+    assert!(paths.probes_blocked_dir.join("probe-001.md").is_file());
     assert!(!paths.recon_packets_dir.join("recon-probe-001.md").exists());
     assert_eq!(fs::read_dir(&paths.tasks_queue_dir).unwrap().count(), 0);
     let snapshot = load_snapshot(&paths).unwrap();
-    assert_eq!(snapshot.active_stage, Some(StageName::Mechanic));
+    assert!(snapshot.active_runs_by_plane.is_empty());
     assert_eq!(
         snapshot.current_failure_class.as_deref(),
-        Some("planning_post_stage_apply_failed")
+        Some("recon_handoff_invalid")
     );
     let context = RuntimeErrorContext::from_json_str(
-        &fs::read_to_string(outcome.runtime_error_context_path.as_ref().unwrap()).unwrap(),
+        &fs::read_to_string(&paths.runtime_error_context_file).unwrap(),
     )
     .unwrap();
-    assert_eq!(
-        context.error_code.as_str(),
-        "planning_post_stage_apply_failed"
+    assert_eq!(context.error_code.as_str(), "recon_handoff_invalid");
+    assert!(
+        context
+            .exception_message
+            .contains("must start with a markdown H1 title")
     );
-    assert_eq!(context.failed_stage, StageName::Recon);
-    assert_eq!(context.repair_stage, StageName::Mechanic);
+    assert!(
+        !runtime_events(&paths)
+            .iter()
+            .any(|event| { event["event_type"] == "runtime_post_stage_recovery_scheduled" })
+    );
 
     session.finish().unwrap();
 }
@@ -3201,6 +3545,309 @@ fn serial_tick_dispatches_fake_runner_persists_artifacts_and_routes_from_graph()
     );
 
     session.finish().unwrap();
+}
+
+#[test]
+fn integrated_mode_routes_builder_to_integrator_then_checker_and_traces_sequence() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    fs::write(
+        &paths.runtime_config_file,
+        "[runtime]\ndefault_mode = \"default_codex_integrated\"\n",
+    )
+    .unwrap();
+    QueueStore::from_paths(paths.clone())
+        .enqueue_task(&task_document("task-integrated"))
+        .unwrap();
+
+    let mut session =
+        startup_runtime_once_for_paths(&paths, startup_options("tick-integrated")).unwrap();
+    assert_eq!(
+        session.compiled_plan.execution_loop_id,
+        "execution.with_integrator"
+    );
+    assert_eq!(session.compiled_plan.planning_loop_id, "planning.standard");
+
+    let builder_runner =
+        FakeRunner::with_default(FakeRunnerResult::terminal_marker("### BUILDER_COMPLETE"))
+            .unwrap();
+    let builder = run_serial_runtime_tick_with_runner(
+        &mut session,
+        tick_options("run-integrated", "request-integrated-builder"),
+        &builder_runner,
+    )
+    .unwrap();
+    let builder_decision = builder.router_decision.as_ref().unwrap();
+    assert_eq!(builder_decision.action, RouterAction::RunStage);
+    assert_eq!(builder_decision.next_stage, Some(StageName::Integrator));
+    assert_eq!(builder_decision.next_node_id.as_deref(), Some("integrator"));
+    assert_eq!(builder_decision.reason, "builder:BUILDER_COMPLETE");
+    assert_eq!(
+        load_snapshot(&paths).unwrap().active_stage,
+        Some(StageName::Integrator)
+    );
+
+    let integrator_runner = FakeRunner::with_default(FakeRunnerResult::terminal_marker(
+        "### INTEGRATION_COMPLETE",
+    ))
+    .unwrap();
+    let integrator = run_serial_runtime_tick_with_runner(
+        &mut session,
+        tick_options("ignored-run", "request-integrated-integrator"),
+        &integrator_runner,
+    )
+    .unwrap();
+    let request = integrator.stage_request.as_ref().unwrap();
+    assert_eq!(request.request_id, "request-integrated-integrator");
+    assert_eq!(request.run_id, "run-integrated");
+    assert_eq!(request.mode_id, "default_codex_integrated");
+    assert_eq!(request.plane, Plane::Execution);
+    assert_eq!(request.stage, StageName::Integrator);
+    assert_eq!(request.node_id, "integrator");
+    assert_eq!(request.stage_kind_id, "integrator");
+    assert_eq!(request.running_status_marker, "INTEGRATOR_RUNNING");
+    assert!(
+        request
+            .entrypoint_path
+            .ends_with("millrace-agents/entrypoints/execution/integrator.md")
+    );
+    assert_eq!(
+        request.entrypoint_contract_id.as_deref(),
+        Some("integrator.contract.v1")
+    );
+    assert_eq!(
+        request.legal_terminal_markers,
+        vec![
+            "### INTEGRATION_COMPLETE".to_owned(),
+            "### BLOCKED".to_owned(),
+        ]
+    );
+    assert_eq!(
+        request
+            .allowed_result_classes_by_outcome
+            .result_classes_for("INTEGRATION_COMPLETE")
+            .unwrap(),
+        [ResultClass::Success]
+    );
+    assert_eq!(
+        request
+            .allowed_result_classes_by_outcome
+            .result_classes_for("BLOCKED")
+            .unwrap(),
+        [ResultClass::Blocked, ResultClass::RecoverableFailure]
+    );
+    assert_eq!(
+        request.required_skill_paths,
+        vec![
+            paths
+                .runtime_root
+                .join("skills/stage/execution/integrator-core/SKILL.md")
+                .display()
+                .to_string()
+        ]
+    );
+    assert!(request.attached_skill_paths.is_empty());
+    assert_eq!(request.active_work_item_kind, Some(WorkItemKind::Task));
+    assert_eq!(
+        request.active_work_item_id.as_deref(),
+        Some("task-integrated")
+    );
+    assert!(
+        request
+            .active_work_item_path
+            .as_deref()
+            .unwrap()
+            .ends_with("millrace-agents/tasks/active/task-integrated.md")
+    );
+    assert_eq!(
+        request.run_dir,
+        paths.runs_dir.join("run-integrated").display().to_string()
+    );
+    assert_eq!(
+        request.summary_status_path,
+        paths.execution_status_file.display().to_string()
+    );
+    assert_eq!(
+        request.runtime_snapshot_path,
+        paths.runtime_snapshot_file.display().to_string()
+    );
+    assert_eq!(
+        request.recovery_counters_path,
+        paths.recovery_counters_file.display().to_string()
+    );
+    assert!(
+        request
+            .preferred_troubleshoot_report_path
+            .as_deref()
+            .unwrap()
+            .ends_with("millrace-agents/runs/run-integrated/troubleshoot_report.md")
+    );
+    assert_eq!(request.runner_name.as_deref(), Some("codex_cli"));
+    assert_eq!(request.model_name, None);
+    assert_eq!(request.thinking_level, None);
+    assert_eq!(request.model_reasoning_effort, None);
+    assert_eq!(request.timeout_seconds, 3600);
+
+    let stage_result = integrator.stage_result.as_ref().unwrap();
+    assert_eq!(stage_result.stage, StageName::Integrator);
+    assert_eq!(
+        stage_result.terminal_result,
+        TerminalResult::Execution(ExecutionTerminalResult::IntegrationComplete)
+    );
+    let integrator_decision = integrator.router_decision.as_ref().unwrap();
+    assert_eq!(integrator_decision.action, RouterAction::RunStage);
+    assert_eq!(integrator_decision.next_stage, Some(StageName::Checker));
+    assert_eq!(integrator_decision.next_node_id.as_deref(), Some("checker"));
+    assert_eq!(
+        integrator_decision.reason,
+        "integrator:INTEGRATION_COMPLETE"
+    );
+
+    let trace = inspect_run_trace(paths.runs_dir.join("run-integrated")).unwrap();
+    assert_eq!(trace.status.as_str(), "active");
+    assert_eq!(
+        trace
+            .nodes
+            .iter()
+            .map(|node| node.stage.as_str())
+            .collect::<Vec<_>>(),
+        vec!["builder", "integrator"]
+    );
+    assert_eq!(trace.edges.len(), 2);
+    assert_eq!(trace.edges[0].outcome, "BUILDER_COMPLETE");
+    assert_eq!(trace.edges[0].target_node_id.as_deref(), Some("integrator"));
+    assert_eq!(trace.edges[1].outcome, "INTEGRATION_COMPLETE");
+    assert_eq!(trace.edges[1].target_node_id.as_deref(), Some("checker"));
+
+    assert_eq!(
+        load_snapshot(&paths).unwrap().active_stage,
+        Some(StageName::Checker)
+    );
+    assert!(paths.tasks_active_dir.join("task-integrated.md").is_file());
+    assert!(!paths.tasks_done_dir.join("task-integrated.md").exists());
+
+    session.finish().unwrap();
+}
+
+#[test]
+fn integrated_mode_routes_integrator_blocked_to_recovery_and_threshold_consultant() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    fs::write(
+        &paths.runtime_config_file,
+        "[runtime]\ndefault_mode = \"default_codex_integrated\"\n",
+    )
+    .unwrap();
+    QueueStore::from_paths(paths.clone())
+        .enqueue_task(&task_document("task-integrator-blocked"))
+        .unwrap();
+    let mut session =
+        startup_runtime_once_for_paths(&paths, startup_options("tick-integrator-blocked")).unwrap();
+    let builder_runner =
+        FakeRunner::with_default(FakeRunnerResult::terminal_marker("### BUILDER_COMPLETE"))
+            .unwrap();
+    run_serial_runtime_tick_with_runner(
+        &mut session,
+        tick_options(
+            "run-integrator-blocked",
+            "request-integrator-blocked-builder",
+        ),
+        &builder_runner,
+    )
+    .unwrap();
+
+    let blocked_runner =
+        FakeRunner::with_default(FakeRunnerResult::terminal_marker("### BLOCKED")).unwrap();
+    let blocked = run_serial_runtime_tick_with_runner(
+        &mut session,
+        tick_options("ignored-run", "request-integrator-blocked-integrator"),
+        &blocked_runner,
+    )
+    .unwrap();
+    let decision = blocked.router_decision.as_ref().unwrap();
+    assert_eq!(decision.action, RouterAction::RunStage);
+    assert_eq!(decision.next_stage, Some(StageName::Troubleshooter));
+    assert_eq!(decision.next_node_id.as_deref(), Some("troubleshooter"));
+    assert_eq!(decision.reason, "integrator_blocked");
+    assert_eq!(
+        decision.failure_class.as_deref(),
+        Some("integrator_blocked")
+    );
+    assert_eq!(
+        decision.counter_key.as_deref(),
+        Some("task:task-integrator-blocked:integrator_blocked")
+    );
+    let counters = load_recovery_counters(&paths).unwrap();
+    assert_eq!(counters.entries[0].failure_class, "integrator_blocked");
+    assert_eq!(counters.entries[0].troubleshoot_attempt_count, 1);
+    session.finish().unwrap();
+
+    let threshold_temp = TempDir::new().unwrap();
+    let threshold_paths = initialize_workspace(threshold_temp.path().join("workspace")).unwrap();
+    fs::write(
+        &threshold_paths.runtime_config_file,
+        "[runtime]\ndefault_mode = \"default_codex_integrated\"\n",
+    )
+    .unwrap();
+    QueueStore::from_paths(threshold_paths.clone())
+        .enqueue_task(&task_document("task-integrator-threshold"))
+        .unwrap();
+    let mut threshold_session = startup_runtime_once_for_paths(
+        &threshold_paths,
+        startup_options("tick-integrator-threshold"),
+    )
+    .unwrap();
+    run_serial_runtime_tick_with_runner(
+        &mut threshold_session,
+        tick_options(
+            "run-integrator-threshold",
+            "request-integrator-threshold-builder",
+        ),
+        &builder_runner,
+    )
+    .unwrap();
+    save_recovery_counters(
+        &threshold_paths,
+        &RecoveryCounters {
+            schema_version: "1.0".to_owned(),
+            kind: "recovery_counters".to_owned(),
+            entries: vec![RecoveryCounterEntry {
+                failure_class: "integrator_blocked".to_owned(),
+                work_item_id: "task-integrator-threshold".to_owned(),
+                work_item_kind: WorkItemKind::Task,
+                troubleshoot_attempt_count: 2,
+                mechanic_attempt_count: 0,
+                fix_cycle_count: 0,
+                consultant_invocations: 0,
+                last_updated_at: timestamp("2026-04-28T20:09:00Z"),
+            }],
+        },
+    )
+    .unwrap();
+
+    let threshold = run_serial_runtime_tick_with_runner(
+        &mut threshold_session,
+        tick_options("ignored-run", "request-integrator-threshold-integrator"),
+        &blocked_runner,
+    )
+    .unwrap();
+    let threshold_decision = threshold.router_decision.as_ref().unwrap();
+    assert_eq!(threshold_decision.action, RouterAction::RunStage);
+    assert_eq!(threshold_decision.next_stage, Some(StageName::Consultant));
+    assert_eq!(
+        threshold_decision.next_node_id.as_deref(),
+        Some("consultant")
+    );
+    assert_eq!(threshold_decision.reason, "integrator_blocked");
+    assert_eq!(
+        threshold_decision.failure_class.as_deref(),
+        Some("integrator_blocked")
+    );
+    let threshold_counters = load_recovery_counters(&threshold_paths).unwrap();
+    assert_eq!(threshold_counters.entries[0].troubleshoot_attempt_count, 2);
+    assert_eq!(threshold_counters.entries[0].consultant_invocations, 1);
+
+    threshold_session.finish().unwrap();
 }
 
 #[test]
@@ -4810,6 +5457,66 @@ fn serial_tick_activates_learning_request_only_when_learning_graph_exists() {
     assert_eq!(evidence["request_id"], "request-learning");
 
     session.finish().unwrap();
+}
+
+#[test]
+fn serial_tick_requeues_and_blocks_stage_work_item_ownership_mismatches() {
+    assert_stage_work_item_ownership_guard_requeues(
+        "ownership-execution-spec",
+        Plane::Execution,
+        StageName::Builder,
+        ActiveRunRequestKind::ActiveWorkItem,
+        WorkItemKind::Spec,
+        "spec-ownership-execution",
+        |queue| {
+            queue
+                .enqueue_spec(&spec_document("spec-ownership-execution"))
+                .unwrap();
+            queue.claim_next_planning_item(None).unwrap().unwrap();
+        },
+    );
+    assert_stage_work_item_ownership_guard_requeues(
+        "ownership-planning-task",
+        Plane::Planning,
+        StageName::Planner,
+        ActiveRunRequestKind::ActiveWorkItem,
+        WorkItemKind::Task,
+        "task-ownership-planning",
+        |queue| {
+            queue
+                .enqueue_task(&task_document("task-ownership-planning"))
+                .unwrap();
+            queue.claim_next_execution_task(None).unwrap().unwrap();
+        },
+    );
+    assert_stage_work_item_ownership_guard_requeues(
+        "ownership-recon-spec",
+        Plane::Planning,
+        StageName::Recon,
+        ActiveRunRequestKind::ActiveWorkItem,
+        WorkItemKind::Spec,
+        "spec-ownership-recon",
+        |queue| {
+            queue
+                .enqueue_spec(&spec_document("spec-ownership-recon"))
+                .unwrap();
+            queue.claim_next_planning_item(None).unwrap().unwrap();
+        },
+    );
+    assert_stage_work_item_ownership_guard_requeues(
+        "ownership-learning-task",
+        Plane::Learning,
+        StageName::Analyst,
+        ActiveRunRequestKind::ActiveWorkItem,
+        WorkItemKind::Task,
+        "task-ownership-learning",
+        |queue| {
+            queue
+                .enqueue_task(&task_document("task-ownership-learning"))
+                .unwrap();
+            queue.claim_next_execution_task(None).unwrap().unwrap();
+        },
+    );
 }
 
 #[test]

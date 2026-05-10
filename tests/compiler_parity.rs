@@ -132,6 +132,43 @@ fn rust_compile_graph_cli_exports_python_v0_18_1_recon_graph_shape() {
             && edge["outcome"] == "BUILDER_COMPLETE"
             && edge["target_node_id"] == "checker"
     }));
+
+    let integrated_output = run_rust_millrace([
+        "compile",
+        "graph",
+        "--workspace",
+        root.to_str().unwrap(),
+        "--mode",
+        "default_codex_integrated",
+        "--plane",
+        "execution",
+        "--format",
+        "json",
+    ])
+    .expect("run Rust integrated compile graph");
+    integrated_output.assert_success();
+    assert_eq!(integrated_output.stderr, "");
+    let integrated_graphs: Vec<Value> =
+        serde_json::from_str(&integrated_output.stdout).expect("parse integrated graph JSON");
+    assert_eq!(integrated_graphs.len(), 1);
+    let execution = &integrated_graphs[0];
+    assert_eq!(execution["mode_id"], "default_codex_integrated");
+    assert_eq!(execution["loop_id"], "execution.with_integrator");
+    assert!(execution["nodes"].as_array().unwrap().iter().any(|node| {
+        node["node_id"] == "integrator"
+            && node["stage_kind_id"] == "integrator"
+            && node["runner_name"] == "codex_cli"
+    }));
+    assert!(execution["edges"].as_array().unwrap().iter().any(|edge| {
+        edge["source_node_id"] == "builder"
+            && edge["outcome"] == "BUILDER_COMPLETE"
+            && edge["target_node_id"] == "integrator"
+    }));
+    assert!(execution["edges"].as_array().unwrap().iter().any(|edge| {
+        edge["source_node_id"] == "integrator"
+            && edge["outcome"] == "INTEGRATION_COMPLETE"
+            && edge["target_node_id"] == "checker"
+    }));
 }
 
 #[test]
@@ -297,6 +334,115 @@ fn compiler_parity_scout_pins_python_v0_18_1_recon_assets_and_graph_sources() {
         assert!(
             targets.contains(target_path),
             "missing v0.18.1 compiler/recon Rust target {target_path}"
+        );
+    }
+}
+
+#[test]
+fn compiler_parity_scout_pins_python_v0_18_2_integrator_assets_and_graph_sources() {
+    let fixture: Value = serde_json::from_str(
+        &read_fixture("compiler_parity/auto_port_v0_18_2_compiler_contract_scout.json")
+            .expect("read v0.18.2 compiler scout fixture"),
+    )
+    .expect("parse v0.18.2 compiler scout fixture");
+    assert_eq!(fixture["schema_version"], "1.0");
+    assert_eq!(fixture["kind"], "auto_port_v0_18_2_compiler_contract_scout");
+    assert_eq!(fixture["python_reference"]["previous_tag"], "v0.18.1");
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.18.2");
+    assert_eq!(
+        fixture["python_reference"]["previous_commit"],
+        "0396c7852793b212d31345862b38a7d6f3f02854"
+    );
+    assert_eq!(
+        fixture["python_reference"]["target_commit"],
+        "5444cb9485ea90b67b2ed6ba7e0723ae9fe7b79f"
+    );
+    assert_eq!(
+        fixture["python_reference"]["diff_range"],
+        "v0.18.1..v0.18.2"
+    );
+    assert_eq!(
+        fixture["rust_reference"]["current_repo_crate_version"],
+        "0.3.1"
+    );
+    assert_eq!(
+        fixture["rust_reference"]["current_repo_version_role"],
+        "previous_baseline_for_python_v0.18.1"
+    );
+    assert_eq!(fixture["rust_reference"]["planned_crate_version"], "0.3.2");
+    assert_ne!(
+        fixture["rust_reference"]["planned_crate_version"],
+        fixture["rust_reference"]["current_repo_crate_version"],
+        "v0.18.2 compiler scout must not treat Rust 0.3.1 as the target"
+    );
+
+    let sources: BTreeSet<_> = fixture["compiler_source_refs"]
+        .as_array()
+        .expect("compiler source refs are present")
+        .iter()
+        .map(|value| value.as_str().expect("compiler source ref"))
+        .collect();
+    for source_path in [
+        "../millrace-py/src/millrace_ai/contracts/enums.py",
+        "../millrace-py/src/millrace_ai/contracts/stage_metadata.py",
+        "../millrace-py/src/millrace_ai/assets/entrypoints/execution/checker.md",
+        "../millrace-py/src/millrace_ai/assets/entrypoints/execution/integrator.md",
+        "../millrace-py/src/millrace_ai/assets/graphs/execution/with_integrator.json",
+        "../millrace-py/src/millrace_ai/assets/loop_graphs.py",
+        "../millrace-py/src/millrace_ai/assets/loops/execution/with_integrator.json",
+        "../millrace-py/src/millrace_ai/assets/modes/default_codex_integrated.json",
+        "../millrace-py/src/millrace_ai/assets/modes/learning_codex_integrated.json",
+        "../millrace-py/src/millrace_ai/assets/registry/stage_kinds/execution/integrator.json",
+        "../millrace-py/src/millrace_ai/assets/skills/stage/execution/integrator-core/SKILL.md",
+        "../millrace-py/tests/assets/test_entrypoints.py",
+        "../millrace-py/tests/assets/test_loop_graphs.py",
+        "../millrace-py/tests/assets/test_modes.py",
+        "../millrace-py/tests/assets/test_packaging_runtime_assets.py",
+        "../millrace-py/tests/assets/test_stage_kinds.py",
+    ] {
+        assert!(
+            sources.contains(source_path),
+            "missing v0.18.2 compiler/integrator source {source_path}"
+        );
+    }
+
+    let targets: BTreeSet<_> = fixture["expected_rust_targets"]
+        .as_array()
+        .expect("expected Rust targets are present")
+        .iter()
+        .map(|value| value.as_str().expect("expected Rust target"))
+        .collect();
+    for target_path in [
+        "millrace-agents/entrypoints/execution/integrator.md",
+        "millrace-agents/graphs/execution/with_integrator.json",
+        "millrace-agents/loops/execution/with_integrator.json",
+        "millrace-agents/modes/default_codex_integrated.json",
+        "millrace-agents/modes/learning_codex_integrated.json",
+        "millrace-agents/registry/stage_kinds/execution/integrator.json",
+        "millrace-agents/skills/stage/execution/integrator-core/SKILL.md",
+        "src/assets/baseline/entrypoints/execution/integrator.md",
+        "src/assets/baseline/graphs/execution/with_integrator.json",
+        "src/assets/baseline/loops/execution/with_integrator.json",
+        "src/assets/baseline/modes/default_codex_integrated.json",
+        "src/assets/baseline/modes/learning_codex_integrated.json",
+        "src/assets/baseline/registry/stage_kinds/execution/integrator.json",
+        "src/assets/baseline/skills/stage/execution/integrator-core/SKILL.md",
+        "src/contracts/enums.rs",
+        "src/contracts/stage_metadata.rs",
+        "src/compiler/assets.rs",
+        "src/compiler/contracts.rs",
+        "src/compiler/materialization.rs",
+        "src/compiler/graph_exports.rs",
+        "tests/contracts_stage_metadata.rs",
+        "tests/compiler_assets.rs",
+        "tests/compiler_contracts.rs",
+        "tests/compiler_materialization.rs",
+        "tests/compiler_parity.rs",
+        "tests/workspace_assets_baseline.rs",
+    ] {
+        assert!(
+            targets.contains(target_path),
+            "missing v0.18.2 compiler/integrator Rust target {target_path}"
         );
     }
 }

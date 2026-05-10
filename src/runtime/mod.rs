@@ -11,7 +11,8 @@ use serde_json::Value;
 
 use crate::contracts::{
     ContractError, Plane, ResultClass, StageName, WorkItemKind, allowed_result_classes_by_outcome,
-    legal_terminal_markers, running_status_marker, stage_plane, terminal_result_for_plane,
+    allowed_work_item_kinds, legal_terminal_markers, running_status_marker,
+    stage_allows_work_item_kind, stage_plane, terminal_result_for_plane,
 };
 
 mod monitor;
@@ -469,6 +470,27 @@ impl StageRunRequest {
 
         match self.request_kind {
             RequestKind::ActiveWorkItem => {
+                if !has_kind || self.active_work_item_path.is_none() {
+                    return Err(StageRunRequestError::InvalidDocument {
+                        message: "active_work_item requests require active work item fields"
+                            .to_owned(),
+                    });
+                }
+                let work_item_kind = self
+                    .active_work_item_kind
+                    .expect("active work item kind was validated as present");
+                if work_item_kind == WorkItemKind::LearningRequest {
+                    return Err(StageRunRequestError::InvalidDocument {
+                        message:
+                            "learning_request work items must use request_kind=learning_request"
+                                .to_owned(),
+                    });
+                }
+                if !stage_allows_work_item_kind(self.stage, work_item_kind) {
+                    return Err(StageRunRequestError::InvalidDocument {
+                        message: format_stage_work_item_mismatch(self.stage, work_item_kind),
+                    });
+                }
                 if self.has_any_closure_field() {
                     return Err(StageRunRequestError::InvalidDocument {
                         message: "active_work_item requests cannot declare closure target fields"
@@ -513,6 +535,14 @@ impl StageRunRequest {
                     return Err(StageRunRequestError::InvalidDocument {
                         message: "learning_request requests cannot declare closure target fields"
                             .to_owned(),
+                    });
+                }
+                if !stage_allows_work_item_kind(self.stage, WorkItemKind::LearningRequest) {
+                    return Err(StageRunRequestError::InvalidDocument {
+                        message: format_stage_work_item_mismatch(
+                            self.stage,
+                            WorkItemKind::LearningRequest,
+                        ),
                     });
                 }
             }
@@ -838,6 +868,28 @@ fn require_non_blank(field_name: &'static str, value: &str) -> Result<(), StageR
         })
     } else {
         Ok(())
+    }
+}
+
+fn format_stage_work_item_mismatch(stage: StageName, work_item_kind: WorkItemKind) -> String {
+    let expected = allowed_work_item_kinds(stage)
+        .iter()
+        .map(|kind| kind.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    if expected.is_empty() {
+        format!(
+            "stage {} does not allow active work items; got {}",
+            stage.as_str(),
+            work_item_kind.as_str()
+        )
+    } else {
+        format!(
+            "stage {} does not allow active_work_item_kind {}; expected one of: {}",
+            stage.as_str(),
+            work_item_kind.as_str(),
+            expected
+        )
     }
 }
 

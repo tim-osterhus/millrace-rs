@@ -23,6 +23,19 @@ task or spec with probe/recon references and root-intake lineage; no-op results
 close the probe without downstream work. Packet/result mismatches schedule
 planning recovery without moving the active probe.
 
+For Python `v0.18.2` parity, invalid Recon handoff artifacts now block the
+active probe with `recon_handoff_invalid` runtime error evidence instead of
+falling into ordinary planning recovery. Handoff-specific emitted-id validation,
+generated task/spec id checks, malformed packet handling, and direct-stage
+graph-edge rejection keep generated-work promotion runtime-owned.
+
+The same parity line adds stage/work-item ownership validation before serial or
+daemon runner dispatch. Stale active pairings are rejected before a runner is
+invoked, the active artifact is safely requeued or blocked through queue
+helpers, runtime error/report evidence uses
+`stage_work_item_ownership_invalid`, and closure-target Arbiter activation
+remains valid without an active work item.
+
 Learning request activation uses active request documents under
 `millrace-agents/learning/requests/active/`. For Python `v0.17.4` parity,
 stage-specific no-op terminal results move the active learning request to
@@ -35,7 +48,7 @@ into both queued work documents and trigger metadata. This preserves
 without allowing destination-less direct Curator requests.
 
 The optional Python `millrace-web` package remains outside the accepted Rust
-runtime boundary, including the Python `v0.18.1` package/runtime version sync.
+runtime boundary, including the Python `v0.18.2` package/runtime version sync.
 Rust inspection stays local and read-only through CLI commands
 such as `queue ls/show`, `status show`, `runs ls/show/tail`, `modes show`,
 `config show`, `compile show`, `compile graph`, and `runs trace <run_id>`.

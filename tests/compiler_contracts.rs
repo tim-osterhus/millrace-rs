@@ -156,12 +156,97 @@ fn baseline_mode_graph_and_stage_kind_assets_parse_through_contracts() {
             .is_empty()
     );
 
+    let integrated_mode: ModeDefinition = parse_contract(include_str!(
+        "../src/assets/baseline/modes/default_codex_integrated.json"
+    ));
+    assert_eq!(integrated_mode.mode_id, "default_codex_integrated");
+    assert_eq!(
+        integrated_mode
+            .loop_ids_by_plane
+            .get(&Plane::Execution)
+            .map(String::as_str),
+        Some("execution.with_integrator")
+    );
+    assert_eq!(
+        integrated_mode
+            .loop_ids_by_plane
+            .get(&Plane::Planning)
+            .map(String::as_str),
+        Some("planning.standard")
+    );
+    assert_eq!(
+        integrated_mode
+            .stage_runner_bindings
+            .get(&millrace_ai::contracts::StageName::Integrator)
+            .map(String::as_str),
+        Some("codex_cli")
+    );
+    assert!(integrated_mode.concurrency_policy.is_none());
+    assert!(integrated_mode.learning_trigger_rules.is_empty());
+
+    let learning_integrated_mode: ModeDefinition = parse_contract(include_str!(
+        "../src/assets/baseline/modes/learning_codex_integrated.json"
+    ));
+    assert_eq!(
+        learning_integrated_mode.mode_id,
+        "learning_codex_integrated"
+    );
+    assert_eq!(
+        learning_integrated_mode
+            .loop_ids_by_plane
+            .get(&Plane::Execution)
+            .map(String::as_str),
+        Some("execution.with_integrator")
+    );
+    assert_eq!(
+        learning_integrated_mode
+            .loop_ids_by_plane
+            .get(&Plane::Learning)
+            .map(String::as_str),
+        Some("learning.standard")
+    );
+    assert!(learning_integrated_mode.concurrency_policy.is_some());
+    assert_eq!(learning_integrated_mode.learning_trigger_rules.len(), 3);
+    assert_eq!(
+        learning_integrated_mode
+            .stage_runner_bindings
+            .get(&millrace_ai::contracts::StageName::Integrator)
+            .map(String::as_str),
+        Some("codex_cli")
+    );
+
     let execution_graph: GraphLoopDefinition = parse_contract(include_str!(
         "../src/assets/baseline/graphs/execution/standard.json"
     ));
     assert_eq!(execution_graph.loop_id, "execution.standard");
     assert_eq!(execution_graph.nodes[0].stage_kind_id, "builder");
     assert_eq!(execution_graph.edges[0].kind, LoopEdgeKind::Normal);
+
+    let integrated_execution_graph: GraphLoopDefinition = parse_contract(include_str!(
+        "../src/assets/baseline/graphs/execution/with_integrator.json"
+    ));
+    assert_eq!(
+        integrated_execution_graph.loop_id,
+        "execution.with_integrator"
+    );
+    assert!(
+        integrated_execution_graph
+            .nodes
+            .iter()
+            .any(|node| node.node_id == "integrator" && node.stage_kind_id == "integrator")
+    );
+    assert!(integrated_execution_graph.edges.iter().any(|edge| {
+        edge.edge_id == "builder-complete-to-integrator"
+            && edge.from_node_id == "builder"
+            && edge.to_node_id.as_deref() == Some("integrator")
+            && edge.on_outcomes == ["BUILDER_COMPLETE"]
+    }));
+    assert!(integrated_execution_graph.edges.iter().any(|edge| {
+        edge.edge_id == "integrator-complete-to-checker"
+            && edge.from_node_id == "integrator"
+            && edge.to_node_id.as_deref() == Some("checker")
+            && edge.on_outcomes == ["INTEGRATION_COMPLETE"]
+    }));
 
     let planning_graph: GraphLoopDefinition = parse_contract(include_str!(
         "../src/assets/baseline/graphs/planning/standard.json"
@@ -214,6 +299,33 @@ fn baseline_mode_graph_and_stage_kind_assets_parse_through_contracts() {
         builder_kind
             .allowed_overrides
             .contains(&"thinking_level".to_owned())
+    );
+
+    let integrator_kind: RegisteredStageKindDefinition = parse_contract(include_str!(
+        "../src/assets/baseline/registry/stage_kinds/execution/integrator.json"
+    ));
+    assert_eq!(integrator_kind.stage_kind_id, "integrator");
+    assert_eq!(integrator_kind.plane, Plane::Execution);
+    assert_eq!(integrator_kind.running_status_marker, "INTEGRATOR_RUNNING");
+    assert_eq!(
+        integrator_kind.legal_outcomes,
+        ["INTEGRATION_COMPLETE", "BLOCKED"]
+    );
+    assert_eq!(
+        integrator_kind.required_skill_paths,
+        ["skills/stage/execution/integrator-core/SKILL.md".to_owned()]
+    );
+    assert_eq!(
+        integrator_kind.allowed_result_classes_by_outcome["INTEGRATION_COMPLETE"],
+        [ResultClass::Success]
+    );
+    assert_eq!(
+        integrator_kind.allowed_result_classes_by_outcome["BLOCKED"],
+        [ResultClass::Blocked, ResultClass::RecoverableFailure]
+    );
+    assert_eq!(
+        integrator_kind.declared_output_artifacts,
+        ["stage_result".to_owned(), "integration_report".to_owned()]
     );
 
     let recon_kind: RegisteredStageKindDefinition = parse_contract(include_str!(
@@ -669,4 +781,24 @@ fn invalid_references_are_rejected_without_guesswork() {
     bad_trigger["learning_trigger_rules"][0]["on_terminal_results"] = json!(["NOT_A_RESULT"]);
     let error = ModeDefinition::from_json_value(bad_trigger).unwrap_err();
     assert!(error.to_string().contains("unknown terminal result"));
+}
+
+#[test]
+fn recon_handoff_outcomes_cannot_route_directly_to_stage_nodes() {
+    let mut graph = fixture_value(include_str!(
+        "../src/assets/baseline/graphs/planning/standard.json"
+    ));
+    let edge = graph["edges"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|edge| edge["edge_id"] == "recon-to-execution-to-terminal-recon-to-execution")
+        .unwrap();
+    edge["to_node_id"] = json!("planner");
+    edge["terminal_state_id"] = Value::Null;
+    edge["kind"] = json!("normal");
+
+    let error = GraphLoopDefinition::from_json_value(graph).unwrap_err();
+    assert!(error.to_string().contains("Recon handoff outcome"));
+    assert!(error.to_string().contains("runtime-owned terminal states"));
 }

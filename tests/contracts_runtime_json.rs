@@ -7,11 +7,11 @@ use tempfile::TempDir;
 
 use millrace_ai::contracts::{
     CompileDiagnostics, ExecutionTerminalResult, LearningTerminalResult, MailboxAddProbePayload,
-    MailboxCommandEnvelope, Plane, PlanningTerminalResult, ReconDecision, ReconHandoffTarget,
-    ReconPacketDocument, ReconPacketError, RecoveryCounters, ResultClass, RunTraceGraph,
-    RuntimeErrorContext, RuntimeJsonContract, RuntimeJsonError, RuntimeSnapshot, StageName,
-    StageResultEnvelope, TerminalResult, TokenUsage, UsageGovernanceLedgerEntry,
-    UsageGovernanceState, UsageGovernanceSubscriptionWindow,
+    MailboxCommandEnvelope, Plane, PlanningTerminalResult, ReadOnlyStatusPayload, ReconDecision,
+    ReconHandoffTarget, ReconPacketDocument, ReconPacketError, RecoveryCounters, ResultClass,
+    RunTraceGraph, RuntimeErrorContext, RuntimeJsonContract, RuntimeJsonError, RuntimeMode,
+    RuntimeSnapshot, StageName, StageResultEnvelope, TerminalResult, TokenUsage,
+    UsageGovernanceLedgerEntry, UsageGovernanceState, UsageGovernanceSubscriptionWindow,
 };
 use millrace_ai::recon_packets::{parse_recon_packet, read_recon_packet, render_recon_packet};
 
@@ -407,6 +407,58 @@ fn python_produced_runtime_json_fixtures_round_trip_against_rust_contracts() {
 }
 
 #[test]
+fn read_only_status_payload_serializes_python_compatible_json_fields() {
+    let payload = ReadOnlyStatusPayload {
+        workspace: "/tmp/workspace".to_owned(),
+        runtime_mode: RuntimeMode::Daemon,
+        process_running: true,
+        runtime_ownership_lock: "active".to_owned(),
+        paused: false,
+        pause_sources: "none".to_owned(),
+        stop_requested: false,
+        active_mode_id: "default_codex".to_owned(),
+        compiled_plan_id: "plan-001".to_owned(),
+        compiled_plan_currentness: "current".to_owned(),
+        active_plane: Some(Plane::Planning),
+        active_stage: Some(StageName::Mechanic),
+        active_node_id: Some("mechanic".to_owned()),
+        active_stage_kind_id: Some("mechanic".to_owned()),
+        active_work_item_kind: None,
+        active_work_item_id: None,
+        active_run_count: 0,
+        execution_queue_depth: 0,
+        planning_queue_depth: 0,
+        learning_queue_depth: 0,
+        execution_status_marker: "### IDLE".to_owned(),
+        planning_status_marker: "### BLOCKED".to_owned(),
+        learning_status_marker: "### IDLE".to_owned(),
+        blocked_idle: true,
+        current_failure_class: Some("recon_handoff_invalid".to_owned()),
+        latest_runtime_error_report_path: Some(
+            "millrace-agents/runs/run-001/runtime_error_report.md".to_owned(),
+        ),
+        closure_target_root_spec_id: json!("spec-root-001"),
+        closure_target_open: json!(true),
+        closure_target_blocked_by_lineage_work: json!(true),
+        planning_root_specs_deferred_by_closure_target: json!(0),
+        closure_target_latest_verdict_path: Value::Null,
+        closure_target_latest_report_path: Value::Null,
+    };
+
+    let value = serde_json::to_value(&payload).expect("serialize status payload");
+    assert_eq!(value["runtime_mode"], "daemon");
+    assert_eq!(value["active_plane"], "planning");
+    assert_eq!(value["active_stage"], "mechanic");
+    assert_eq!(value["blocked_idle"], true);
+    assert_eq!(value["current_failure_class"], "recon_handoff_invalid");
+    assert_eq!(value["closure_target_open"], true);
+
+    let decoded: ReadOnlyStatusPayload =
+        serde_json::from_value(value).expect("decode status payload");
+    assert_eq!(decoded, payload);
+}
+
+#[test]
 fn python_v0_17_4_stage_result_no_op_runtime_json_fixture_round_trips_as_non_success() {
     let no_op = assert_python_stage_result_fixture_round_trips(python_model_dump_fixture(
         include_str!("fixtures/runtime_json/stage_result_learning_noop.json"),
@@ -608,6 +660,125 @@ fn auto_port_v0_18_1_runtime_contract_scout_pins_probe_recon_sources() {
 }
 
 #[test]
+fn auto_port_v0_18_2_runtime_contract_scout_pins_status_recon_ownership_sources() {
+    let fixture: Value = python_model_dump_fixture(include_str!(
+        "fixtures/runtime_json/auto_port_v0_18_2_runtime_contract_scout.json"
+    ));
+    assert_eq!(fixture["schema_version"], "1.0");
+    assert_eq!(fixture["kind"], "auto_port_v0_18_2_runtime_contract_scout");
+    assert_eq!(fixture["python_reference"]["previous_tag"], "v0.18.1");
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.18.2");
+    assert_eq!(
+        fixture["python_reference"]["previous_commit"],
+        "0396c7852793b212d31345862b38a7d6f3f02854"
+    );
+    assert_eq!(
+        fixture["python_reference"]["target_commit"],
+        "5444cb9485ea90b67b2ed6ba7e0723ae9fe7b79f"
+    );
+    assert_eq!(
+        fixture["python_reference"]["diff_range"],
+        "v0.18.1..v0.18.2"
+    );
+    assert_eq!(
+        fixture["rust_reference"]["current_repo_crate_version"],
+        "0.3.1"
+    );
+    assert_eq!(
+        fixture["rust_reference"]["current_repo_version_role"],
+        "previous_baseline_for_python_v0.18.1"
+    );
+    assert_eq!(fixture["rust_reference"]["planned_crate_version"], "0.3.2");
+    assert_ne!(
+        fixture["rust_reference"]["planned_crate_version"],
+        fixture["rust_reference"]["current_repo_crate_version"],
+        "v0.18.2 runtime scout must not treat Rust 0.3.1 as the target"
+    );
+
+    let sources = fixture["contract_sources"]
+        .as_array()
+        .expect("contract source references are present");
+    for source_path in [
+        "../millrace-py/src/millrace_ai/cli/commands/status.py",
+        "../millrace-py/src/millrace_ai/cli/status_view.py",
+        "../millrace-py/src/millrace_ai/contracts/enums.py",
+        "../millrace-py/src/millrace_ai/contracts/recon.py",
+        "../millrace-py/src/millrace_ai/contracts/stage_metadata.py",
+        "../millrace-py/src/millrace_ai/errors.py",
+        "../millrace-py/src/millrace_ai/runtime/error_recovery.py",
+        "../millrace-py/src/millrace_ai/runtime/recon_transitions.py",
+        "../millrace-py/src/millrace_ai/runtime/result_application.py",
+        "../millrace-py/src/millrace_ai/runtime/stage_requests.py",
+        "../millrace-py/src/millrace_ai/runtime/supervisor.py",
+        "../millrace-py/src/millrace_ai/runtime/tick_cycle.py",
+        "../millrace-py/tests/cli/test_cli.py",
+        "../millrace-py/tests/runtime/test_graph_authority.py",
+        "../millrace-py/tests/runtime/test_recon_packets.py",
+        "../millrace-py/tests/runtime/test_runtime.py",
+    ] {
+        assert!(
+            sources
+                .iter()
+                .any(|value| value.as_str() == Some(source_path)),
+            "missing v0.18.2 runtime/status/recon/ownership source {source_path}"
+        );
+    }
+
+    let targets = fixture["expected_rust_contract_targets"]
+        .as_array()
+        .expect("expected Rust contract targets are present");
+    for target_path in [
+        "src/contracts/enums.rs",
+        "src/contracts/recon.rs",
+        "src/contracts/runtime_json.rs",
+        "src/contracts/stage_metadata.rs",
+        "src/recon_packets.rs",
+        "src/cli/parser.rs",
+        "src/cli/read_only.rs",
+        "src/cli/render.rs",
+        "src/runtime/startup.rs",
+        "src/runtime/supervisor.rs",
+        "src/runtime/tick.rs",
+        "src/runtime/run_traces.rs",
+        "src/workspace/queue_store.rs",
+        "src/workspace/state_store.rs",
+        "tests/contracts_stage_metadata.rs",
+        "tests/contracts_runtime_json.rs",
+        "tests/runtime_serial.rs",
+        "tests/runtime_daemon.rs",
+        "tests/parity_cli.rs",
+        "tests/workspace_queue_state_stores.rs",
+    ] {
+        assert!(
+            targets
+                .iter()
+                .any(|value| value.as_str() == Some(target_path)),
+            "missing v0.18.2 Rust contract target {target_path}"
+        );
+    }
+
+    let guarantees = fixture["no_live_guarantees"]
+        .as_array()
+        .expect("non-live guarantees are present");
+    for guarantee in [
+        "no live Codex runner",
+        "no live Pi runner",
+        "no network",
+        "no credentials",
+        "no web server",
+        "no release upload",
+        "no publishing",
+    ] {
+        assert!(
+            guarantees
+                .iter()
+                .any(|value| value.as_str() == Some(guarantee)),
+            "missing v0.18.2 runtime contract scout guarantee {guarantee}"
+        );
+    }
+}
+
+#[test]
 fn recon_packet_json_fixture_and_markdown_round_trip_exactly() {
     let expected = python_model_dump_fixture(include_str!(
         "fixtures/runtime_json/recon_packet_to_execution.json"
@@ -651,7 +822,22 @@ fn recon_packet_contract_rejects_mismatched_or_empty_fields() {
     let mut missing_emitted_task = fixture();
     missing_emitted_task["emitted_task_id"] = Value::Null;
     let error = ReconPacketDocument::from_json_value(missing_emitted_task).unwrap_err();
-    assert!(error.to_string().contains("emitted_task_id"));
+    assert!(error.to_string().contains("Emitted-Task-ID"));
+
+    let mut to_planning_with_task = fixture();
+    to_planning_with_task["decision"] = json!("to_planning");
+    to_planning_with_task["handoff_target"] = json!("planning");
+    to_planning_with_task["emitted_task_id"] = json!("task-from-probe");
+    to_planning_with_task["emitted_spec_id"] = Value::Null;
+    let error = ReconPacketDocument::from_json_value(to_planning_with_task).unwrap_err();
+    assert!(error.to_string().contains("Emitted-Spec-ID"));
+    assert!(error.to_string().contains("Emitted-Task-ID"));
+
+    let mut to_execution_with_spec = fixture();
+    to_execution_with_spec["emitted_task_id"] = Value::Null;
+    to_execution_with_spec["emitted_spec_id"] = json!("spec-from-probe");
+    let error = ReconPacketDocument::from_json_value(to_execution_with_spec).unwrap_err();
+    assert!(error.to_string().contains("Emitted-Task-ID"));
 
     let mut invalid_emitted_task = fixture();
     invalid_emitted_task["emitted_task_id"] = json!("-bad-task");

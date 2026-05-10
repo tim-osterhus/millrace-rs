@@ -107,6 +107,88 @@ fn initialized_workspace_assets_resolve_deterministically_from_authoritative_roo
 }
 
 #[test]
+fn opt_in_integrated_execution_assets_resolve_without_changing_default_mode() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+
+    let default = resolve_compile_assets(&paths, Some("default_codex")).unwrap();
+    assert!(
+        default
+            .resolved_assets
+            .iter()
+            .all(|asset| asset.compile_time_path != "graphs/execution/with_integrator.json")
+    );
+
+    let integrated = resolve_compile_assets(&paths, Some("default_codex_integrated")).unwrap();
+    assert_eq!(integrated.mode_id, "default_codex_integrated");
+    assert_eq!(
+        integrated
+            .graph_loops
+            .iter()
+            .find(|graph| graph.plane == millrace_ai::contracts::Plane::Execution)
+            .unwrap()
+            .graph_loop
+            .loop_id,
+        "execution.with_integrator"
+    );
+
+    let resolved_paths: Vec<_> = integrated
+        .resolved_assets
+        .iter()
+        .map(|asset| asset.compile_time_path.as_str())
+        .collect();
+    for expected_path in [
+        "modes/default_codex_integrated.json",
+        "graphs/execution/with_integrator.json",
+        "registry/stage_kinds/execution/integrator.json",
+        "entrypoints/execution/integrator.md",
+        "skills/stage/execution/integrator-core/SKILL.md",
+    ] {
+        assert!(
+            resolved_paths.contains(&expected_path),
+            "integrated resolution missed {expected_path}"
+        );
+    }
+    assert!(
+        integrated
+            .resolved_assets
+            .iter()
+            .all(|asset| asset.content_sha256 != MISSING_ASSET_TOKEN)
+    );
+
+    let learning_integrated =
+        resolve_compile_assets(&paths, Some("learning_codex_integrated")).unwrap();
+    assert_eq!(learning_integrated.mode_id, "learning_codex_integrated");
+    assert!(
+        learning_integrated
+            .graph_loops
+            .iter()
+            .any(|graph| graph.graph_loop.loop_id == "learning.standard")
+    );
+    assert!(
+        learning_integrated
+            .mode
+            .concurrency_policy
+            .as_ref()
+            .is_some_and(|policy| policy.may_run_concurrently.len() == 2)
+    );
+    assert_eq!(learning_integrated.mode.learning_trigger_rules.len(), 3);
+    assert!(
+        learning_integrated
+            .mode
+            .stage_runner_bindings
+            .values()
+            .all(|runner| runner == "codex_cli")
+    );
+    assert!(
+        learning_integrated
+            .mode
+            .stage_runner_bindings
+            .contains_key(&millrace_ai::contracts::StageName::Integrator)
+    );
+}
+
+#[test]
 fn mode_resolution_uses_requested_mode_config_default_and_aliases() {
     let temp_dir = TempDir::new().unwrap();
     let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();

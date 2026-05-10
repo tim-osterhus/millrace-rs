@@ -1,6 +1,6 @@
 use super::{
     ContractError, ExecutionTerminalResult, IdentifierErrorReason, LearningTerminalResult, Plane,
-    PlanningTerminalResult, ResultClass, StageName, TerminalResult,
+    PlanningTerminalResult, ResultClass, StageName, TerminalResult, WorkItemKind,
 };
 
 /// Human-readable description of the safe identifier pattern used by Python.
@@ -12,9 +12,17 @@ const FOLLOWUP_CLASSES: &[ResultClass] = &[ResultClass::FollowupNeeded];
 const ESCALATE_PLANNING_CLASSES: &[ResultClass] = &[ResultClass::EscalatePlanning];
 const ONLY_BLOCKED_CLASSES: &[ResultClass] = &[ResultClass::Blocked];
 const BLOCKED_CLASSES: &[ResultClass] = &[ResultClass::Blocked, ResultClass::RecoverableFailure];
+const TASK_WORK_ITEMS: &[WorkItemKind] = &[WorkItemKind::Task];
+const PROBE_WORK_ITEMS: &[WorkItemKind] = &[WorkItemKind::Probe];
+const INCIDENT_WORK_ITEMS: &[WorkItemKind] = &[WorkItemKind::Incident];
+const SPEC_OR_INCIDENT_WORK_ITEMS: &[WorkItemKind] = &[WorkItemKind::Spec, WorkItemKind::Incident];
+const LEARNING_REQUEST_WORK_ITEMS: &[WorkItemKind] = &[WorkItemKind::LearningRequest];
+const NO_ACTIVE_WORK_ITEMS: &[WorkItemKind] = &[];
 
 const E_BUILDER_COMPLETE: TerminalResult =
     TerminalResult::Execution(ExecutionTerminalResult::BuilderComplete);
+const E_INTEGRATION_COMPLETE: TerminalResult =
+    TerminalResult::Execution(ExecutionTerminalResult::IntegrationComplete);
 const E_CHECKER_PASS: TerminalResult =
     TerminalResult::Execution(ExecutionTerminalResult::CheckerPass);
 const E_FIX_NEEDED: TerminalResult = TerminalResult::Execution(ExecutionTerminalResult::FixNeeded);
@@ -126,6 +134,18 @@ const BUILDER_LEGAL: &[TerminalResult] = &[E_BUILDER_COMPLETE, E_BLOCKED];
 const BUILDER_ALLOWED: &[OutcomeResultClasses] = &[
     OutcomeResultClasses {
         terminal_result: E_BUILDER_COMPLETE,
+        result_classes: SUCCESS_CLASSES,
+    },
+    OutcomeResultClasses {
+        terminal_result: E_BLOCKED,
+        result_classes: BLOCKED_CLASSES,
+    },
+];
+
+const INTEGRATOR_LEGAL: &[TerminalResult] = &[E_INTEGRATION_COMPLETE, E_BLOCKED];
+const INTEGRATOR_ALLOWED: &[OutcomeResultClasses] = &[
+    OutcomeResultClasses {
+        terminal_result: E_INTEGRATION_COMPLETE,
         result_classes: SUCCESS_CLASSES,
     },
     OutcomeResultClasses {
@@ -366,6 +386,12 @@ const BUILDER_METADATA: StageMetadata = StageMetadata {
     legal_terminal_results: BUILDER_LEGAL,
     allowed_result_classes_by_outcome: BUILDER_ALLOWED,
 };
+const INTEGRATOR_METADATA: StageMetadata = StageMetadata {
+    stage: StageName::Integrator,
+    plane: Plane::Execution,
+    legal_terminal_results: INTEGRATOR_LEGAL,
+    allowed_result_classes_by_outcome: INTEGRATOR_ALLOWED,
+};
 const CHECKER_METADATA: StageMetadata = StageMetadata {
     stage: StageName::Checker,
     plane: Plane::Execution,
@@ -460,6 +486,7 @@ const CURATOR_METADATA: StageMetadata = StageMetadata {
 /// Stage metadata entries keyed by each stage value.
 pub const STAGE_METADATA_BY_VALUE: &[StageMetadata] = &[
     BUILDER_METADATA,
+    INTEGRATOR_METADATA,
     CHECKER_METADATA,
     FIXER_METADATA,
     DOUBLECHECKER_METADATA,
@@ -480,6 +507,7 @@ pub const STAGE_METADATA_BY_VALUE: &[StageMetadata] = &[
 /// Canonical stage names in metadata order.
 pub const STAGE_NAME_BY_VALUE: &[StageName] = &[
     StageName::Builder,
+    StageName::Integrator,
     StageName::Checker,
     StageName::Fixer,
     StageName::Doublechecker,
@@ -500,6 +528,7 @@ pub const STAGE_NAME_BY_VALUE: &[StageName] = &[
 /// Stage-to-plane relationships in metadata order.
 pub const STAGE_TO_PLANE: &[(StageName, Plane)] = &[
     (StageName::Builder, Plane::Execution),
+    (StageName::Integrator, Plane::Execution),
     (StageName::Checker, Plane::Execution),
     (StageName::Fixer, Plane::Execution),
     (StageName::Doublechecker, Plane::Execution),
@@ -517,9 +546,31 @@ pub const STAGE_TO_PLANE: &[(StageName, Plane)] = &[
     (StageName::Curator, Plane::Learning),
 ];
 
+/// Python-compatible active work-item ownership policy for each stage.
+pub const STAGE_ALLOWED_WORK_ITEM_KINDS: &[(StageName, &[WorkItemKind])] = &[
+    (StageName::Builder, TASK_WORK_ITEMS),
+    (StageName::Integrator, TASK_WORK_ITEMS),
+    (StageName::Checker, TASK_WORK_ITEMS),
+    (StageName::Fixer, TASK_WORK_ITEMS),
+    (StageName::Doublechecker, TASK_WORK_ITEMS),
+    (StageName::Updater, TASK_WORK_ITEMS),
+    (StageName::Troubleshooter, TASK_WORK_ITEMS),
+    (StageName::Consultant, TASK_WORK_ITEMS),
+    (StageName::Recon, PROBE_WORK_ITEMS),
+    (StageName::Planner, SPEC_OR_INCIDENT_WORK_ITEMS),
+    (StageName::Manager, SPEC_OR_INCIDENT_WORK_ITEMS),
+    (StageName::Mechanic, SPEC_OR_INCIDENT_WORK_ITEMS),
+    (StageName::Auditor, INCIDENT_WORK_ITEMS),
+    (StageName::Arbiter, NO_ACTIVE_WORK_ITEMS),
+    (StageName::Analyst, LEARNING_REQUEST_WORK_ITEMS),
+    (StageName::Professor, LEARNING_REQUEST_WORK_ITEMS),
+    (StageName::Curator, LEARNING_REQUEST_WORK_ITEMS),
+];
+
 /// Legal terminal results for every stage in metadata order.
 pub const STAGE_LEGAL_TERMINAL_RESULTS: &[(StageName, &[TerminalResult])] = &[
     (StageName::Builder, BUILDER_LEGAL),
+    (StageName::Integrator, INTEGRATOR_LEGAL),
     (StageName::Checker, CHECKER_LEGAL),
     (StageName::Fixer, FIXER_LEGAL),
     (StageName::Doublechecker, DOUBLECHECKER_LEGAL),
@@ -542,6 +593,7 @@ pub const STAGE_LEGAL_TERMINAL_RESULTS: &[(StageName, &[TerminalResult])] = &[
 pub fn stage_metadata(stage: StageName) -> &'static StageMetadata {
     match stage {
         StageName::Builder => &BUILDER_METADATA,
+        StageName::Integrator => &INTEGRATOR_METADATA,
         StageName::Checker => &CHECKER_METADATA,
         StageName::Fixer => &FIXER_METADATA,
         StageName::Doublechecker => &DOUBLECHECKER_METADATA,
@@ -579,6 +631,36 @@ pub fn legal_terminal_results(stage: StageName) -> &'static [TerminalResult] {
     stage_metadata(stage).legal_terminal_results
 }
 
+/// Returns the active work-item kinds that may be sent to a stage.
+#[must_use]
+pub const fn allowed_work_item_kinds(stage: StageName) -> &'static [WorkItemKind] {
+    match stage {
+        StageName::Builder
+        | StageName::Integrator
+        | StageName::Checker
+        | StageName::Fixer
+        | StageName::Doublechecker
+        | StageName::Updater
+        | StageName::Troubleshooter
+        | StageName::Consultant => TASK_WORK_ITEMS,
+        StageName::Recon => PROBE_WORK_ITEMS,
+        StageName::Planner | StageName::Manager | StageName::Mechanic => {
+            SPEC_OR_INCIDENT_WORK_ITEMS
+        }
+        StageName::Auditor => INCIDENT_WORK_ITEMS,
+        StageName::Arbiter => NO_ACTIVE_WORK_ITEMS,
+        StageName::Analyst | StageName::Professor | StageName::Curator => {
+            LEARNING_REQUEST_WORK_ITEMS
+        }
+    }
+}
+
+/// Returns true when a stage may receive the active work-item kind.
+#[must_use]
+pub fn stage_allows_work_item_kind(stage: StageName, work_item_kind: WorkItemKind) -> bool {
+    allowed_work_item_kinds(stage).contains(&work_item_kind)
+}
+
 /// Returns the legal terminal markers for a stage.
 #[must_use]
 pub fn legal_terminal_markers(stage: StageName) -> Vec<String> {
@@ -593,6 +675,7 @@ pub fn legal_terminal_markers(stage: StageName) -> Vec<String> {
 pub const fn running_status_marker(stage: StageName) -> &'static str {
     match stage {
         StageName::Builder => "BUILDER_RUNNING",
+        StageName::Integrator => "INTEGRATOR_RUNNING",
         StageName::Checker => "CHECKER_RUNNING",
         StageName::Fixer => "FIXER_RUNNING",
         StageName::Doublechecker => "DOUBLECHECKER_RUNNING",
@@ -621,6 +704,7 @@ pub fn allowed_result_classes_by_outcome(stage: StageName) -> &'static [OutcomeR
 pub fn stage_name_for_value(stage_value: &str) -> Result<StageName, ContractError> {
     match stage_value {
         "builder" => Ok(StageName::Builder),
+        "integrator" => Ok(StageName::Integrator),
         "checker" => Ok(StageName::Checker),
         "fixer" => Ok(StageName::Fixer),
         "doublechecker" => Ok(StageName::Doublechecker),

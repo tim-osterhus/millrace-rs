@@ -21,9 +21,9 @@ Run the published-package verification path on a clean release candidate:
 cargo publish --dry-run
 ```
 
-During active Millrace Builder/Checker worktree validation, the `0.3.1`
-release fixture records the plain dry-run dirty-worktree limitation alongside
-the non-uploading substitutes:
+During active Millrace Builder/Checker worktree validation, the `0.3.2`
+release fixture records offline package verification as Builder evidence.
+The non-uploading dirty-worktree substitutes are:
 
 ```bash
 cargo publish --dry-run --allow-dirty
@@ -38,15 +38,33 @@ The test suite covers:
   parity
 - public contract exports and runtime JSON schemas
 - work-document parsing and rendering
-- CLI parity for init, status, config, modes, queue, skills, control, runs,
-  doctor, upgrade, and run commands
+- CLI parity for init, status text/JSON diagnostics, config, modes, queue,
+  skills, control, runs, doctor, upgrade, and run commands
 - Codex CLI and Pi RPC runner adapter construction and artifact normalization
 - serial runtime and daemon runtime behavior
 - workspace paths, initialization, managed assets, doctor checks, queue/state
   stores, runtime control, and runtime locks
-- release fixtures through Rust `0.3.1` version metadata, docs, package
-  include rules, Python `v0.18.1` source references, required release-check
-  results, package verification evidence, and explicit web-gap evidence
+- Integrator contracts/assets/compiler graph coverage for execution stage
+  metadata, managed live/baseline assets, `execution.with_integrator`
+  materialization/export, workspace baseline synchronization, opt-in integrated
+  mode resolution, runtime routing, and run-trace evidence
+- release fixtures through Rust `0.3.2` version metadata, docs, package
+  include rules, Python `v0.18.2` source references, required release-readiness
+  command results, package verification evidence, and explicit web-gap evidence
+- target-facing Python `v0.18.1..v0.18.2` guardrail fixtures for Rust `0.3.2`
+  integrated modes, status JSON diagnostics, Recon hardening, stage/work-item
+  ownership, docs/version, final release checks, package dry-run evidence,
+  web-package evidence, generated scout mappings, and no-live guarantees, with
+  those behavior targets now implemented
+- Recon invalid-handoff hardening coverage for handoff-specific emitted-id
+  validation, generated task/spec id checks before import, durable
+  `recon_handoff_invalid` runtime error evidence, active-probe blocking, and
+  compiler graph validation that rejects direct Recon handoff edges to stage
+  nodes
+- stage/work-item ownership coverage for the typed ownership matrix,
+  `StageRunRequest` validation, serial and daemon pre-runner guards, stale
+  pairing runtime error/event evidence, active-artifact requeue behavior,
+  snapshot clearing, and closure-target Arbiter exemption
 
 Some live smoke tests are gated because they require real local credentials,
 network access, or provider CLIs:

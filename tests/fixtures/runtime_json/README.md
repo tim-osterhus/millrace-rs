@@ -14,13 +14,33 @@ contracts plus runtime trace persistence and fallback-inspection coverage.
 result-application source references plus the expected Rust contract/test
 targets. It is target-facing guardrail evidence for the probe/recon auto-port
 lineage and does not require live Python execution.
+`auto_port_v0_18_2_runtime_contract_scout.json` pins the Python
+`v0.18.1..v0.18.2` status JSON, Recon invalid-handoff, graph validation,
+stage/work-item ownership, runtime error, and runtime test source references
+plus the expected Rust contract/test targets. It is target-facing guardrail
+evidence for the Integrator/status/recon/ownership auto-port lineage and does
+not require live Python execution. The status JSON portion is now backed by the
+Rust `ReadOnlyStatusPayload` contract coverage for blocked-idle,
+current-failure-class, latest runtime error report path, and closure-target
+diagnostics. The Recon hardening portion is now backed by contract/runtime
+coverage for handoff-specific emitted-id validation, `recon_handoff_invalid`
+runtime error evidence, blocked active-probe disposition, and generated
+task/spec id checks before queue import.
+The stage/work-item ownership portion is now backed by Rust contract and
+runtime coverage for the typed ownership matrix, `StageRunRequest` validation,
+serial and daemon pre-runner guards, `stage_work_item_ownership_invalid`
+runtime error evidence, `runtime_stage_work_item_ownership_invalid` event
+evidence, active-artifact requeue behavior, active snapshot clearing, and
+closure-target Arbiter exemption.
 `mailbox_add_probe_payload.json` and `recon_packet_to_execution.json` pin the
 implemented v0.18.1 add-probe mailbox payload and Recon packet contract
 fixtures used by the Rust runtime JSON contract tests.
-The final Rust `0.3.1` release evidence in
-`tests/fixtures/cli_parity/auto_port_v0_18_1_release_parity_evidence.json`
-uses these fixtures as package-readiness proof that add-probe mailbox contracts
-and Recon packet JSON are shipped with the crate test evidence.
+The Rust `0.3.2` release evidence in
+`tests/fixtures/cli_parity/auto_port_v0_18_2_release_parity_evidence.json`
+uses these fixtures as package-readiness proof that status JSON diagnostics,
+Recon invalid-handoff evidence, stage/work-item ownership evidence, add-probe
+mailbox contracts, and Recon packet JSON are shipped with the crate test
+evidence.
 
 Regenerate them from the repository root with:
 

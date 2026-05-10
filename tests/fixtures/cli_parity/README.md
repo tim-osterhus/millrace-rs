@@ -40,7 +40,8 @@ records the Python v0.17.3 optional `packages/millrace-web` surface as an
 intentional unsupported Rust parity gap, records the Python v0.17.4 package
 version/dependency sync, records the Python v0.18.0 graph/trace dashboard
 evidence for that same gap, and records the Python v0.18.1 package/runtime app
-version sync without authorizing a Rust web implementation. It names
+version sync plus the Python v0.18.2 package/runtime app version sync without
+authorizing a Rust web implementation. It names
 the workspace registry, summary DTO, queue/run/snapshot/baseline/compiled-plan/
 Arbiter/usage-governance/event readers, static shell, CLI/server boundary, and
 package-boundary tests, while documenting that Rust currently keeps the
@@ -105,6 +106,36 @@ and the Python v0.18.1 `millrace-web` package/version unsupported-gap evidence.
 `tests/parity_cli.rs` rejects missing, malformed, unknown, stale, or omitted
 Rust test references in that release fixture and confirms release evidence does
 not require publish, upload, push, tag, or deployment commands.
+`auto_port_v0_18_2_parity_evidence.json` records target-facing guardrails for
+the Python `v0.18.1..v0.18.2` to Rust `0.3.2` auto-port. It maps every
+generated scout changed path to an expected Rust implementation, test,
+documentation, fixture, package evidence, or unsupported-gap evidence target;
+pins Integrator assets, `execution.with_integrator`, integrated modes, status
+JSON diagnostics, Recon invalid-handoff hardening, graph validation guards,
+stage/work-item ownership, docs, version, release-check, package dry-run, and
+`millrace-web` source references; and keeps Rust `0.3.1` as the previous
+baseline while Rust `0.3.2` is the target. The status JSON diagnostics targets are now
+implemented and covered by `tests/parity_cli.rs` for text/JSON payload
+coherence, blocked-idle and runtime-error context diagnostics, deterministic
+format rejections, text-only `status watch` rejection, and no-mutation
+guarantees. The Recon hardening targets are now implemented and covered by
+focused contract, compiler, serial runtime, daemon runtime, and parity guardrail
+tests for emitted-id validation, invalid-handoff runtime error evidence,
+active-probe blocking, and direct-stage graph edge rejection. The ownership
+targets are now implemented and covered by focused contract and runtime tests
+for the stage/work-item matrix, request validation, serial and daemon
+pre-runner guards, stale-pairing error/event evidence, safe active-artifact
+requeue, snapshot clearing, and closure-target Arbiter exemption.
+`auto_port_v0_18_2_release_parity_evidence.json` records the Rust `0.3.2`
+final release-parity evidence for Python `v0.18.1..v0.18.2`, including
+version-visible CLI metadata, generated-scout path mapping evidence, package
+include rules, README/changelog/roadmap/runtime docs,
+Integrator/status/Recon/ownership package-readiness evidence, required
+release-readiness command results, source-package mapping, the dirty-worktree
+publish dry-run limitation, allow-dirty dry-run/package substitutes, and the
+Python v0.18.2 `millrace-web` package/version unsupported-gap evidence. It
+also confirms Builder release evidence does not require publish, upload, push,
+tag, or deployment commands.
 
 The evidence is intentionally not a byte-for-byte transcript. Paths, generated
 ids, timestamps, package versions, command ids, run ids, compact run handles,

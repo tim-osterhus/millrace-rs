@@ -911,6 +911,7 @@ impl GraphLoopDefinition {
                 }
             }
         }
+        validate_recon_handoff_edges(&self.nodes, &self.edges)?;
         if let Some(policies) = &self.dynamic_policies {
             for policy in &policies.resume_policies {
                 require_known_node(
@@ -992,6 +993,39 @@ impl GraphLoopDefinition {
         }
         Ok(())
     }
+}
+
+fn validate_recon_handoff_edges(
+    nodes: &[GraphLoopNodeDefinition],
+    edges: &[GraphLoopEdgeDefinition],
+) -> Result<(), CompilerContractError> {
+    let recon_node_ids: HashSet<&str> = nodes
+        .iter()
+        .filter(|node| node.stage_kind_id == "recon")
+        .map(|node| node.node_id.as_str())
+        .collect();
+    if recon_node_ids.is_empty() {
+        return Ok(());
+    }
+
+    for edge in edges {
+        if !recon_node_ids.contains(edge.from_node_id.as_str()) || edge.to_node_id.is_none() {
+            continue;
+        }
+        if edge
+            .on_outcomes
+            .iter()
+            .any(|outcome| matches!(outcome.as_str(), "RECON_TO_EXECUTION" | "RECON_TO_PLANNING"))
+        {
+            return Err(CompilerContractError::InvalidDocument {
+                message: format!(
+                    "edge {} routes a Recon handoff outcome directly to a stage node; Recon task/spec promotion must target runtime-owned terminal states",
+                    edge.edge_id
+                ),
+            });
+        }
+    }
+    Ok(())
 }
 
 /// Validates graph node references against a loaded stage-kind registry.

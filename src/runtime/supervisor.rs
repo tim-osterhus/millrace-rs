@@ -449,8 +449,9 @@ where
 
         let mut dispatched = 0;
         for active_run in active_runs_in_dispatch_order(&session.snapshot) {
-            if !self.completed_workers.contains_key(&active_run.plane) {
-                self.start_worker(session, active_run.plane, options, now)?;
+            if !self.completed_workers.contains_key(&active_run.plane)
+                && self.start_worker(session, active_run.plane, options, now)?
+            {
                 dispatched += 1;
             }
         }
@@ -511,8 +512,9 @@ where
             )
             && activate_completion_stage_if_ready(session, options, now)?
         {
-            self.start_worker(session, Plane::Planning, options, now)?;
-            return Ok(1);
+            return self
+                .start_worker(session, Plane::Planning, options, now)
+                .map(|started| if started { 1 } else { 0 });
         }
         Ok(0)
     }
@@ -534,8 +536,8 @@ where
         if !activate_next_claim_for_plane(session, plane, options, now)? {
             return Ok(0);
         }
-        self.start_worker(session, plane, options, now)?;
-        Ok(1)
+        self.start_worker(session, plane, options, now)
+            .map(|started| if started { 1 } else { 0 })
     }
 
     fn start_worker(
@@ -544,9 +546,12 @@ where
         plane: Plane,
         options: &RuntimeTickOptions,
         now: &Timestamp,
-    ) -> RuntimeTickResult<()> {
+    ) -> RuntimeTickResult<bool> {
         if self.completed_workers.contains_key(&plane) {
-            return Ok(());
+            return Ok(false);
+        }
+        if tick::guard_stage_work_item_ownership_for_plane(session, plane, now)?.is_some() {
+            return Ok(false);
         }
         let request = build_stage_run_request_for_plane(session, plane, options, now)?;
         mark_stage_running_and_emit_started(session, &request, now)?;
@@ -555,7 +560,7 @@ where
         let outcome = run_stage_worker(active_run, request, &self.runner)?;
         outcome.validate()?;
         self.completed_workers.insert(plane, outcome);
-        Ok(())
+        Ok(true)
     }
 }
 

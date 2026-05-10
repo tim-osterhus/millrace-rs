@@ -34,3 +34,12 @@ For Python `v0.18.1` compiler parity, the planning graph also includes the
 preserves the Recon node, `recon-core` skill path, legal Recon terminal
 outcomes/classes, timeout metadata, mode runner bindings, and terminal states
 without making graph exports runtime routing authority.
+
+For Python `v0.18.2` compiler parity, Rust also packages the opt-in
+`execution.with_integrator` graph and loop assets, the Integrator execution
+stage metadata, the Integrator entrypoint/core skill, and the
+`default_codex_integrated` and `learning_codex_integrated` mode assets. Default
+execution modes continue to route Builder success directly to Checker; only the
+integrated modes route Builder success through Integrator before Checker.
+Compiler graph validation also rejects direct Recon handoff edges to stage
+nodes, preserving runtime ownership of generated task/spec promotion.

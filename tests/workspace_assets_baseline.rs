@@ -121,15 +121,22 @@ fn initialize_workspace_deploys_managed_assets_and_manifest_io() {
 
     let representative_assets = [
         "entrypoints/execution/builder.md",
+        "entrypoints/execution/integrator.md",
         "entrypoints/planning/recon.md",
         "skills/stage/execution/builder-core/SKILL.md",
+        "skills/stage/execution/integrator-core/SKILL.md",
         "skills/stage/planning/recon-core/SKILL.md",
         "modes/default_codex.json",
+        "modes/default_codex_integrated.json",
+        "modes/learning_codex_integrated.json",
         "graphs/execution/standard.json",
+        "graphs/execution/with_integrator.json",
         "graphs/planning/standard.json",
         "registry/stage_kinds/execution/builder.json",
+        "registry/stage_kinds/execution/integrator.json",
         "registry/stage_kinds/planning/recon.json",
         "loops/execution/default.json",
+        "loops/execution/with_integrator.json",
     ];
 
     let manifest = load_baseline_manifest(&paths).unwrap();
@@ -172,6 +179,119 @@ fn initialize_workspace_deploys_managed_assets_and_manifest_io() {
         "operator edit\n"
     );
     assert_eq!(load_baseline_manifest(&paths).unwrap(), manifest);
+}
+
+#[test]
+fn initialized_workspace_integrator_assets_match_packaged_baseline() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+    let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/assets/baseline");
+    let integrator_assets = [
+        "entrypoints/execution/integrator.md",
+        "skills/stage/execution/integrator-core/SKILL.md",
+        "registry/stage_kinds/execution/integrator.json",
+        "graphs/execution/with_integrator.json",
+        "loops/execution/with_integrator.json",
+        "modes/default_codex_integrated.json",
+        "modes/learning_codex_integrated.json",
+        "skills/skills_index.md",
+    ];
+
+    for relative_path in integrator_assets {
+        assert_eq!(
+            fs::read(paths.runtime_root.join(relative_path)).unwrap(),
+            fs::read(source_root.join(relative_path)).unwrap(),
+            "workspace Integrator asset drifted from packaged baseline: {relative_path}",
+        );
+    }
+
+    let graph: Value = serde_json::from_slice(
+        &fs::read(
+            paths
+                .runtime_root
+                .join("graphs/execution/with_integrator.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(
+        graph["nodes"].as_array().unwrap().iter().any(|node| {
+            node["node_id"] == "integrator" && node["stage_kind_id"] == "integrator"
+        })
+    );
+    assert!(graph["edges"].as_array().unwrap().iter().any(|edge| {
+        edge["edge_id"] == "builder-complete-to-integrator" && edge["to_node_id"] == "integrator"
+    }));
+    assert!(graph["edges"].as_array().unwrap().iter().any(|edge| {
+        edge["edge_id"] == "integrator-complete-to-checker"
+            && edge["on_outcomes"].as_array().unwrap()
+                == &vec![Value::String("INTEGRATION_COMPLETE".to_owned())]
+    }));
+
+    let registry: Value = serde_json::from_slice(
+        &fs::read(
+            paths
+                .runtime_root
+                .join("registry/stage_kinds/execution/integrator.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(registry["running_status_marker"], "INTEGRATOR_RUNNING");
+    assert_eq!(
+        registry["required_skill_paths"][0],
+        "skills/stage/execution/integrator-core/SKILL.md"
+    );
+
+    let skills_index =
+        fs::read_to_string(paths.runtime_root.join("skills/skills_index.md")).unwrap();
+    assert!(skills_index.contains("| `integrator-core` |"));
+
+    let default_mode: Value = serde_json::from_slice(
+        &fs::read(
+            paths
+                .runtime_root
+                .join("modes/default_codex_integrated.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        default_mode["loop_ids_by_plane"]["execution"],
+        "execution.with_integrator"
+    );
+    assert_eq!(
+        default_mode["stage_runner_bindings"]["integrator"],
+        "codex_cli"
+    );
+
+    let learning_mode: Value = serde_json::from_slice(
+        &fs::read(
+            paths
+                .runtime_root
+                .join("modes/learning_codex_integrated.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        learning_mode["loop_ids_by_plane"]["learning"],
+        "learning.standard"
+    );
+    assert_eq!(
+        learning_mode["concurrency_policy"]["may_run_concurrently"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(
+        learning_mode["learning_trigger_rules"]
+            .as_array()
+            .unwrap()
+            .len(),
+        3
+    );
 }
 
 #[test]

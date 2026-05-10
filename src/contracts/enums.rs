@@ -97,6 +97,7 @@ string_enum! {
     /// Execution-plane stage names.
     pub enum ExecutionStageName {
         Builder => "builder",
+        Integrator => "integrator",
         Checker => "checker",
         Fixer => "fixer",
         Doublechecker => "doublechecker",
@@ -131,6 +132,7 @@ string_enum! {
     /// All stage names across runtime planes.
     pub enum StageName {
         Builder => "builder",
+        Integrator => "integrator",
         Checker => "checker",
         Fixer => "fixer",
         Doublechecker => "doublechecker",
@@ -155,6 +157,7 @@ impl StageName {
     pub const fn plane(self) -> Plane {
         match self {
             Self::Builder
+            | Self::Integrator
             | Self::Checker
             | Self::Fixer
             | Self::Doublechecker
@@ -176,6 +179,7 @@ impl From<ExecutionStageName> for StageName {
     fn from(value: ExecutionStageName) -> Self {
         match value {
             ExecutionStageName::Builder => Self::Builder,
+            ExecutionStageName::Integrator => Self::Integrator,
             ExecutionStageName::Checker => Self::Checker,
             ExecutionStageName::Fixer => Self::Fixer,
             ExecutionStageName::Doublechecker => Self::Doublechecker,
@@ -213,6 +217,7 @@ string_enum! {
     /// Execution-plane terminal results.
     pub enum ExecutionTerminalResult {
         BuilderComplete => "BUILDER_COMPLETE",
+        IntegrationComplete => "INTEGRATION_COMPLETE",
         CheckerPass => "CHECKER_PASS",
         FixNeeded => "FIX_NEEDED",
         FixerComplete => "FIXER_COMPLETE",
@@ -471,6 +476,8 @@ string_enum! {
         ExecutionWorkItemCompletionConflict => "execution_work_item_completion_conflict",
         PlanningPostStageApplyFailed => "planning_post_stage_apply_failed",
         ExecutionPostStageApplyFailed => "execution_post_stage_apply_failed",
+        ReconHandoffInvalid => "recon_handoff_invalid",
+        StageWorkItemOwnershipInvalid => "stage_work_item_ownership_invalid",
     }
 }
 

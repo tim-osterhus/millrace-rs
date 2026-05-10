@@ -908,6 +908,7 @@ fn run_status_group(args: Vec<String>) -> CliOutput {
         repeatable_workspace_spec(),
         value_spec("--max-updates", EmptyValue::NonBlank),
         value_spec("--interval-seconds", EmptyValue::NonBlank),
+        value_spec("--format", EmptyValue::NonBlank),
     ];
     let parsed = match parse_or_output(args, &specs) {
         Ok(parsed) => parsed,
@@ -924,12 +925,24 @@ fn run_status_group(args: Vec<String>) -> CliOutput {
         Ok(paths_list) => paths_list,
         Err(output) => return output,
     };
+    let format = match render_format(parsed.value("--format").unwrap_or("text")) {
+        Ok(format) => format,
+        Err(output) => return output,
+    };
+    if command == "watch" && format == GraphTraceOutputFormat::Json {
+        return CliOutput::stdout_failure("status watch only supports text format");
+    }
+    if format == GraphTraceOutputFormat::Json && paths_list.len() != 1 {
+        return CliOutput::stdout_failure("status JSON output requires exactly one workspace");
+    }
     let lines = if command == "watch" {
         read_only::status_watch_lines(
             &paths_list,
             parsed.value("--max-updates"),
             parsed.value("--interval-seconds"),
         )
+    } else if format == GraphTraceOutputFormat::Json {
+        read_only::status_json(&paths_list[0]).map(|rendered| vec![rendered])
     } else if paths_list.len() == 1 {
         read_only::status_lines(&paths_list[0])
     } else {

@@ -279,6 +279,7 @@ fn try_upsert_stage_result_trace_node(
     for edge in &mut trace.edges {
         link_edge_target(edge, &node);
     }
+    sort_trace_nodes(&mut trace.nodes, &trace.edges);
     let notes = without_derived_note(&trace.notes);
     update_trace_header(
         &mut trace,
@@ -302,6 +303,7 @@ fn try_record_router_decision_trace(
         .edges
         .retain(|existing| existing.trace_edge_id != edge.trace_edge_id);
     trace.edges.push(edge);
+    sort_trace_nodes(&mut trace.nodes, &trace.edges);
     let notes = without_derived_note(&trace.notes);
     update_trace_header(
         &mut trace,
@@ -535,6 +537,39 @@ fn link_edge_target(edge: &mut RunTraceEdge, node: &RunTraceNode) {
     {
         edge.target_trace_node_id = Some(node.trace_node_id.clone());
     }
+}
+
+fn sort_trace_nodes(nodes: &mut [RunTraceNode], edges: &[RunTraceEdge]) {
+    nodes.sort_by(|left, right| {
+        (
+            trace_node_depth(left, edges),
+            left.started_at.as_str(),
+            left.completed_at.as_str(),
+            left.trace_node_id.as_str(),
+        )
+            .cmp(&(
+                trace_node_depth(right, edges),
+                right.started_at.as_str(),
+                right.completed_at.as_str(),
+                right.trace_node_id.as_str(),
+            ))
+    });
+}
+
+fn trace_node_depth(node: &RunTraceNode, edges: &[RunTraceEdge]) -> usize {
+    let mut depth = 0;
+    let mut current = node.trace_node_id.as_str();
+    for _ in 0..edges.len() {
+        let Some(parent) = edges
+            .iter()
+            .find(|edge| edge.target_trace_node_id.as_deref() == Some(current))
+        else {
+            break;
+        };
+        depth += 1;
+        current = parent.source_trace_node_id.as_str();
+    }
+    depth
 }
 
 fn spawned_kind_from_path(path: &Path) -> RunTraceSpawnedWorkKind {

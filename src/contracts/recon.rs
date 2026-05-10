@@ -351,39 +351,37 @@ impl ReconPacketDocument {
             ReconDecision::ToExecution => {
                 if self.emitted_task_id.is_none() {
                     return Err(ReconPacketError::InvalidDocument {
-                        message: "to_execution decisions require emitted_task_id".to_owned(),
+                        message: "to_execution decisions require Emitted-Task-ID".to_owned(),
                     });
                 }
                 if self.emitted_spec_id.is_some() {
                     return Err(ReconPacketError::InvalidDocument {
-                        message: "emitted_spec_id is only valid for to_planning decisions"
-                            .to_owned(),
+                        message: "to_execution decisions require Emitted-Task-ID; Emitted-Spec-ID is only valid for to_planning decisions".to_owned(),
                     });
                 }
             }
             ReconDecision::ToPlanning => {
-                if self.emitted_spec_id.is_none() {
-                    return Err(ReconPacketError::InvalidDocument {
-                        message: "to_planning decisions require emitted_spec_id".to_owned(),
-                    });
-                }
                 if self.emitted_task_id.is_some() {
                     return Err(ReconPacketError::InvalidDocument {
-                        message: "emitted_task_id is only valid for to_execution decisions"
-                            .to_owned(),
+                        message: "to_planning decisions require Emitted-Spec-ID; Emitted-Task-ID is only valid for to_execution decisions".to_owned(),
+                    });
+                }
+                if self.emitted_spec_id.is_none() {
+                    return Err(ReconPacketError::InvalidDocument {
+                        message: "to_planning decisions require Emitted-Spec-ID".to_owned(),
                     });
                 }
             }
             ReconDecision::Blocked | ReconDecision::Noop => {
                 if self.emitted_task_id.is_some() {
                     return Err(ReconPacketError::InvalidDocument {
-                        message: "emitted_task_id is only valid for to_execution decisions"
+                        message: "Emitted-Task-ID is only valid for to_execution decisions"
                             .to_owned(),
                     });
                 }
                 if self.emitted_spec_id.is_some() {
                     return Err(ReconPacketError::InvalidDocument {
-                        message: "emitted_spec_id is only valid for to_planning decisions"
+                        message: "Emitted-Spec-ID is only valid for to_planning decisions"
                             .to_owned(),
                     });
                 }

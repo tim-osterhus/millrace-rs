@@ -10,11 +10,24 @@ evidence for Python `v0.18.0..v0.18.1`. It pins the Recon managed assets,
 planning graph entry, mode runner bindings, stage-kind registry, compiler
 materialization source references, and expected Rust fixture/test targets
 alongside the implemented normalized compiler parity fixture.
-The final Rust `0.3.1` release evidence in
-`tests/fixtures/cli_parity/auto_port_v0_18_1_release_parity_evidence.json`
-uses this compiler evidence as package-readiness proof that Recon entrypoints,
-stage-kind registry files, skills, mode bindings, and graph fixtures are
-included by the crate package boundary.
+`auto_port_v0_18_2_compiler_contract_scout.json` is target-facing scout
+evidence for Python `v0.18.1..v0.18.2`. It pins the Integrator entrypoint,
+Checker entrypoint update, `execution.with_integrator` graph and loop assets,
+integrated Codex mode assets, Integrator stage-kind registry, Integrator core
+skill, package baseline targets, compiler targets, and fixture/test targets.
+The Integrator contracts/assets/compiler graph subset is now implemented and
+covered by focused Rust contract, asset, materialization/export, and
+workspace-baseline tests. Integrated Codex mode assets and runtime-routing
+coverage are now implemented by focused compiler, CLI, serial runtime, daemon
+runtime, and baseline tests. Compiler graph validation now also rejects direct
+edges from Recon handoff outcomes to stage nodes so generated task/spec
+promotion stays runtime-owned.
+The Rust `0.3.2` release evidence in
+`tests/fixtures/cli_parity/auto_port_v0_18_2_release_parity_evidence.json`
+uses this compiler evidence as package-readiness proof that Integrator
+entrypoints, stage-kind registry files, skills, integrated mode bindings, graph
+fixtures, and the v0.18.2 compiler scout fixture are included by the crate
+package boundary.
 
 Regenerate intentionally with:
 

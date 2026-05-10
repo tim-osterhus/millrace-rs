@@ -183,6 +183,14 @@ fn supervisor_runner() -> FakeRunner {
     let config = FakeRunnerConfig::new(FakeRunnerResult::terminal_marker("### BUILDER_COMPLETE"))
         .unwrap()
         .with_stage_result(
+            StageName::Integrator,
+            FakeRunnerResult::terminal_marker("### INTEGRATION_COMPLETE"),
+        )
+        .with_stage_result(
+            StageName::Checker,
+            FakeRunnerResult::terminal_marker("### CHECKER_PASS"),
+        )
+        .with_stage_result(
             StageName::Planner,
             FakeRunnerResult::terminal_marker("### PLANNER_COMPLETE"),
         )
@@ -2233,6 +2241,96 @@ fn daemon_loop_runs_one_max_tick_drains_worker_and_releases_lock() {
     assert_eq!(trace.status.as_str(), "complete");
     assert_eq!(trace.nodes[0].stage, "updater");
     assert_eq!(trace.edges[0].edge_kind, "idle");
+}
+
+#[test]
+fn daemon_supervisor_integrated_mode_drains_builder_integrator_checker_sequence() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    fs::write(
+        &paths.runtime_config_file,
+        "[runtime]\ndefault_mode = \"default_codex_integrated\"\nrun_style = \"daemon\"\n",
+    )
+    .unwrap();
+    QueueStore::from_paths(paths.clone())
+        .enqueue_task(&task_document("task-integrated-daemon"))
+        .unwrap();
+
+    let mut session =
+        startup_runtime_daemon_for_paths(&paths, daemon_options("integrated-daemon")).unwrap();
+    assert_eq!(
+        session.compiled_plan.execution_loop_id,
+        "execution.with_integrator"
+    );
+    let mut supervisor = RuntimeDaemonSupervisor::new(supervisor_runner());
+
+    let first = supervisor
+        .run_cycle(&mut session, runtime_tick_options())
+        .unwrap();
+    assert_eq!(first.dispatched_count, 1);
+    assert!(first.completions.is_empty());
+
+    let second = supervisor
+        .run_cycle(&mut session, runtime_tick_options())
+        .unwrap();
+    assert_eq!(second.completions.len(), 1);
+    assert_eq!(
+        second.completions[0].stage_result.as_ref().unwrap().stage,
+        StageName::Builder
+    );
+    assert_eq!(
+        second.completions[0]
+            .router_decision
+            .as_ref()
+            .unwrap()
+            .next_stage,
+        Some(StageName::Integrator)
+    );
+    assert_eq!(second.dispatched_count, 1);
+    assert_eq!(
+        load_snapshot(&paths).unwrap().active_stage,
+        Some(StageName::Integrator)
+    );
+
+    let third = supervisor
+        .run_cycle(&mut session, runtime_tick_options())
+        .unwrap();
+    assert_eq!(third.completions.len(), 1);
+    assert_eq!(
+        third.completions[0].stage_result.as_ref().unwrap().stage,
+        StageName::Integrator
+    );
+    assert_eq!(
+        third.completions[0]
+            .router_decision
+            .as_ref()
+            .unwrap()
+            .next_stage,
+        Some(StageName::Checker)
+    );
+    assert_eq!(third.dispatched_count, 1);
+    assert_eq!(
+        load_snapshot(&paths).unwrap().active_stage,
+        Some(StageName::Checker)
+    );
+
+    let run_id = &second.completions[0].run_id;
+    let trace = RunTraceGraph::from_json_str(
+        &fs::read_to_string(paths.runs_dir.join(run_id).join("run_trace.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        trace
+            .nodes
+            .iter()
+            .map(|node| node.stage.as_str())
+            .collect::<Vec<_>>(),
+        vec!["builder", "integrator"]
+    );
+    assert_eq!(trace.edges[0].target_node_id.as_deref(), Some("integrator"));
+    assert_eq!(trace.edges[1].target_node_id.as_deref(), Some("checker"));
+
+    session.finish().unwrap();
 }
 
 #[test]

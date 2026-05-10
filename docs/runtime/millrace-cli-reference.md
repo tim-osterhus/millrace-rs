@@ -11,7 +11,7 @@ millrace --version
 millrace version
 ```
 
-For Rust `0.3.1`, both commands print `millrace 0.3.1`.
+For Rust `0.3.2`, both commands print `millrace 0.3.2`.
 
 ## Probe Intake And Inspection
 
@@ -29,6 +29,16 @@ name `add_probe`; otherwise they write directly through the same runtime-control
 boundary. `millrace queue ls` reports probe queue and lifecycle counts, and
 `millrace queue show <probe-id>` renders canonical probe fields without moving
 or normalizing the inspected document.
+
+## Status JSON Diagnostics
+
+Rust `0.3.2` adds the Python `v0.18.2` status JSON diagnostics surface.
+`millrace status` and `millrace status show` accept `--format text|json`; text
+remains the default, while JSON reports the shared read-only status payload,
+including active state, queue depths, closure-target diagnostics,
+`blocked_idle`, `current_failure_class`, and the latest runtime error report
+path. `millrace status watch` remains text-only and rejects JSON format
+requests deterministically.
 
 ## Graph And Trace Inspection
 
@@ -61,8 +71,8 @@ artifacts.
 ## Web Boundary
 
 Python `millrace-web` exposes graph and trace data through read-only dashboard
-routes, and Python `v0.18.1` syncs that optional package to version `0.18.1`.
-Rust `0.3.1` shadows the accepted local inspection behavior through the CLI
+routes, and Python `v0.18.2` syncs that optional package to version `0.18.2`.
+Rust `0.3.2` shadows the accepted local inspection behavior through the CLI
 commands above and keeps the optional web dashboard as an explicit unsupported
 gap. No Rust web server, dashboard HTTP API, static shell, SSE stream, separate
 dashboard package, or Rust-managed web asset is part of this crate release.

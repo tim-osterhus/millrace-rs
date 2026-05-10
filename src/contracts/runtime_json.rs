@@ -465,6 +465,44 @@ pub struct RuntimeSnapshot {
     pub updated_at: Timestamp,
 }
 
+/// Stable read-only payload rendered by `millrace status --format json`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReadOnlyStatusPayload {
+    pub workspace: String,
+    pub runtime_mode: RuntimeMode,
+    pub process_running: bool,
+    pub runtime_ownership_lock: String,
+    pub paused: bool,
+    pub pause_sources: String,
+    pub stop_requested: bool,
+    pub active_mode_id: String,
+    pub compiled_plan_id: String,
+    pub compiled_plan_currentness: String,
+    pub active_plane: Option<Plane>,
+    pub active_stage: Option<StageName>,
+    pub active_node_id: Option<String>,
+    pub active_stage_kind_id: Option<String>,
+    pub active_work_item_kind: Option<WorkItemKind>,
+    pub active_work_item_id: Option<String>,
+    pub active_run_count: u64,
+    pub execution_queue_depth: u64,
+    pub planning_queue_depth: u64,
+    pub learning_queue_depth: u64,
+    pub execution_status_marker: String,
+    pub planning_status_marker: String,
+    pub learning_status_marker: String,
+    pub blocked_idle: bool,
+    pub current_failure_class: Option<String>,
+    pub latest_runtime_error_report_path: Option<String>,
+    pub closure_target_root_spec_id: Value,
+    pub closure_target_open: Value,
+    pub closure_target_blocked_by_lineage_work: Value,
+    pub planning_root_specs_deferred_by_closure_target: Value,
+    pub closure_target_latest_verdict_path: Value,
+    pub closure_target_latest_report_path: Value,
+}
+
 impl RuntimeJsonContract for RuntimeSnapshot {
     const ARTIFACT: &'static str = "runtime_snapshot";
 

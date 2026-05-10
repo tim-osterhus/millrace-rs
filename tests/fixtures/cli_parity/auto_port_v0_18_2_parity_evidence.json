@@ -1,0 +1,333 @@
+{
+  "active_guardrail_tests": [
+    {
+      "file": "tests/parity_cli.rs",
+      "name": "committed_auto_port_v0_18_2_parity_fixture_covers_integrator_status_recon_ownership_guardrails"
+    },
+    {
+      "file": "tests/compiler_parity.rs",
+      "name": "compiler_parity_scout_pins_python_v0_18_2_integrator_assets_and_graph_sources"
+    },
+    {
+      "file": "tests/contracts_runtime_json.rs",
+      "name": "auto_port_v0_18_2_runtime_contract_scout_pins_status_recon_ownership_sources"
+    },
+    {
+      "file": "tests/parity_cli.rs",
+      "name": "committed_auto_port_v0_18_2_release_parity_evidence_covers_version_docs_package_integrator_status_recon_ownership_and_web_gap"
+    }
+  ],
+  "changed_path_mappings": [
+    {"python_path": "CHANGELOG.md", "surface": "docs_version_web_package_evidence", "change_role": "docs_release_notes", "rust_targets": [{"kind": "documentation", "path": "CHANGELOG.md"}]},
+    {"python_path": "README.md", "surface": "docs_version_web_package_evidence", "change_role": "docs_status", "rust_targets": [{"kind": "documentation", "path": "README.md"}]},
+    {"python_path": "ROADMAP.md", "surface": "docs_version_web_package_evidence", "change_role": "roadmap_status", "rust_targets": [{"kind": "documentation", "path": "ROADMAP.md"}, {"kind": "documentation", "path": "docs/rust-port-roadmap.md"}]},
+    {"python_path": "docs/millrace-technical-overview.md", "surface": "docs_version_web_package_evidence", "change_role": "operator_overview_docs", "rust_targets": [{"kind": "documentation", "path": "README.md"}, {"kind": "documentation", "path": "docs/rust-port-roadmap.md"}]},
+    {"python_path": "docs/runtime/README.md", "surface": "docs_version_web_package_evidence", "change_role": "runtime_docs_index", "rust_targets": [{"kind": "documentation", "path": "docs/runtime/"}]},
+    {"python_path": "docs/runtime/millrace-arbiter-and-completion-behavior.md", "surface": "docs_version_web_package_evidence", "change_role": "arbiter_docs", "rust_targets": [{"kind": "documentation", "path": "docs/runtime/"}]},
+    {"python_path": "docs/runtime/millrace-cli-reference.md", "surface": "docs_version_web_package_evidence", "change_role": "cli_status_docs", "rust_targets": [{"kind": "documentation", "path": "docs/runtime/"}]},
+    {"python_path": "docs/runtime/millrace-entrypoint-mapping.md", "surface": "docs_version_web_package_evidence", "change_role": "entrypoint_docs", "rust_targets": [{"kind": "documentation", "path": "docs/runtime/"}]},
+    {"python_path": "docs/runtime/millrace-loop-authoring.md", "surface": "docs_version_web_package_evidence", "change_role": "loop_docs", "rust_targets": [{"kind": "documentation", "path": "docs/runtime/"}]},
+    {"python_path": "docs/runtime/millrace-modes-and-loops.md", "surface": "docs_version_web_package_evidence", "change_role": "integrated_modes_docs", "rust_targets": [{"kind": "documentation", "path": "docs/runtime/"}]},
+    {"python_path": "docs/runtime/millrace-runner-architecture.md", "surface": "docs_version_web_package_evidence", "change_role": "runner_docs", "rust_targets": [{"kind": "documentation", "path": "docs/runtime/"}]},
+    {"python_path": "docs/runtime/millrace-runtime-architecture.md", "surface": "docs_version_web_package_evidence", "change_role": "runtime_architecture_docs", "rust_targets": [{"kind": "documentation", "path": "docs/runtime/"}]},
+    {"python_path": "docs/runtime/millrace-runtime-error-codes.md", "surface": "docs_version_web_package_evidence", "change_role": "runtime_error_docs", "rust_targets": [{"kind": "documentation", "path": "docs/runtime/"}]},
+    {"python_path": "docs/runtime/millrace-runtime-lifecycle-diagram.md", "surface": "docs_version_web_package_evidence", "change_role": "runtime_lifecycle_docs", "rust_targets": [{"kind": "documentation", "path": "docs/runtime/"}]},
+    {"python_path": "docs/runtime/millrace-workspace-baselines-and-upgrades.md", "surface": "docs_version_web_package_evidence", "change_role": "baseline_docs", "rust_targets": [{"kind": "documentation", "path": "docs/runtime/"}]},
+    {"python_path": "docs/skills/millrace-ops-agent-manual/SKILL.md", "surface": "docs_version_web_package_evidence", "change_role": "operator_skill_docs", "rust_targets": [{"kind": "documentation", "path": "docs/source-package-map.md"}]},
+    {"python_path": "docs/source-package-map.md", "surface": "docs_version_web_package_evidence", "change_role": "source_package_map_docs", "rust_targets": [{"kind": "documentation", "path": "docs/source-package-map.md"}]},
+    {"python_path": "packages/millrace-web/CHANGELOG.md", "surface": "docs_version_web_package_evidence", "change_role": "web_package_release_notes", "rust_targets": [{"kind": "package_evidence", "path": "tests/fixtures/cli_parity/web_dashboard_parity_decision.json"}, {"kind": "unsupported_gap_evidence", "path": "tests/fixtures/cli_parity/web_dashboard_parity_decision.json"}]},
+    {"python_path": "packages/millrace-web/pyproject.toml", "surface": "docs_version_web_package_evidence", "change_role": "web_package_version", "rust_targets": [{"kind": "package_evidence", "path": "tests/fixtures/cli_parity/web_dashboard_parity_decision.json"}, {"kind": "unsupported_gap_evidence", "path": "tests/fixtures/cli_parity/web_dashboard_parity_decision.json"}]},
+    {"python_path": "packages/millrace-web/src/millrace_web/__init__.py", "surface": "docs_version_web_package_evidence", "change_role": "web_package_version_export", "rust_targets": [{"kind": "package_evidence", "path": "tests/fixtures/cli_parity/web_dashboard_parity_decision.json"}, {"kind": "unsupported_gap_evidence", "path": "tests/fixtures/cli_parity/web_dashboard_parity_decision.json"}]},
+    {"python_path": "packages/millrace-web/src/millrace_web/app.py", "surface": "docs_version_web_package_evidence", "change_role": "web_app_version", "rust_targets": [{"kind": "package_evidence", "path": "tests/fixtures/cli_parity/web_dashboard_parity_decision.json"}, {"kind": "unsupported_gap_evidence", "path": "tests/fixtures/cli_parity/web_dashboard_parity_decision.json"}]},
+    {"python_path": "src/millrace_ai/__init__.py", "surface": "release_validation_guardrails", "change_role": "python_package_version", "rust_targets": [{"kind": "package_evidence", "path": "Cargo.toml"}, {"kind": "package_evidence", "path": "Cargo.lock"}, {"kind": "package_evidence", "path": "tests/fixtures/cli_parity/auto_port_v0_18_2_release_parity_evidence.json"}]},
+    {"python_path": "src/millrace_ai/assets/entrypoints/execution/checker.md", "surface": "integrator_contracts_assets_compiler", "change_role": "checker_entrypoint_integrator_handoff", "rust_targets": [{"kind": "implementation", "path": "millrace-agents/entrypoints/execution/checker.md"}, {"kind": "implementation", "path": "src/assets/baseline/entrypoints/execution/checker.md"}, {"kind": "test", "path": "tests/workspace_assets_baseline.rs"}]},
+    {"python_path": "src/millrace_ai/assets/entrypoints/execution/integrator.md", "surface": "integrator_contracts_assets_compiler", "change_role": "integrator_entrypoint_asset", "rust_targets": [{"kind": "implementation", "path": "millrace-agents/entrypoints/execution/integrator.md"}, {"kind": "implementation", "path": "src/assets/baseline/entrypoints/execution/integrator.md"}, {"kind": "test", "path": "tests/workspace_assets_baseline.rs"}]},
+    {"python_path": "src/millrace_ai/assets/graphs/execution/with_integrator.json", "surface": "integrator_contracts_assets_compiler", "change_role": "execution_with_integrator_graph", "rust_targets": [{"kind": "implementation", "path": "millrace-agents/graphs/execution/with_integrator.json"}, {"kind": "implementation", "path": "src/assets/baseline/graphs/execution/with_integrator.json"}, {"kind": "test", "path": "tests/compiler_contracts.rs"}, {"kind": "test", "path": "tests/compiler_parity.rs"}]},
+    {"python_path": "src/millrace_ai/assets/loop_graphs.py", "surface": "integrator_contracts_assets_compiler", "change_role": "loop_graph_registry", "rust_targets": [{"kind": "implementation", "path": "src/compiler/contracts.rs"}, {"kind": "test", "path": "tests/compiler_contracts.rs"}]},
+    {"python_path": "src/millrace_ai/assets/loops/execution/with_integrator.json", "surface": "integrator_contracts_assets_compiler", "change_role": "execution_with_integrator_loop", "rust_targets": [{"kind": "implementation", "path": "millrace-agents/loops/execution/with_integrator.json"}, {"kind": "implementation", "path": "src/assets/baseline/loops/execution/with_integrator.json"}, {"kind": "test", "path": "tests/compiler_materialization.rs"}]},
+    {"python_path": "src/millrace_ai/assets/modes.py", "surface": "integrated_modes_runtime_routing", "change_role": "integrated_mode_registry", "rust_targets": [{"kind": "implementation", "path": "src/compiler/assets.rs"}, {"kind": "test", "path": "tests/compiler_assets.rs"}]},
+    {"python_path": "src/millrace_ai/assets/modes/default_codex_integrated.json", "surface": "integrated_modes_runtime_routing", "change_role": "default_codex_integrated_mode", "rust_targets": [{"kind": "implementation", "path": "millrace-agents/modes/default_codex_integrated.json"}, {"kind": "implementation", "path": "src/assets/baseline/modes/default_codex_integrated.json"}, {"kind": "test", "path": "tests/compiler_parity.rs"}]},
+    {"python_path": "src/millrace_ai/assets/modes/learning_codex_integrated.json", "surface": "integrated_modes_runtime_routing", "change_role": "learning_codex_integrated_mode", "rust_targets": [{"kind": "implementation", "path": "millrace-agents/modes/learning_codex_integrated.json"}, {"kind": "implementation", "path": "src/assets/baseline/modes/learning_codex_integrated.json"}, {"kind": "test", "path": "tests/compiler_parity.rs"}]},
+    {"python_path": "src/millrace_ai/assets/registry/stage_kinds/execution/integrator.json", "surface": "integrator_contracts_assets_compiler", "change_role": "integrator_stage_kind_registry", "rust_targets": [{"kind": "implementation", "path": "millrace-agents/registry/stage_kinds/execution/integrator.json"}, {"kind": "implementation", "path": "src/assets/baseline/registry/stage_kinds/execution/integrator.json"}, {"kind": "test", "path": "tests/contracts_stage_metadata.rs"}]},
+    {"python_path": "src/millrace_ai/assets/skills/README.md", "surface": "integrator_contracts_assets_compiler", "change_role": "skills_docs", "rust_targets": [{"kind": "implementation", "path": "src/assets/baseline/skills/README.md"}, {"kind": "test", "path": "tests/workspace_assets_baseline.rs"}]},
+    {"python_path": "src/millrace_ai/assets/skills/skills_index.md", "surface": "integrator_contracts_assets_compiler", "change_role": "skills_index_integrator", "rust_targets": [{"kind": "implementation", "path": "millrace-agents/skills/skills_index.md"}, {"kind": "implementation", "path": "src/assets/baseline/skills/skills_index.md"}, {"kind": "test", "path": "tests/workspace_assets_baseline.rs"}]},
+    {"python_path": "src/millrace_ai/assets/skills/stage/execution/checker-core/SKILL.md", "surface": "integrator_contracts_assets_compiler", "change_role": "checker_core_integrator_posture", "rust_targets": [{"kind": "implementation", "path": "millrace-agents/skills/stage/execution/checker-core/SKILL.md"}, {"kind": "implementation", "path": "src/assets/baseline/skills/stage/execution/checker-core/SKILL.md"}, {"kind": "test", "path": "tests/workspace_assets_baseline.rs"}]},
+    {"python_path": "src/millrace_ai/assets/skills/stage/execution/integrator-core/SKILL.md", "surface": "integrator_contracts_assets_compiler", "change_role": "integrator_core_skill", "rust_targets": [{"kind": "implementation", "path": "millrace-agents/skills/stage/execution/integrator-core/SKILL.md"}, {"kind": "implementation", "path": "src/assets/baseline/skills/stage/execution/integrator-core/SKILL.md"}, {"kind": "test", "path": "tests/workspace_assets_baseline.rs"}]},
+    {"python_path": "src/millrace_ai/cli/commands/status.py", "surface": "status_json_diagnostics", "change_role": "status_cli_json_format", "rust_targets": [{"kind": "implementation", "path": "src/cli/parser.rs"}, {"kind": "implementation", "path": "src/cli/read_only.rs"}, {"kind": "test", "path": "tests/parity_cli.rs"}]},
+    {"python_path": "src/millrace_ai/cli/status_view.py", "surface": "status_json_diagnostics", "change_role": "status_json_payload", "rust_targets": [{"kind": "implementation", "path": "src/cli/render.rs"}, {"kind": "fixture", "path": "tests/fixtures/runtime_json/auto_port_v0_18_2_runtime_contract_scout.json"}, {"kind": "test", "path": "tests/contracts_runtime_json.rs"}, {"kind": "test", "path": "tests/parity_cli.rs"}]},
+    {"python_path": "src/millrace_ai/contracts/enums.py", "surface": "integrator_contracts_assets_compiler", "change_role": "integrator_terminal_enums", "rust_targets": [{"kind": "implementation", "path": "src/contracts/enums.rs"}, {"kind": "test", "path": "tests/contracts_stage_metadata.rs"}, {"kind": "test", "path": "tests/contracts_runtime_json.rs"}]},
+    {"python_path": "src/millrace_ai/contracts/recon.py", "surface": "recon_handoff_graph_hardening", "change_role": "recon_handoff_validation", "rust_targets": [{"kind": "implementation", "path": "src/contracts/recon.rs"}, {"kind": "implementation", "path": "src/recon_packets.rs"}, {"kind": "test", "path": "tests/contracts_runtime_json.rs"}]},
+    {"python_path": "src/millrace_ai/contracts/stage_metadata.py", "surface": "stage_work_item_ownership", "change_role": "stage_work_item_metadata", "rust_targets": [{"kind": "implementation", "path": "src/contracts/stage_metadata.rs"}, {"kind": "test", "path": "tests/contracts_stage_metadata.rs"}]},
+    {"python_path": "src/millrace_ai/errors.py", "surface": "recon_handoff_graph_hardening", "change_role": "runtime_error_code_recon_handoff", "rust_targets": [{"kind": "implementation", "path": "src/contracts/runtime_json.rs"}, {"kind": "implementation", "path": "src/runtime/tick.rs"}, {"kind": "test", "path": "tests/contracts_runtime_json.rs"}]},
+    {"python_path": "src/millrace_ai/runtime/engine.py", "surface": "integrated_modes_runtime_routing", "change_role": "integrated_runtime_engine", "rust_targets": [{"kind": "implementation", "path": "src/runtime/mod.rs"}, {"kind": "implementation", "path": "src/runtime/tick.rs"}, {"kind": "test", "path": "tests/runtime_serial.rs"}]},
+    {"python_path": "src/millrace_ai/runtime/error_recovery.py", "surface": "recon_handoff_graph_hardening", "change_role": "recon_error_recovery", "rust_targets": [{"kind": "implementation", "path": "src/runtime/tick.rs"}, {"kind": "implementation", "path": "src/runtime/startup.rs"}, {"kind": "test", "path": "tests/runtime_daemon.rs"}]},
+    {"python_path": "src/millrace_ai/runtime/recon_transitions.py", "surface": "recon_handoff_graph_hardening", "change_role": "invalid_recon_handoff_handling", "rust_targets": [{"kind": "implementation", "path": "src/runtime/tick.rs"}, {"kind": "implementation", "path": "src/runtime/run_traces.rs"}, {"kind": "test", "path": "tests/runtime_serial.rs"}]},
+    {"python_path": "src/millrace_ai/runtime/result_application.py", "surface": "recon_handoff_graph_hardening", "change_role": "runtime_result_application_guards", "rust_targets": [{"kind": "implementation", "path": "src/runtime/tick.rs"}, {"kind": "test", "path": "tests/runtime_serial.rs"}, {"kind": "test", "path": "tests/runtime_daemon.rs"}]},
+    {"python_path": "src/millrace_ai/runtime/stage_requests.py", "surface": "stage_work_item_ownership", "change_role": "stage_request_ownership_guard", "rust_targets": [{"kind": "implementation", "path": "src/runtime/tick.rs"}, {"kind": "implementation", "path": "src/runtime/supervisor.rs"}, {"kind": "test", "path": "tests/runtime_serial.rs"}]},
+    {"python_path": "src/millrace_ai/runtime/supervisor.py", "surface": "stage_work_item_ownership", "change_role": "pre_runner_ownership_validation", "rust_targets": [{"kind": "implementation", "path": "src/runtime/supervisor.rs"}, {"kind": "test", "path": "tests/runtime_daemon.rs"}]},
+    {"python_path": "src/millrace_ai/runtime/tick_cycle.py", "surface": "stage_work_item_ownership", "change_role": "active_state_ownership_recovery", "rust_targets": [{"kind": "implementation", "path": "src/runtime/tick.rs"}, {"kind": "implementation", "path": "src/workspace/queue_store.rs"}, {"kind": "implementation", "path": "src/workspace/state_store.rs"}, {"kind": "test", "path": "tests/workspace_queue_state_stores.rs"}]},
+    {"python_path": "tests/assets/test_entrypoints.py", "surface": "integrator_contracts_assets_compiler", "change_role": "entrypoint_asset_tests", "rust_targets": [{"kind": "test", "path": "tests/workspace_assets_baseline.rs"}, {"kind": "test", "path": "tests/compiler_parity.rs"}]},
+    {"python_path": "tests/assets/test_loop_graphs.py", "surface": "integrator_contracts_assets_compiler", "change_role": "loop_graph_asset_tests", "rust_targets": [{"kind": "test", "path": "tests/compiler_contracts.rs"}, {"kind": "test", "path": "tests/compiler_materialization.rs"}]},
+    {"python_path": "tests/assets/test_modes.py", "surface": "integrated_modes_runtime_routing", "change_role": "integrated_mode_asset_tests", "rust_targets": [{"kind": "test", "path": "tests/compiler_assets.rs"}, {"kind": "test", "path": "tests/compiler_parity.rs"}]},
+    {"python_path": "tests/assets/test_packaging_runtime_assets.py", "surface": "integrator_contracts_assets_compiler", "change_role": "packaging_runtime_asset_tests", "rust_targets": [{"kind": "test", "path": "tests/workspace_assets_baseline.rs"}, {"kind": "fixture", "path": "tests/fixtures/compiler_parity/auto_port_v0_18_2_compiler_contract_scout.json"}]},
+    {"python_path": "tests/assets/test_stage_kinds.py", "surface": "integrator_contracts_assets_compiler", "change_role": "stage_kind_asset_tests", "rust_targets": [{"kind": "test", "path": "tests/contracts_stage_metadata.rs"}, {"kind": "test", "path": "tests/compiler_contracts.rs"}]},
+    {"python_path": "tests/cli/test_cli.py", "surface": "status_json_diagnostics", "change_role": "status_cli_tests", "rust_targets": [{"kind": "test", "path": "tests/parity_cli.rs"}]},
+    {"python_path": "tests/runtime/test_graph_authority.py", "surface": "recon_handoff_graph_hardening", "change_role": "graph_authority_validation_tests", "rust_targets": [{"kind": "test", "path": "tests/compiler_contracts.rs"}, {"kind": "test", "path": "tests/compiler_materialization.rs"}, {"kind": "test", "path": "tests/runtime_serial.rs"}]},
+    {"python_path": "tests/runtime/test_recon_packets.py", "surface": "recon_handoff_graph_hardening", "change_role": "recon_packet_validation_tests", "rust_targets": [{"kind": "test", "path": "tests/contracts_runtime_json.rs"}, {"kind": "test", "path": "tests/runtime_serial.rs"}]},
+    {"python_path": "tests/runtime/test_runtime.py", "surface": "stage_work_item_ownership", "change_role": "runtime_status_recon_ownership_tests", "rust_targets": [{"kind": "test", "path": "tests/runtime_serial.rs"}, {"kind": "test", "path": "tests/runtime_daemon.rs"}, {"kind": "test", "path": "tests/parity_cli.rs"}]}
+  ],
+  "kind": "auto_port_v0_18_2_parity_evidence",
+  "non_live_guarantees": [
+    "no live Codex runner",
+    "no live Pi runner",
+    "no network",
+    "no credentials",
+    "no web server",
+    "no release upload",
+    "no publishing"
+  ],
+  "python_reference": {
+    "diff_range": "v0.18.1..v0.18.2",
+    "generated_scout": "millrace-agents/auto-port/generated/auto-port-python-v0.18.1-to-v0.18.2-rust-0.3.2.md",
+    "previous_commit": "0396c7852793b212d31345862b38a7d6f3f02854",
+    "previous_tag": "v0.18.1",
+    "target_commit": "5444cb9485ea90b67b2ed6ba7e0723ae9fe7b79f",
+    "target_tag": "v0.18.2"
+  },
+  "required_coverage_axes": [
+    "python_diff_pin",
+    "rust_version_transition_pin",
+    "generated_scout_changed_paths",
+    "integrator_asset_source_refs",
+    "integrated_mode_source_refs",
+    "status_json_source_refs",
+    "recon_hardening_source_refs",
+    "stage_work_item_ownership_source_refs",
+    "docs_source_refs",
+    "web_version_package_evidence",
+    "expected_rust_target_mapping",
+    "release_check_evidence",
+    "package_dry_run_evidence",
+    "no_live_external_dependencies"
+  ],
+  "required_release_checks": [
+    "cargo fmt --check",
+    "cargo clippy --all-targets --all-features -- -D warnings",
+    "cargo test --all",
+    "cargo test --test compiler_parity",
+    "cargo test --test parity_cli",
+    "cargo test --test contracts_runtime_json",
+    "cargo test --test compiler_contracts",
+    "cargo test --test compiler_materialization",
+    "cargo publish --dry-run",
+    "cargo package --allow-dirty --offline"
+  ],
+  "required_surfaces": [
+    "integrator_contracts_assets_compiler",
+    "integrated_modes_runtime_routing",
+    "status_json_diagnostics",
+    "recon_handoff_graph_hardening",
+    "stage_work_item_ownership",
+    "docs_version_web_package_evidence",
+    "source_reference_guardrails",
+    "release_validation_guardrails"
+  ],
+  "rust_reference": {
+    "current_repo_crate_version": "0.3.1",
+    "current_repo_version_role": "previous_baseline_for_python_v0.18.1",
+    "planned_crate_version": "0.3.2",
+    "planned_version_role": "target_release_for_python_v0.18.2",
+    "previous_repo_crate_version": "0.3.1",
+    "previous_repo_version_role": "released_target_for_python_v0.18.1"
+  },
+  "schema_version": "1.0",
+  "source_reference_surfaces": [
+    {
+      "coverage": ["integrator_asset_source_refs", "expected_rust_target_mapping"],
+      "expected_rust_targets": [
+        "millrace-agents/entrypoints/execution/checker.md",
+        "millrace-agents/entrypoints/execution/integrator.md",
+        "millrace-agents/graphs/execution/with_integrator.json",
+        "millrace-agents/loops/execution/with_integrator.json",
+        "millrace-agents/registry/stage_kinds/execution/integrator.json",
+        "millrace-agents/skills/stage/execution/integrator-core/SKILL.md",
+        "src/assets/baseline/entrypoints/execution/integrator.md",
+        "src/assets/baseline/graphs/execution/with_integrator.json",
+        "src/assets/baseline/loops/execution/with_integrator.json",
+        "src/assets/baseline/registry/stage_kinds/execution/integrator.json",
+        "src/assets/baseline/skills/stage/execution/integrator-core/SKILL.md",
+        "src/contracts/enums.rs",
+        "src/contracts/stage_metadata.rs",
+        "tests/compiler_parity.rs"
+      ],
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/contracts/enums.py",
+        "../millrace-py/src/millrace_ai/contracts/stage_metadata.py",
+        "../millrace-py/src/millrace_ai/assets/entrypoints/execution/checker.md",
+        "../millrace-py/src/millrace_ai/assets/entrypoints/execution/integrator.md",
+        "../millrace-py/src/millrace_ai/assets/graphs/execution/with_integrator.json",
+        "../millrace-py/src/millrace_ai/assets/loops/execution/with_integrator.json",
+        "../millrace-py/src/millrace_ai/assets/registry/stage_kinds/execution/integrator.json",
+        "../millrace-py/src/millrace_ai/assets/skills/stage/execution/integrator-core/SKILL.md",
+        "../millrace-py/tests/assets/test_entrypoints.py",
+        "../millrace-py/tests/assets/test_loop_graphs.py",
+        "../millrace-py/tests/assets/test_stage_kinds.py"
+      ],
+      "surface": "integrator_contracts_assets_compiler"
+    },
+    {
+      "coverage": ["integrated_mode_source_refs", "expected_rust_target_mapping"],
+      "expected_rust_targets": [
+        "millrace-agents/modes/default_codex_integrated.json",
+        "millrace-agents/modes/learning_codex_integrated.json",
+        "src/assets/baseline/modes/default_codex_integrated.json",
+        "src/assets/baseline/modes/learning_codex_integrated.json",
+        "src/runtime/tick.rs",
+        "src/runtime/supervisor.rs",
+        "src/runtime/run_traces.rs",
+        "tests/runtime_serial.rs",
+        "tests/runtime_daemon.rs"
+      ],
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/assets/modes.py",
+        "../millrace-py/src/millrace_ai/assets/modes/default_codex_integrated.json",
+        "../millrace-py/src/millrace_ai/assets/modes/learning_codex_integrated.json",
+        "../millrace-py/src/millrace_ai/runtime/engine.py",
+        "../millrace-py/src/millrace_ai/runtime/result_application.py",
+        "../millrace-py/src/millrace_ai/runtime/supervisor.py",
+        "../millrace-py/tests/assets/test_modes.py",
+        "../millrace-py/tests/runtime/test_graph_authority.py",
+        "../millrace-py/tests/runtime/test_runtime.py"
+      ],
+      "surface": "integrated_modes_runtime_routing"
+    },
+    {
+      "coverage": ["status_json_source_refs", "expected_rust_target_mapping"],
+      "expected_rust_targets": [
+        "src/contracts/runtime_json.rs",
+        "src/cli/parser.rs",
+        "src/cli/read_only.rs",
+        "src/cli/render.rs",
+        "tests/contracts_runtime_json.rs",
+        "tests/parity_cli.rs"
+      ],
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/cli/commands/status.py",
+        "../millrace-py/src/millrace_ai/cli/status_view.py",
+        "../millrace-py/tests/cli/test_cli.py",
+        "../millrace-py/tests/runtime/test_runtime.py"
+      ],
+      "surface": "status_json_diagnostics"
+    },
+    {
+      "coverage": ["recon_hardening_source_refs", "expected_rust_target_mapping"],
+      "expected_rust_targets": [
+        "src/contracts/recon.rs",
+        "src/recon_packets.rs",
+        "src/contracts/runtime_json.rs",
+        "src/compiler/contracts.rs",
+        "src/compiler/materialization.rs",
+        "src/runtime/tick.rs",
+        "src/runtime/run_traces.rs",
+        "tests/contracts_runtime_json.rs",
+        "tests/compiler_contracts.rs",
+        "tests/compiler_materialization.rs",
+        "tests/runtime_serial.rs",
+        "tests/runtime_daemon.rs"
+      ],
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/contracts/recon.py",
+        "../millrace-py/src/millrace_ai/errors.py",
+        "../millrace-py/src/millrace_ai/runtime/error_recovery.py",
+        "../millrace-py/src/millrace_ai/runtime/recon_transitions.py",
+        "../millrace-py/src/millrace_ai/runtime/result_application.py",
+        "../millrace-py/src/millrace_ai/runtime/tick_cycle.py",
+        "../millrace-py/tests/runtime/test_recon_packets.py",
+        "../millrace-py/tests/runtime/test_graph_authority.py",
+        "../millrace-py/tests/runtime/test_runtime.py"
+      ],
+      "surface": "recon_handoff_graph_hardening"
+    },
+    {
+      "coverage": ["stage_work_item_ownership_source_refs", "expected_rust_target_mapping"],
+      "expected_rust_targets": [
+        "src/contracts/stage_metadata.rs",
+        "src/runtime/tick.rs",
+        "src/runtime/supervisor.rs",
+        "src/workspace/queue_store.rs",
+        "src/workspace/state_store.rs",
+        "tests/contracts_stage_metadata.rs",
+        "tests/runtime_serial.rs",
+        "tests/runtime_daemon.rs",
+        "tests/workspace_queue_state_stores.rs"
+      ],
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/runtime/stage_requests.py",
+        "../millrace-py/src/millrace_ai/runtime/supervisor.py",
+        "../millrace-py/src/millrace_ai/runtime/tick_cycle.py",
+        "../millrace-py/tests/runtime/test_runtime.py"
+      ],
+      "surface": "stage_work_item_ownership"
+    },
+    {
+      "coverage": ["docs_source_refs", "web_version_package_evidence", "expected_rust_target_mapping"],
+      "expected_rust_targets": [
+        "README.md",
+        "CHANGELOG.md",
+        "ROADMAP.md",
+        "docs/rust-port-roadmap.md",
+        "docs/source-package-map.md",
+        "docs/runtime/",
+        "tests/fixtures/cli_parity/web_dashboard_parity_decision.json"
+      ],
+      "python_sources": [
+        "../millrace-py/CHANGELOG.md",
+        "../millrace-py/README.md",
+        "../millrace-py/ROADMAP.md",
+        "../millrace-py/docs/millrace-technical-overview.md",
+        "../millrace-py/docs/runtime/README.md",
+        "../millrace-py/docs/runtime/millrace-cli-reference.md",
+        "../millrace-py/docs/runtime/millrace-modes-and-loops.md",
+        "../millrace-py/docs/runtime/millrace-runtime-architecture.md",
+        "../millrace-py/docs/source-package-map.md",
+        "../millrace-py/packages/millrace-web/CHANGELOG.md",
+        "../millrace-py/packages/millrace-web/pyproject.toml",
+        "../millrace-py/packages/millrace-web/src/millrace_web/__init__.py",
+        "../millrace-py/packages/millrace-web/src/millrace_web/app.py"
+      ],
+      "surface": "docs_version_web_package_evidence"
+    },
+    {
+      "coverage": ["python_diff_pin", "rust_version_transition_pin", "generated_scout_changed_paths", "expected_rust_target_mapping"],
+      "expected_rust_targets": [
+        "millrace-agents/auto-port/generated/auto-port-python-v0.18.1-to-v0.18.2-rust-0.3.2.md",
+        "tests/fixtures/cli_parity/auto_port_v0_18_2_parity_evidence.json",
+        "tests/fixtures/compiler_parity/auto_port_v0_18_2_compiler_contract_scout.json",
+        "tests/fixtures/runtime_json/auto_port_v0_18_2_runtime_contract_scout.json",
+        "tests/parity_cli.rs"
+      ],
+      "python_sources": [
+        "../millrace-py diff v0.18.1..v0.18.2",
+        "../millrace-py tag v0.18.1",
+        "../millrace-py tag v0.18.2"
+      ],
+      "surface": "source_reference_guardrails"
+    },
+    {
+      "coverage": ["release_check_evidence", "package_dry_run_evidence", "no_live_external_dependencies", "expected_rust_target_mapping"],
+      "expected_rust_targets": [
+        "Cargo.toml",
+        "Cargo.lock",
+        "tests/parity_cli.rs",
+        "tests/fixtures/cli_parity/auto_port_v0_18_2_parity_evidence.json",
+        "tests/fixtures/cli_parity/auto_port_v0_18_2_release_parity_evidence.json"
+      ],
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/__init__.py",
+        "../millrace-py/packages/millrace-web/pyproject.toml"
+      ],
+      "surface": "release_validation_guardrails"
+    }
+  ],
+  "summary": "Target-facing scout evidence for the Python v0.18.1..v0.18.2 auto-port. This fixture pins Python v0.18.1 and Rust 0.3.1 as previous baselines, Python v0.18.2 and Rust 0.3.2 as targets, and requires source references, changed-path mappings, release checks, package dry-run evidence, and non-live guarantees for Integrator assets, integrated modes, status JSON, Recon handoff hardening, graph validation, stage/work-item ownership, docs, version, and web-package evidence."
+}

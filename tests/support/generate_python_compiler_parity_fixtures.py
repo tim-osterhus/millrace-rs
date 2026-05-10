@@ -24,9 +24,13 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PYTHON_ROOT = Path(os.environ.get("MILLRACE_PY_ROOT", REPO_ROOT / "../millrace-py")).resolve()
 PYTHON_SRC = PYTHON_ROOT / "src"
 FIXTURE_PATH = REPO_ROOT / "tests/fixtures/compiler_parity/python_compiler_parity.json"
-SCOUT_FIXTURE_PATH = (
+V0_18_1_SCOUT_FIXTURE_PATH = (
     REPO_ROOT
     / "tests/fixtures/compiler_parity/auto_port_v0_18_1_compiler_contract_scout.json"
+)
+V0_18_2_SCOUT_FIXTURE_PATH = (
+    REPO_ROOT
+    / "tests/fixtures/compiler_parity/auto_port_v0_18_2_compiler_contract_scout.json"
 )
 FIXED_COMPILED_AT = datetime(2026, 4, 28, 15, 30, 0, tzinfo=timezone.utc)
 MODES = (
@@ -114,11 +118,17 @@ def main() -> None:
     FIXTURE_PATH.write_text(json.dumps(fixture, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"wrote {FIXTURE_PATH.relative_to(REPO_ROOT)}")
 
-    SCOUT_FIXTURE_PATH.write_text(
+    V0_18_1_SCOUT_FIXTURE_PATH.write_text(
         json.dumps(build_v0_18_1_compiler_scout(), indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-    print(f"wrote {SCOUT_FIXTURE_PATH.relative_to(REPO_ROOT)}")
+    print(f"wrote {V0_18_1_SCOUT_FIXTURE_PATH.relative_to(REPO_ROOT)}")
+
+    V0_18_2_SCOUT_FIXTURE_PATH.write_text(
+        json.dumps(build_v0_18_2_compiler_scout(), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(f"wrote {V0_18_2_SCOUT_FIXTURE_PATH.relative_to(REPO_ROOT)}")
 
 
 def build_case(requested_mode_id: str) -> dict[str, Any]:
@@ -203,6 +213,83 @@ def build_v0_18_1_compiler_scout() -> dict[str, Any]:
             "tests/compiler_contracts.rs",
             "tests/compiler_materialization.rs",
             "tests/compiler_parity.rs",
+        ],
+    }
+
+
+def build_v0_18_2_compiler_scout() -> dict[str, Any]:
+    return {
+        "schema_version": "1.0",
+        "kind": "auto_port_v0_18_2_compiler_contract_scout",
+        "python_reference": {
+            "previous_tag": "v0.18.1",
+            "previous_commit": "0396c7852793b212d31345862b38a7d6f3f02854",
+            "target_tag": "v0.18.2",
+            "target_commit": "5444cb9485ea90b67b2ed6ba7e0723ae9fe7b79f",
+            "diff_range": "v0.18.1..v0.18.2",
+        },
+        "rust_reference": {
+            "current_repo_crate_version": "0.3.1",
+            "current_repo_version_role": "previous_baseline_for_python_v0.18.1",
+            "previous_repo_crate_version": "0.3.1",
+            "previous_repo_version_role": "released_target_for_python_v0.18.1",
+            "planned_crate_version": "0.3.2",
+            "planned_version_role": "target_release_for_python_v0.18.2",
+        },
+        "compiler_source_refs": [
+            "../millrace-py/src/millrace_ai/contracts/enums.py",
+            "../millrace-py/src/millrace_ai/contracts/stage_metadata.py",
+            "../millrace-py/src/millrace_ai/assets/entrypoints/execution/checker.md",
+            "../millrace-py/src/millrace_ai/assets/entrypoints/execution/integrator.md",
+            "../millrace-py/src/millrace_ai/assets/graphs/execution/with_integrator.json",
+            "../millrace-py/src/millrace_ai/assets/loop_graphs.py",
+            "../millrace-py/src/millrace_ai/assets/loops/execution/with_integrator.json",
+            "../millrace-py/src/millrace_ai/assets/modes.py",
+            "../millrace-py/src/millrace_ai/assets/modes/default_codex_integrated.json",
+            "../millrace-py/src/millrace_ai/assets/modes/learning_codex_integrated.json",
+            "../millrace-py/src/millrace_ai/assets/registry/stage_kinds/execution/integrator.json",
+            "../millrace-py/src/millrace_ai/assets/skills/skills_index.md",
+            "../millrace-py/src/millrace_ai/assets/skills/stage/execution/checker-core/SKILL.md",
+            "../millrace-py/src/millrace_ai/assets/skills/stage/execution/integrator-core/SKILL.md",
+            "../millrace-py/tests/assets/test_entrypoints.py",
+            "../millrace-py/tests/assets/test_loop_graphs.py",
+            "../millrace-py/tests/assets/test_modes.py",
+            "../millrace-py/tests/assets/test_packaging_runtime_assets.py",
+            "../millrace-py/tests/assets/test_stage_kinds.py",
+        ],
+        "expected_rust_targets": [
+            "millrace-agents/entrypoints/execution/checker.md",
+            "millrace-agents/entrypoints/execution/integrator.md",
+            "millrace-agents/graphs/execution/with_integrator.json",
+            "millrace-agents/loops/execution/with_integrator.json",
+            "millrace-agents/modes/default_codex_integrated.json",
+            "millrace-agents/modes/learning_codex_integrated.json",
+            "millrace-agents/registry/stage_kinds/execution/integrator.json",
+            "millrace-agents/skills/skills_index.md",
+            "millrace-agents/skills/stage/execution/checker-core/SKILL.md",
+            "millrace-agents/skills/stage/execution/integrator-core/SKILL.md",
+            "src/assets/baseline/entrypoints/execution/checker.md",
+            "src/assets/baseline/entrypoints/execution/integrator.md",
+            "src/assets/baseline/graphs/execution/with_integrator.json",
+            "src/assets/baseline/loops/execution/with_integrator.json",
+            "src/assets/baseline/modes/default_codex_integrated.json",
+            "src/assets/baseline/modes/learning_codex_integrated.json",
+            "src/assets/baseline/registry/stage_kinds/execution/integrator.json",
+            "src/assets/baseline/skills/skills_index.md",
+            "src/assets/baseline/skills/stage/execution/checker-core/SKILL.md",
+            "src/assets/baseline/skills/stage/execution/integrator-core/SKILL.md",
+            "src/contracts/enums.rs",
+            "src/contracts/stage_metadata.rs",
+            "src/compiler/assets.rs",
+            "src/compiler/contracts.rs",
+            "src/compiler/graph_exports.rs",
+            "src/compiler/materialization.rs",
+            "tests/contracts_stage_metadata.rs",
+            "tests/compiler_assets.rs",
+            "tests/compiler_contracts.rs",
+            "tests/compiler_materialization.rs",
+            "tests/compiler_parity.rs",
+            "tests/workspace_assets_baseline.rs",
         ],
     }
 

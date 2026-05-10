@@ -3,6 +3,43 @@
 All notable user-facing changes to the experimental Rust `millrace-ai` crate
 are documented in this file.
 
+## [0.3.2] - 2026-05-10
+
+### Added
+
+- Added Rust release evidence for the Python `v0.18.1..v0.18.2` parity pass,
+  covering Integrator contracts/assets, opt-in integrated Codex modes, status
+  JSON diagnostics, Recon invalid-handoff hardening, graph validation guards,
+  stage/work-item ownership validation, package include readiness, and the
+  optional `millrace-web` `v0.18.2` package/version unsupported-gap surface.
+- Added release fixture coverage for the new Integrator managed assets,
+  integrated mode assets, runtime docs, v0.18.2 parity fixtures, source package
+  mapping, required release-readiness command results, the plain publish
+  dry-run dirty-worktree limitation, allow-dirty dry-run/package substitutes,
+  and forbidden release actions.
+
+### Changed
+
+- Bumped the Rust crate, lockfile package metadata, and version-visible CLI
+  output from `0.3.1` to `0.3.2`.
+- Updated README, roadmap, source-package map, runtime docs, outline, fixture
+  docs, and release evidence to target Python `v0.18.2` at
+  `5444cb9485ea90b67b2ed6ba7e0723ae9fe7b79f`.
+
+### Known Gaps
+
+- The optional Python `packages/millrace-web` `v0.18.2` package version,
+  `millrace-ai>=0.18.2` dependency floor, and FastAPI app version are recorded
+  as explicit package/version evidence for the existing unsupported Rust web
+  gap. Rust still does not ship a web server, static dashboard shell, SSE
+  stream, dashboard HTTP API, or separate `millrace-web` package.
+- The plain clean-worktree `cargo publish --dry-run` check remains recorded as
+  a dirty-worktree limitation for this uncommitted Builder pass; normal
+  Millrace stages do not perform publish, tag, push, upload, or deployment
+  actions.
+- Native filesystem watcher integration, live subscription-quota provider
+  polling, and live Codex/Pi smoke runs remain opt-in or preview-only.
+
 ## [0.3.1] - 2026-05-09
 
 ### Added

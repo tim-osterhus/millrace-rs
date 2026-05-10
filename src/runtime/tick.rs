@@ -29,7 +29,8 @@ use crate::{
         ReloadOutcome, ResultClass, RootIntakeKind, RuntimeErrorCode, RuntimeErrorContext,
         RuntimeJsonContract, RuntimeSnapshot, SpecDocument, SpecSourceType, StageName,
         StageResultEnvelope, SubscriptionQuotaTelemetryState, TaskDocument, TerminalResult,
-        Timestamp, UsageGovernanceBlocker, WorkDocumentError, WorkItemKind, stage_name_for_plane,
+        Timestamp, UsageGovernanceBlocker, WorkDocumentError, WorkItemKind,
+        allowed_work_item_kinds, stage_allows_work_item_kind, stage_name_for_plane,
     },
     recon_packets::{read_recon_packet, render_recon_packet},
     runners::{
@@ -66,6 +67,7 @@ static RUN_COUNTER: AtomicU64 = AtomicU64::new(0);
 static REQUEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 const IDLE_STATUS_MARKER: &str = "### IDLE";
+const STAGE_WORK_ITEM_OWNERSHIP_INVALID: &str = "stage_work_item_ownership_invalid";
 
 /// Result type for serial runtime tick activation.
 pub type RuntimeTickResult<T> = Result<T, RuntimeTickError>;
@@ -411,6 +413,18 @@ pub fn run_serial_runtime_tick(
     let Some(active_stage) = session.snapshot.active_stage else {
         return idle_outcome(session, &now);
     };
+
+    if let Some(event_log_path) =
+        guard_stage_work_item_ownership_for_plane(session, active_plane, &now)?
+    {
+        return Ok(RuntimeTickOutcome {
+            kind: RuntimeTickOutcomeKind::Blocked,
+            reason: STAGE_WORK_ITEM_OWNERSHIP_INVALID.to_owned(),
+            stage_request: None,
+            snapshot: session.snapshot.clone(),
+            event_log_path: Some(event_log_path),
+        });
+    }
 
     let stage_plan = stage_plan_for_active_state(
         &session.compiled_plan,
@@ -1806,6 +1820,246 @@ fn build_closure_target_stage_run_request(
     Ok(request)
 }
 
+pub(crate) fn guard_stage_work_item_ownership_for_plane(
+    session: &mut RuntimeStartupSession,
+    plane: Plane,
+    now: &Timestamp,
+) -> RuntimeTickResult<Option<PathBuf>> {
+    let Some(active_run) = active_run_for_plane(&session.snapshot, plane) else {
+        return Ok(None);
+    };
+    let Some(violation) = stage_work_item_ownership_violation(&active_run) else {
+        return Ok(None);
+    };
+    record_stage_work_item_ownership_invalid(session, &active_run, violation, now).map(Some)
+}
+
+fn stage_work_item_ownership_violation(
+    active_run: &ActiveRunState,
+) -> Option<StageWorkItemOwnershipViolation> {
+    if active_run.request_kind == ActiveRunRequestKind::ClosureTarget {
+        return None;
+    }
+
+    let expected_work_item_kinds = allowed_work_item_kinds(active_run.stage).to_vec();
+    let Some(work_item_kind) = active_run.work_item_kind else {
+        return Some(StageWorkItemOwnershipViolation {
+            reason: "missing_work_item_kind",
+            expected_work_item_kinds,
+            message: format!(
+                "stage {} active run is missing work_item_kind",
+                active_run.stage.as_str()
+            ),
+        });
+    };
+    if active_run.work_item_id.as_deref().is_none_or(str::is_empty) {
+        return Some(StageWorkItemOwnershipViolation {
+            reason: "missing_work_item_id",
+            expected_work_item_kinds,
+            message: format!(
+                "stage {} active run is missing work_item_id",
+                active_run.stage.as_str()
+            ),
+        });
+    }
+    if active_run.request_kind == ActiveRunRequestKind::LearningRequest
+        && work_item_kind != WorkItemKind::LearningRequest
+    {
+        return Some(StageWorkItemOwnershipViolation {
+            reason: "learning_request_kind_mismatch",
+            expected_work_item_kinds,
+            message: format!(
+                "learning_request active run for stage {} has work item kind {}",
+                active_run.stage.as_str(),
+                work_item_kind.as_str()
+            ),
+        });
+    }
+    if active_run.request_kind == ActiveRunRequestKind::ActiveWorkItem
+        && work_item_kind == WorkItemKind::LearningRequest
+    {
+        return Some(StageWorkItemOwnershipViolation {
+            reason: "active_work_item_learning_request",
+            expected_work_item_kinds,
+            message: format!(
+                "active_work_item run for stage {} has learning_request work item kind",
+                active_run.stage.as_str()
+            ),
+        });
+    }
+    if !stage_allows_work_item_kind(active_run.stage, work_item_kind) {
+        let expected = render_work_item_kind_list(&expected_work_item_kinds);
+        return Some(StageWorkItemOwnershipViolation {
+            reason: "stage_work_item_kind_mismatch",
+            expected_work_item_kinds,
+            message: if expected.is_empty() {
+                format!(
+                    "stage {} does not allow active work items; got {}",
+                    active_run.stage.as_str(),
+                    work_item_kind.as_str()
+                )
+            } else {
+                format!(
+                    "stage {} cannot receive work item kind {}; expected one of: {}",
+                    active_run.stage.as_str(),
+                    work_item_kind.as_str(),
+                    expected
+                )
+            },
+        });
+    }
+    None
+}
+
+fn record_stage_work_item_ownership_invalid(
+    session: &mut RuntimeStartupSession,
+    active_run: &ActiveRunState,
+    violation: StageWorkItemOwnershipViolation,
+    now: &Timestamp,
+) -> RuntimeTickResult<PathBuf> {
+    let context_paths =
+        write_stage_work_item_ownership_runtime_error(session, active_run, &violation, now)?;
+    let queue = QueueStore::from_paths(session.paths.clone());
+    let requeued_count =
+        requeue_all_active_items(&session.paths, &queue, STAGE_WORK_ITEM_OWNERSHIP_INVALID)?;
+
+    if let (Some(work_item_kind), Some(work_item_id)) = (
+        active_run.work_item_kind,
+        active_run.work_item_id.as_deref(),
+    ) {
+        reset_forward_progress_counters(&session.paths, work_item_kind, work_item_id)?;
+        session.counters = load_recovery_counters(&session.paths)?;
+    }
+
+    reset_runtime_to_idle(
+        &session.paths,
+        &mut session.snapshot,
+        true,
+        false,
+        false,
+        now,
+    )?;
+    session.snapshot.current_failure_class = Some(STAGE_WORK_ITEM_OWNERSHIP_INVALID.to_owned());
+    session.snapshot.updated_at = now.clone();
+    save_snapshot(&session.paths, &session.snapshot)?;
+
+    write_runtime_event(
+        &session.paths,
+        "runtime_stage_work_item_ownership_invalid",
+        json_object([
+            ("reason", Value::String(violation.reason.to_owned())),
+            ("message", Value::String(violation.message)),
+            ("plane", Value::String(active_run.plane.as_str().to_owned())),
+            ("stage", Value::String(active_run.stage.as_str().to_owned())),
+            ("node_id", Value::String(active_run.node_id.clone())),
+            (
+                "stage_kind_id",
+                Value::String(active_run.stage_kind_id.clone()),
+            ),
+            ("run_id", Value::String(active_run.run_id.clone())),
+            (
+                "request_kind",
+                Value::String(active_run.request_kind.as_str().to_owned()),
+            ),
+            (
+                "work_item_kind",
+                active_run
+                    .work_item_kind
+                    .map(|kind| Value::String(kind.as_str().to_owned()))
+                    .unwrap_or(Value::Null),
+            ),
+            (
+                "work_item_id",
+                active_run
+                    .work_item_id
+                    .clone()
+                    .map(Value::String)
+                    .unwrap_or(Value::Null),
+            ),
+            (
+                "expected_work_item_kinds",
+                Value::Array(
+                    violation
+                        .expected_work_item_kinds
+                        .iter()
+                        .map(|kind| Value::String(kind.as_str().to_owned()))
+                        .collect(),
+                ),
+            ),
+            (
+                "requeued_count",
+                Value::Number(serde_json::Number::from(requeued_count)),
+            ),
+            (
+                "runtime_error_context_path",
+                context_paths
+                    .context_path
+                    .as_ref()
+                    .map(|path| Value::String(workspace_relative(&session.paths, path)))
+                    .unwrap_or(Value::Null),
+            ),
+            (
+                "runtime_error_report_path",
+                context_paths
+                    .report_path
+                    .as_ref()
+                    .map(|path| Value::String(workspace_relative(&session.paths, path)))
+                    .unwrap_or(Value::Null),
+            ),
+        ]),
+        now,
+    )
+}
+
+fn write_stage_work_item_ownership_runtime_error(
+    session: &RuntimeStartupSession,
+    active_run: &ActiveRunState,
+    violation: &StageWorkItemOwnershipViolation,
+    now: &Timestamp,
+) -> RuntimeTickResult<StageWorkItemOwnershipContextPaths> {
+    let (Some(work_item_kind), Some(work_item_id)) =
+        (active_run.work_item_kind, active_run.work_item_id.as_ref())
+    else {
+        return Ok(StageWorkItemOwnershipContextPaths::default());
+    };
+
+    let report_path = session
+        .paths
+        .runs_dir
+        .join(&active_run.run_id)
+        .join("runtime_error_report.md");
+    if let Some(parent) = report_path.parent() {
+        create_dir_all(parent)?;
+    }
+    let context = RuntimeErrorContext {
+        schema_version: "1.0".to_owned(),
+        kind: "runtime_error_context".to_owned(),
+        error_code: RuntimeErrorCode::StageWorkItemOwnershipInvalid,
+        plane: active_run.plane,
+        failed_stage: active_run.stage,
+        repair_stage: active_run.stage,
+        work_item_kind,
+        work_item_id: work_item_id.clone(),
+        run_id: active_run.run_id.clone(),
+        router_action: None,
+        terminal_result: None,
+        stage_result_path: None,
+        report_path: report_path.display().to_string(),
+        exception_type: "StageWorkItemOwnershipInvalid".to_owned(),
+        exception_message: violation.message.clone(),
+        captured_at: now.clone(),
+    };
+    context.validate().map_err(|error| {
+        invalid_state(format!("runtime error context validation failed: {error}"))
+    })?;
+    write_runtime_error_report(&report_path, &context)?;
+    write_pretty_json(&session.paths.runtime_error_context_file, &context)?;
+    Ok(StageWorkItemOwnershipContextPaths {
+        context_path: Some(session.paths.runtime_error_context_file.clone()),
+        report_path: Some(report_path),
+    })
+}
+
 fn runtime_error_request_fields(
     session: &RuntimeStartupSession,
     active_run: &ActiveRunState,
@@ -2395,7 +2649,7 @@ fn apply_router_decision(
     }
 
     if is_recon_stage_result(stage_result) {
-        return apply_recon_router_decision(session, decision, stage_result);
+        return apply_recon_router_decision(session, decision, stage_result, stage_result_path);
     }
 
     match decision.action {
@@ -2824,6 +3078,20 @@ fn apply_recon_router_decision(
     session: &mut RuntimeStartupSession,
     decision: &RouterDecision,
     stage_result: &StageResultEnvelope,
+    stage_result_path: &Path,
+) -> RuntimeTickResult<Vec<PathBuf>> {
+    match apply_recon_router_decision_inner(session, decision, stage_result) {
+        Ok(paths) => Ok(paths),
+        Err(error) => {
+            block_invalid_recon_handoff(session, decision, stage_result, stage_result_path, error)
+        }
+    }
+}
+
+fn apply_recon_router_decision_inner(
+    session: &mut RuntimeStartupSession,
+    decision: &RouterDecision,
+    stage_result: &StageResultEnvelope,
 ) -> RuntimeTickResult<Vec<PathBuf>> {
     let terminal_result = match stage_result.terminal_result {
         TerminalResult::Planning(result) => result,
@@ -2861,8 +3129,8 @@ fn apply_recon_router_decision(
     let packet = read_and_validate_recon_packet(session, stage_result, terminal_result)?;
     match terminal_result {
         PlanningTerminalResult::ReconToExecution => {
-            let task = generated_recon_task(session, stage_result, &packet)?;
             persist_recon_packet(session, &packet)?;
+            let task = generated_recon_task(session, stage_result, &packet)?;
             let spawned_path = QueueStore::from_paths(session.paths.clone())
                 .enqueue_task(&task)
                 .map_err(RuntimeTickError::from)?;
@@ -2870,8 +3138,8 @@ fn apply_recon_router_decision(
             Ok(vec![spawned_path])
         }
         PlanningTerminalResult::ReconToPlanning => {
-            let spec = generated_recon_spec(session, stage_result, &packet)?;
             persist_recon_packet(session, &packet)?;
+            let spec = generated_recon_spec(session, stage_result, &packet)?;
             let spawned_path = QueueStore::from_paths(session.paths.clone())
                 .enqueue_spec(&spec)
                 .map_err(RuntimeTickError::from)?;
@@ -2890,6 +3158,59 @@ fn apply_recon_router_decision(
         }
         _ => unreachable!("unsupported recon terminal result was rejected"),
     }
+}
+
+fn block_invalid_recon_handoff(
+    session: &mut RuntimeStartupSession,
+    source_decision: &RouterDecision,
+    stage_result: &StageResultEnvelope,
+    stage_result_path: &Path,
+    error: RuntimeTickError,
+) -> RuntimeTickResult<Vec<PathBuf>> {
+    let report_path = session
+        .paths
+        .runs_dir
+        .join(&stage_result.run_id)
+        .join("runtime_error_report.md");
+    let context = RuntimeErrorContext {
+        schema_version: "1.0".to_owned(),
+        kind: "runtime_error_context".to_owned(),
+        error_code: RuntimeErrorCode::ReconHandoffInvalid,
+        plane: stage_result.plane,
+        failed_stage: stage_result.stage,
+        repair_stage: StageName::Recon,
+        work_item_kind: stage_result.work_item_kind,
+        work_item_id: stage_result.work_item_id.clone(),
+        run_id: stage_result.run_id.clone(),
+        router_action: Some(source_decision.action.as_str().to_owned()),
+        terminal_result: Some(stage_result.terminal_result),
+        stage_result_path: Some(path_relative_to_root(&session.paths, stage_result_path)),
+        report_path: report_path.display().to_string(),
+        exception_type: runtime_tick_error_type(&error).to_owned(),
+        exception_message: error.to_string(),
+        captured_at: stage_result.completed_at.clone(),
+    };
+    context.validate().map_err(|error| {
+        invalid_state(format!("runtime error context validation failed: {error}"))
+    })?;
+    write_runtime_error_report(&report_path, &context)?;
+    write_pretty_json(&session.paths.runtime_error_context_file, &context)?;
+
+    set_status_for_plane(&session.paths, stage_result.plane, "### BLOCKED")?;
+    set_snapshot_status_for_plane(&mut session.snapshot, stage_result.plane, "### BLOCKED");
+    let blocked_decision = RouterDecision {
+        action: RouterAction::Blocked,
+        next_plane: None,
+        next_stage: None,
+        reason: RuntimeErrorCode::ReconHandoffInvalid.as_str().to_owned(),
+        next_node_id: None,
+        next_stage_kind_id: None,
+        failure_class: Some(RuntimeErrorCode::ReconHandoffInvalid.as_str().to_owned()),
+        counter_key: None,
+        create_incident: false,
+    };
+    apply_blocked_decision(session, &blocked_decision, stage_result)?;
+    Ok(Vec::new())
 }
 
 fn read_and_validate_recon_packet(
@@ -3873,6 +4194,19 @@ struct RuntimeErrorRequestFields {
     runtime_error_code: Option<String>,
     runtime_error_report_path: Option<String>,
     runtime_error_catalog_path: Option<String>,
+}
+
+#[derive(Debug)]
+struct StageWorkItemOwnershipViolation {
+    reason: &'static str,
+    expected_work_item_kinds: Vec<WorkItemKind>,
+    message: String,
+}
+
+#[derive(Debug, Default)]
+struct StageWorkItemOwnershipContextPaths {
+    context_path: Option<PathBuf>,
+    report_path: Option<PathBuf>,
 }
 
 #[derive(Debug)]
@@ -5803,6 +6137,14 @@ fn workspace_relative(paths: &WorkspacePaths, path: &Path) -> String {
         .unwrap_or(path)
         .to_string_lossy()
         .replace('\\', "/")
+}
+
+fn render_work_item_kind_list(kinds: &[WorkItemKind]) -> String {
+    kinds
+        .iter()
+        .map(|kind| kind.as_str())
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn activation_for_claim(
