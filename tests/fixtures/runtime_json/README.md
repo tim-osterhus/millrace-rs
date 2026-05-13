@@ -66,6 +66,9 @@ same-cycle dependent dispatch suppression.
 `mailbox_add_probe_payload.json` and `recon_packet_to_execution.json` pin the
 implemented v0.18.1 add-probe mailbox payload and Recon packet contract
 fixtures used by the Rust runtime JSON contract tests.
+`mailbox_intervention_payloads.json` pins the Python v0.18.6 operator
+intervention mailbox payload field names, valid command payloads, and
+deterministic validation failures used by the Rust runtime JSON contract tests.
 The Rust `0.3.2` release evidence in
 `tests/fixtures/cli_parity/auto_port_v0_18_2_release_parity_evidence.json`
 uses these fixtures as package-readiness proof that status JSON diagnostics,
@@ -90,6 +93,23 @@ v0.18.4 runtime scout as package-readiness proof that failure classification and
 blocked metadata persistence are implemented, that manual queue retry behavior
 is covered, that auto-recovery config/status evidence is covered, and that
 daemon blocked-dependency auto-recovery evidence is covered.
+`auto_port_v0_18_6_runtime_contract_scout.json` pins the Python
+`v0.18.4..v0.18.6` mailbox intervention payloads, operator intervention
+archive/audit contracts, direct and mailbox-routed runtime-control behavior,
+daemon/read-only status surfaces, durable watcher idea-source behavior, closure
+source preference, and missing root idea source recovery evidence plus expected
+Rust contract/test targets. It is target-facing guardrail evidence for the
+v0.18.6 operator intervention and durable idea-source auto-port lineage and
+does not require live Python execution, network, credentials, Codex, Pi, a web
+server, or release upload.
+The Rust `0.3.5` release evidence in
+`tests/fixtures/cli_parity/auto_port_v0_18_6_release_parity_evidence.json`
+uses this runtime scout and `mailbox_intervention_payloads.json` as
+package-readiness proof that intervention payloads, archive/audit contracts,
+direct and mailbox-routed runtime-control behavior, daemon/read-only status
+surfaces, durable watcher idea-source behavior, closure source preference, and
+missing root idea source recovery evidence are shipped with the crate test
+evidence.
 
 Regenerate them from the repository root with:
 

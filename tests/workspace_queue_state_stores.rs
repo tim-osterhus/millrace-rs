@@ -9,8 +9,9 @@ use tempfile::TempDir;
 
 use millrace_ai::contracts::{
     ClosureTargetState, IncidentDecision, IncidentDocument, LearningRequestAction,
-    LearningRequestDocument, Plane, ProbeDocument, RecoveryCounterEntry, RecoveryCounters,
-    SpecDocument, SpecSourceType, StageName, TaskDocument, Timestamp, WorkItemKind,
+    LearningRequestDocument, MailboxSupersedeCascade, Plane, ProbeDocument, RecoveryCounterEntry,
+    RecoveryCounters, SpecDocument, SpecSourceType, StageName, TaskDocument, Timestamp,
+    WorkItemKind,
 };
 use millrace_ai::work_documents::{
     parse_incident_document, parse_learning_request_document, parse_task_document,
@@ -262,6 +263,386 @@ fn workspace_queue_v0_18_4_guardrail_fixture_requires_blocked_retry_audit_surfac
             "missing v0.18.4 blocked requeue result field {field}"
         );
     }
+}
+
+#[test]
+fn workspace_queue_v0_18_6_guardrail_fixture_requires_operator_intervention_archive_audit_surface()
+{
+    let fixture = read_json_fixture("cli_parity/auto_port_v0_18_6_parity_evidence.json");
+    assert_eq!(fixture["kind"], "auto_port_v0_18_6_parity_evidence");
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.18.6");
+    assert_eq!(fixture["rust_reference"]["planned_crate_version"], "0.3.5");
+
+    let mappings = fixture["changed_path_mappings"]
+        .as_array()
+        .expect("changed path mappings are present");
+    for source in [
+        "src/millrace_ai/runtime/control_mutations.py",
+        "src/millrace_ai/workspace/operator_interventions.py",
+        "src/millrace_ai/workspace/queue_store.py",
+        "tests/integration/test_operator_intervention_cleanup.py",
+        "tests/workspace/test_operator_interventions.py",
+    ] {
+        assert!(
+            mappings.iter().any(|mapping| {
+                mapping["python_path"].as_str() == Some(source)
+                    && mapping["surface"].as_str() == Some("operator_intervention_archive_audit")
+            }),
+            "missing v0.18.6 operator intervention archive/audit mapping for {source}"
+        );
+    }
+
+    let intervention = &fixture["operator_intervention_contract"];
+    assert_eq!(intervention["record_kind"], "operator_intervention");
+    let record_fields: BTreeSet<_> = intervention["record_fields"]
+        .as_array()
+        .expect("operator intervention record fields are present")
+        .iter()
+        .map(|value| value.as_str().expect("record field"))
+        .collect();
+    assert_eq!(
+        record_fields,
+        BTreeSet::from([
+            "action",
+            "actor",
+            "affected_dependents",
+            "applied_at",
+            "destination_path",
+            "destination_state",
+            "issued_at",
+            "kind",
+            "reason",
+            "replacement_work_item_id",
+            "schema_version",
+            "source_path",
+            "source_state",
+            "work_item_id",
+            "work_item_kind",
+        ])
+    );
+
+    let actions: BTreeSet<_> = intervention["actions"]
+        .as_array()
+        .expect("operator intervention actions are present")
+        .iter()
+        .map(|value| value.as_str().expect("action"))
+        .collect();
+    assert_eq!(
+        actions,
+        BTreeSet::from([
+            "archive_blocked_task",
+            "archive_invalid_incident",
+            "cancel",
+            "cancel_incident",
+            "resolve_incident",
+            "retarget_dependency",
+            "supersede",
+        ])
+    );
+
+    let archive_templates: BTreeSet<_> = intervention["archive_path_templates"]
+        .as_array()
+        .expect("archive path templates are present")
+        .iter()
+        .map(|value| value.as_str().expect("archive template"))
+        .collect();
+    for template in [
+        "tasks/queue/cancelled/<TASK_ID>.<TIMESTAMP>.<STATE>.md",
+        "tasks/blocked/cancelled/<TASK_ID>.<TIMESTAMP>.blocked.md",
+        "tasks/blocked/superseded/<TASK_ID>.<TIMESTAMP>.blocked.md",
+        "incidents/active/cancelled/<INCIDENT_ID>.<TIMESTAMP>.active.md",
+        "incidents/resolved/operator/<INCIDENT_ID>.<TIMESTAMP>.<STATE>.md",
+        "incidents/incoming/invalid-archived/<FILENAME>.<TIMESTAMP>",
+    ] {
+        assert!(
+            archive_templates.contains(template),
+            "missing v0.18.6 intervention archive template {template}"
+        );
+    }
+
+    let event_types: BTreeSet<_> = intervention["event_types"]
+        .as_array()
+        .expect("intervention event types are present")
+        .iter()
+        .map(|value| value.as_str().expect("event type"))
+        .collect();
+    for event_type in [
+        "work_item_cancelled",
+        "blocked_task_archived",
+        "task_superseded",
+        "task_dependency_retargeted",
+        "incident_resolved_by_operator",
+        "incident_cancelled",
+        "invalid_incident_artifact_archived",
+        "mailbox_operator_intervention_applied",
+        "operator_intervention_deferred",
+    ] {
+        assert!(
+            event_types.contains(event_type),
+            "missing v0.18.6 operator intervention event {event_type}"
+        );
+    }
+
+    for key in [
+        "cancelled_task_count",
+        "superseded_task_count",
+        "cancelled_incident_count",
+        "operator_resolved_incident_count",
+    ] {
+        assert!(
+            intervention["queue_ls_output_keys"]
+                .as_array()
+                .expect("queue ls output keys are present")
+                .iter()
+                .any(|value| value.as_str() == Some(key)),
+            "missing v0.18.6 queue ls intervention counter {key}"
+        );
+    }
+}
+
+#[test]
+fn operator_intervention_cancel_queued_task_archives_document_and_writes_audit_event() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+    let store = QueueStore::from_paths(paths.clone());
+    store
+        .enqueue_task(&task_document("task-cancel", NOW))
+        .unwrap();
+
+    let result = store
+        .cancel_work_item(
+            "task-cancel",
+            Some(WorkItemKind::Task),
+            " task had the wrong implementation scope ",
+            "operator",
+            false,
+        )
+        .unwrap();
+
+    assert_eq!(result.action.as_str(), "cancel");
+    assert_eq!(result.work_item_kind, WorkItemKind::Task);
+    assert_eq!(result.source_state, "queue");
+    assert_eq!(result.destination_state, "cancelled");
+    assert_eq!(
+        result.source_path,
+        paths.tasks_queue_dir.join("task-cancel.md")
+    );
+    assert_eq!(
+        result.destination_path.parent().unwrap(),
+        paths.tasks_queue_dir.join("cancelled")
+    );
+    assert!(result.destination_path.is_file());
+    assert!(!result.source_path.exists());
+
+    let audit = read_json_lines(&paths.tasks_queue_dir.join("cancelled/interventions.jsonl"));
+    assert_eq!(audit.len(), 1);
+    assert_eq!(audit[0]["schema_version"], "1.0");
+    assert_eq!(audit[0]["kind"], "operator_intervention");
+    assert_eq!(audit[0]["action"], "cancel");
+    assert_eq!(audit[0]["actor"], "operator");
+    assert_eq!(
+        audit[0]["reason"],
+        "task had the wrong implementation scope"
+    );
+    assert_eq!(audit[0]["work_item_kind"], "task");
+    assert_eq!(audit[0]["work_item_id"], "task-cancel");
+    assert_eq!(
+        audit[0]["source_path"],
+        "millrace-agents/tasks/queue/task-cancel.md"
+    );
+    assert!(
+        audit[0]["destination_path"]
+            .as_str()
+            .unwrap()
+            .starts_with("millrace-agents/tasks/queue/cancelled/task-cancel.")
+    );
+
+    let events = read_json_lines(&paths.logs_dir.join("runtime_events.jsonl"));
+    assert_eq!(events.last().unwrap()["event_type"], "work_item_cancelled");
+    assert_eq!(
+        events.last().unwrap()["data"]["work_item_id"],
+        "task-cancel"
+    );
+}
+
+#[test]
+fn operator_intervention_supersede_blocked_task_retargets_queued_dependents() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+    let store = QueueStore::from_paths(paths.clone());
+    store.enqueue_task(&task_document("task-old", NOW)).unwrap();
+    store.claim_next_execution_task(None).unwrap().unwrap();
+    store.mark_task_blocked("task-old").unwrap();
+    store
+        .enqueue_task(&task_document("task-new", "2026-04-15T00:00:01Z"))
+        .unwrap();
+    let mut dependent = task_document("task-dependent", "2026-04-15T00:00:02Z");
+    dependent.depends_on = vec!["task-old".to_owned()];
+    store.enqueue_task(&dependent).unwrap();
+
+    let result = store
+        .supersede_task(
+            "task-old",
+            "task-new",
+            "new task has corrected scope",
+            MailboxSupersedeCascade::Retarget,
+            "operator",
+        )
+        .unwrap();
+
+    assert_eq!(result.action.as_str(), "supersede");
+    assert_eq!(result.source_state, "blocked");
+    assert_eq!(result.destination_state, "superseded");
+    assert_eq!(result.replacement_work_item_id.as_deref(), Some("task-new"));
+    assert_eq!(result.affected_dependents, vec!["task-dependent"]);
+    assert_eq!(
+        result.destination_path.parent().unwrap(),
+        paths.tasks_blocked_dir.join("superseded")
+    );
+    assert!(!paths.tasks_blocked_dir.join("task-old.md").exists());
+
+    let dependent = parse_task_document(
+        &fs::read_to_string(paths.tasks_queue_dir.join("task-dependent.md")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(dependent.depends_on, vec!["task-new".to_owned()]);
+    assert!(dependent.updated_at.is_some());
+
+    let supersede_audit = read_json_lines(
+        &paths
+            .tasks_blocked_dir
+            .join("superseded/interventions.jsonl"),
+    );
+    assert_eq!(supersede_audit[0]["action"], "supersede");
+    assert_eq!(supersede_audit[0]["replacement_work_item_id"], "task-new");
+    assert_eq!(
+        supersede_audit[0]["affected_dependents"],
+        serde_json::json!(["task-dependent"])
+    );
+    let retarget_audit = read_json_lines(&paths.tasks_queue_dir.join("interventions.jsonl"));
+    assert_eq!(retarget_audit[0]["action"], "retarget_dependency");
+    assert_eq!(retarget_audit[0]["replacement_work_item_id"], "task-new");
+
+    let event_types: Vec<_> = read_json_lines(&paths.logs_dir.join("runtime_events.jsonl"))
+        .iter()
+        .map(|event| event["event_type"].as_str().unwrap().to_owned())
+        .collect();
+    assert!(event_types.contains(&"task_superseded".to_owned()));
+    assert!(event_types.contains(&"task_dependency_retargeted".to_owned()));
+}
+
+#[test]
+fn operator_intervention_retarget_dependency_requires_existing_old_dependency() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+    let store = QueueStore::from_paths(paths.clone());
+    store.enqueue_task(&task_document("task-old", NOW)).unwrap();
+    store
+        .enqueue_task(&task_document("task-new", "2026-04-15T00:00:01Z"))
+        .unwrap();
+    let mut dependent = task_document("task-dependent", "2026-04-15T00:00:02Z");
+    dependent.depends_on = vec!["task-old".to_owned()];
+    store.enqueue_task(&dependent).unwrap();
+
+    let result = store
+        .retarget_queued_task_dependency(
+            "task-dependent",
+            "task-old",
+            "task-new",
+            "replace superseded dependency",
+            "operator",
+        )
+        .unwrap();
+    assert_eq!(result.action.as_str(), "retarget_dependency");
+
+    let error = store
+        .retarget_queued_task_dependency(
+            "task-dependent",
+            "missing-old",
+            "task-new",
+            "bad retarget",
+            "operator",
+        )
+        .unwrap_err();
+    assert!(error.to_string().contains("does not depend on"));
+}
+
+#[test]
+fn operator_intervention_incident_cleanup_matches_archive_paths_and_invalid_filename_safety() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+    let store = QueueStore::from_paths(paths.clone());
+    store
+        .enqueue_incident(&incident_document("incident-resolve", NOW))
+        .unwrap();
+    store
+        .enqueue_incident(&incident_document(
+            "incident-cancel",
+            "2026-04-15T00:00:01Z",
+        ))
+        .unwrap();
+    store.claim_next_planning_item(None).unwrap().unwrap();
+
+    let resolved = store
+        .resolve_incident_by_operator(
+            "incident-cancel",
+            "operator resolved bad intake",
+            "operator",
+        )
+        .unwrap();
+    assert_eq!(resolved.action.as_str(), "resolve_incident");
+    assert_eq!(resolved.destination_state, "resolved");
+    assert_eq!(
+        resolved.destination_path.parent().unwrap(),
+        paths.incidents_resolved_dir.join("operator")
+    );
+
+    let cancelled = store
+        .cancel_incident(
+            "incident-resolve",
+            "incident came from superseded bad intake",
+            "operator",
+        )
+        .unwrap();
+    assert_eq!(cancelled.action.as_str(), "cancel_incident");
+    assert_eq!(cancelled.source_state, "active");
+    assert_eq!(
+        cancelled.destination_path.parent().unwrap(),
+        paths.incidents_active_dir.join("cancelled")
+    );
+
+    let invalid = paths.incidents_incoming_dir.join("INC-bad.md.invalid");
+    fs::write(&invalid, "not a valid incident").unwrap();
+    let archived = store
+        .archive_invalid_incident_artifact(
+            "INC-bad.md.invalid",
+            "bad generated incident artifact",
+            "operator",
+        )
+        .unwrap();
+    assert_eq!(archived.action.as_str(), "archive_invalid_incident");
+    assert_eq!(
+        archived.destination_path.parent().unwrap(),
+        paths.incidents_incoming_dir.join("invalid-archived")
+    );
+    assert!(!invalid.exists());
+
+    let traversal = store
+        .archive_invalid_incident_artifact(
+            "../escape.invalid",
+            "bad generated incident artifact",
+            "operator",
+        )
+        .unwrap_err();
+    assert!(traversal.to_string().contains("single relative filename"));
+
+    let event_types: Vec<_> = read_json_lines(&paths.logs_dir.join("runtime_events.jsonl"))
+        .iter()
+        .map(|event| event["event_type"].as_str().unwrap().to_owned())
+        .collect();
+    assert!(event_types.contains(&"incident_resolved_by_operator".to_owned()));
+    assert!(event_types.contains(&"incident_cancelled".to_owned()));
+    assert!(event_types.contains(&"invalid_incident_artifact_archived".to_owned()));
 }
 
 #[test]

@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0",
+  "kind": "mailbox_intervention_payload_contracts",
+  "valid_payloads": {
+    "cancel_work_item": {
+      "work_item_id": "task-cancel-001",
+      "work_item_kind": "task",
+      "reason": "operator cancelled bad intake",
+      "force": false
+    },
+    "archive_blocked_task": {
+      "task_id": "task-blocked-001",
+      "reason": "operator archived obsolete blocked task"
+    },
+    "supersede_task": {
+      "old_task_id": "task-old-001",
+      "replacement_task_id": "task-new-001",
+      "reason": "operator corrected task scope",
+      "cascade": "retarget"
+    },
+    "retarget_task_dependency": {
+      "task_id": "task-dependent-001",
+      "old_dependency_id": "task-old-001",
+      "new_dependency_id": "task-new-001",
+      "reason": "operator retargeted dependency"
+    },
+    "resolve_incident": {
+      "incident_id": "incident-resolve-001",
+      "reason": "operator resolved incident"
+    },
+    "cancel_incident": {
+      "incident_id": "incident-cancel-001",
+      "reason": "operator cancelled incident"
+    },
+    "archive_invalid_incident": {
+      "filename": "incident-invalid.md",
+      "reason": "operator archived invalid incident artifact"
+    }
+  },
+  "validation_failures": {
+    "empty_reason": {
+      "work_item_id": "task-cancel-001",
+      "reason": ""
+    },
+    "unsafe_work_item_id": {
+      "work_item_id": "../task-cancel-001",
+      "reason": "operator cancelled bad intake"
+    },
+    "invalid_work_item_kind": {
+      "work_item_id": "task-cancel-001",
+      "work_item_kind": "story",
+      "reason": "operator cancelled bad intake"
+    },
+    "unsafe_task_id": {
+      "task_id": "../task-blocked-001",
+      "reason": "operator archived obsolete blocked task"
+    },
+    "invalid_cascade": {
+      "old_task_id": "task-old-001",
+      "replacement_task_id": "task-new-001",
+      "reason": "operator corrected task scope",
+      "cascade": "rewrite"
+    },
+    "missing_replacement_task_id": {
+      "old_task_id": "task-old-001",
+      "reason": "operator corrected task scope"
+    },
+    "missing_old_dependency_id": {
+      "task_id": "task-dependent-001",
+      "new_dependency_id": "task-new-001",
+      "reason": "operator retargeted dependency"
+    },
+    "missing_new_dependency_id": {
+      "task_id": "task-dependent-001",
+      "old_dependency_id": "task-old-001",
+      "reason": "operator retargeted dependency"
+    },
+    "unsafe_incident_id": {
+      "incident_id": "../incident-resolve-001",
+      "reason": "operator resolved incident"
+    },
+    "unsafe_invalid_incident_filename": {
+      "filename": "../incident-invalid.md",
+      "reason": "operator archived invalid incident artifact"
+    }
+  }
+}

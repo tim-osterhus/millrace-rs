@@ -13,14 +13,17 @@ use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 use crate::contracts::{
     ActiveRunState, MailboxAddIdeaPayload, MailboxAddProbePayload, MailboxAddSpecPayload,
-    MailboxAddTaskPayload, MailboxCommand, MailboxCommandEnvelope, PauseSource, Plane,
-    ProbeDocument, RecoveryCounters, RuntimeJsonContract, RuntimeJsonError, RuntimeSnapshot,
-    SpecDocument, TaskDocument, Timestamp, WorkItemKind,
+    MailboxAddTaskPayload, MailboxArchiveBlockedTaskPayload, MailboxArchiveInvalidIncidentPayload,
+    MailboxCancelWorkItemPayload, MailboxCommand, MailboxCommandEnvelope,
+    MailboxIncidentInterventionPayload, MailboxRetargetTaskDependencyPayload,
+    MailboxSupersedeCascade, MailboxSupersedeTaskPayload, PauseSource, Plane, ProbeDocument,
+    RecoveryCounters, RuntimeJsonContract, RuntimeJsonError, RuntimeSnapshot, SpecDocument,
+    TaskDocument, Timestamp, WorkItemKind,
 };
 
 use super::{
-    QueueStore, QueueStoreError, RuntimeOwnershipLockError, RuntimeOwnershipLockState,
-    StateStoreError, WorkspaceError, WorkspacePaths, atomic_write_text,
+    OperatorInterventionResult, QueueStore, QueueStoreError, RuntimeOwnershipLockError,
+    RuntimeOwnershipLockState, StateStoreError, WorkspaceError, WorkspacePaths, atomic_write_text,
     clear_stale_runtime_ownership_lock, inspect_runtime_ownership_lock, load_recovery_counters,
     load_snapshot, load_usage_governance_state, require_initialized_workspace,
     require_initialized_workspace_paths, reset_forward_progress_counters, save_recovery_counters,
@@ -555,6 +558,243 @@ impl RuntimeControl {
         })
     }
 
+    /// Cancel a queued or blocked work item, or enqueue a daemon-owned intervention command.
+    pub fn cancel_work_item(
+        &self,
+        work_item_id: &str,
+        reason: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        self.cancel_work_item_with_options(work_item_id, None, reason, false, DEFAULT_ISSUER)
+    }
+
+    /// Cancel a queued or blocked work item with optional kind and force flags.
+    pub fn cancel_work_item_with_options(
+        &self,
+        work_item_id: &str,
+        work_item_kind: Option<WorkItemKind>,
+        reason: &str,
+        force: bool,
+        issuer: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        let mut payload_model = MailboxCancelWorkItemPayload {
+            work_item_id: work_item_id.to_owned(),
+            work_item_kind,
+            reason: reason.to_owned(),
+            force,
+        };
+        let payload =
+            intervention_payload_map(&self.paths.mailbox_incoming_dir, &mut payload_model)?;
+        self.dispatch(
+            MailboxCommand::CancelWorkItem,
+            issuer,
+            Some(payload),
+            |snapshot| self.cancel_work_item_direct(snapshot, &payload_model, issuer),
+        )
+    }
+
+    /// Archive a blocked task without requeueing it, or enqueue a daemon-owned command.
+    pub fn archive_blocked_task(
+        &self,
+        task_id: &str,
+        reason: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        self.archive_blocked_task_with_issuer(task_id, reason, DEFAULT_ISSUER)
+    }
+
+    /// Archive a blocked task with a caller-provided issuer.
+    pub fn archive_blocked_task_with_issuer(
+        &self,
+        task_id: &str,
+        reason: &str,
+        issuer: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        let mut payload_model = MailboxArchiveBlockedTaskPayload {
+            task_id: task_id.to_owned(),
+            reason: reason.to_owned(),
+        };
+        let payload =
+            intervention_payload_map(&self.paths.mailbox_incoming_dir, &mut payload_model)?;
+        self.dispatch(
+            MailboxCommand::ArchiveBlockedTask,
+            issuer,
+            Some(payload),
+            |snapshot| self.archive_blocked_task_direct(snapshot, &payload_model, issuer),
+        )
+    }
+
+    /// Supersede a blocked task with a replacement task.
+    pub fn supersede_task(
+        &self,
+        old_task_id: &str,
+        replacement_task_id: &str,
+        reason: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        self.supersede_task_with_cascade(
+            old_task_id,
+            replacement_task_id,
+            reason,
+            MailboxSupersedeCascade::None,
+            DEFAULT_ISSUER,
+        )
+    }
+
+    /// Supersede a blocked task with an explicit dependent cascade mode.
+    pub fn supersede_task_with_cascade(
+        &self,
+        old_task_id: &str,
+        replacement_task_id: &str,
+        reason: &str,
+        cascade: MailboxSupersedeCascade,
+        issuer: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        let mut payload_model = MailboxSupersedeTaskPayload {
+            old_task_id: old_task_id.to_owned(),
+            replacement_task_id: replacement_task_id.to_owned(),
+            reason: reason.to_owned(),
+            cascade,
+        };
+        let payload =
+            intervention_payload_map(&self.paths.mailbox_incoming_dir, &mut payload_model)?;
+        self.dispatch(
+            MailboxCommand::SupersedeTask,
+            issuer,
+            Some(payload),
+            |snapshot| self.supersede_task_direct(snapshot, &payload_model, issuer),
+        )
+    }
+
+    /// Retarget one queued task dependency from an old task id to a new task id.
+    pub fn retarget_task_dependency(
+        &self,
+        task_id: &str,
+        old_dependency_id: &str,
+        new_dependency_id: &str,
+        reason: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        self.retarget_task_dependency_with_issuer(
+            task_id,
+            old_dependency_id,
+            new_dependency_id,
+            reason,
+            DEFAULT_ISSUER,
+        )
+    }
+
+    /// Retarget one queued task dependency with a caller-provided issuer.
+    pub fn retarget_task_dependency_with_issuer(
+        &self,
+        task_id: &str,
+        old_dependency_id: &str,
+        new_dependency_id: &str,
+        reason: &str,
+        issuer: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        let mut payload_model = MailboxRetargetTaskDependencyPayload {
+            task_id: task_id.to_owned(),
+            old_dependency_id: old_dependency_id.to_owned(),
+            new_dependency_id: new_dependency_id.to_owned(),
+            reason: reason.to_owned(),
+        };
+        let payload =
+            intervention_payload_map(&self.paths.mailbox_incoming_dir, &mut payload_model)?;
+        self.dispatch(
+            MailboxCommand::RetargetTaskDependency,
+            issuer,
+            Some(payload),
+            |snapshot| self.retarget_task_dependency_direct(snapshot, &payload_model, issuer),
+        )
+    }
+
+    /// Resolve an incident by operator intervention.
+    pub fn resolve_incident(
+        &self,
+        incident_id: &str,
+        reason: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        self.resolve_incident_with_issuer(incident_id, reason, DEFAULT_ISSUER)
+    }
+
+    /// Resolve an incident by operator intervention with a caller-provided issuer.
+    pub fn resolve_incident_with_issuer(
+        &self,
+        incident_id: &str,
+        reason: &str,
+        issuer: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        let mut payload_model = MailboxIncidentInterventionPayload {
+            incident_id: incident_id.to_owned(),
+            reason: reason.to_owned(),
+        };
+        let payload =
+            intervention_payload_map(&self.paths.mailbox_incoming_dir, &mut payload_model)?;
+        self.dispatch(
+            MailboxCommand::ResolveIncident,
+            issuer,
+            Some(payload),
+            |snapshot| self.resolve_incident_direct(snapshot, &payload_model, issuer),
+        )
+    }
+
+    /// Cancel an incident by operator intervention.
+    pub fn cancel_incident(
+        &self,
+        incident_id: &str,
+        reason: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        self.cancel_incident_with_issuer(incident_id, reason, DEFAULT_ISSUER)
+    }
+
+    /// Cancel an incident by operator intervention with a caller-provided issuer.
+    pub fn cancel_incident_with_issuer(
+        &self,
+        incident_id: &str,
+        reason: &str,
+        issuer: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        let mut payload_model = MailboxIncidentInterventionPayload {
+            incident_id: incident_id.to_owned(),
+            reason: reason.to_owned(),
+        };
+        let payload =
+            intervention_payload_map(&self.paths.mailbox_incoming_dir, &mut payload_model)?;
+        self.dispatch(
+            MailboxCommand::CancelIncident,
+            issuer,
+            Some(payload),
+            |snapshot| self.cancel_incident_direct(snapshot, &payload_model, issuer),
+        )
+    }
+
+    /// Archive an invalid incident artifact by filename.
+    pub fn archive_invalid_incident(
+        &self,
+        filename: &str,
+        reason: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        self.archive_invalid_incident_with_issuer(filename, reason, DEFAULT_ISSUER)
+    }
+
+    /// Archive an invalid incident artifact by filename with a caller-provided issuer.
+    pub fn archive_invalid_incident_with_issuer(
+        &self,
+        filename: &str,
+        reason: &str,
+        issuer: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        let mut payload_model = MailboxArchiveInvalidIncidentPayload {
+            filename: filename.to_owned(),
+            reason: reason.to_owned(),
+        };
+        let payload =
+            intervention_payload_map(&self.paths.mailbox_incoming_dir, &mut payload_model)?;
+        self.dispatch(
+            MailboxCommand::ArchiveInvalidIncident,
+            issuer,
+            Some(payload),
+            |snapshot| self.archive_invalid_incident_direct(snapshot, &payload_model, issuer),
+        )
+    }
+
     fn dispatch<F>(
         &self,
         command: MailboxCommand,
@@ -875,6 +1115,166 @@ impl RuntimeControl {
         ))
     }
 
+    fn cancel_work_item_direct(
+        &self,
+        snapshot: RuntimeSnapshot,
+        payload: &MailboxCancelWorkItemPayload,
+        issuer: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        self.apply_operator_intervention_direct(snapshot, MailboxCommand::CancelWorkItem, |queue| {
+            queue.cancel_work_item(
+                &payload.work_item_id,
+                payload.work_item_kind,
+                &payload.reason,
+                issuer,
+                payload.force,
+            )
+        })
+    }
+
+    fn archive_blocked_task_direct(
+        &self,
+        snapshot: RuntimeSnapshot,
+        payload: &MailboxArchiveBlockedTaskPayload,
+        issuer: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        self.apply_operator_intervention_direct(
+            snapshot,
+            MailboxCommand::ArchiveBlockedTask,
+            |queue| queue.archive_blocked_task(&payload.task_id, &payload.reason, issuer),
+        )
+    }
+
+    fn supersede_task_direct(
+        &self,
+        snapshot: RuntimeSnapshot,
+        payload: &MailboxSupersedeTaskPayload,
+        issuer: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        self.apply_operator_intervention_direct(snapshot, MailboxCommand::SupersedeTask, |queue| {
+            queue.supersede_task(
+                &payload.old_task_id,
+                &payload.replacement_task_id,
+                &payload.reason,
+                payload.cascade,
+                issuer,
+            )
+        })
+    }
+
+    fn retarget_task_dependency_direct(
+        &self,
+        snapshot: RuntimeSnapshot,
+        payload: &MailboxRetargetTaskDependencyPayload,
+        issuer: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        self.apply_operator_intervention_direct(
+            snapshot,
+            MailboxCommand::RetargetTaskDependency,
+            |queue| {
+                queue.retarget_queued_task_dependency(
+                    &payload.task_id,
+                    &payload.old_dependency_id,
+                    &payload.new_dependency_id,
+                    &payload.reason,
+                    issuer,
+                )
+            },
+        )
+    }
+
+    fn resolve_incident_direct(
+        &self,
+        snapshot: RuntimeSnapshot,
+        payload: &MailboxIncidentInterventionPayload,
+        issuer: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        self.apply_operator_intervention_direct(
+            snapshot,
+            MailboxCommand::ResolveIncident,
+            |queue| {
+                queue.resolve_incident_by_operator(&payload.incident_id, &payload.reason, issuer)
+            },
+        )
+    }
+
+    fn cancel_incident_direct(
+        &self,
+        snapshot: RuntimeSnapshot,
+        payload: &MailboxIncidentInterventionPayload,
+        issuer: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        self.apply_operator_intervention_direct(snapshot, MailboxCommand::CancelIncident, |queue| {
+            queue.cancel_incident(&payload.incident_id, &payload.reason, issuer)
+        })
+    }
+
+    fn archive_invalid_incident_direct(
+        &self,
+        snapshot: RuntimeSnapshot,
+        payload: &MailboxArchiveInvalidIncidentPayload,
+        issuer: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        self.apply_operator_intervention_direct(
+            snapshot,
+            MailboxCommand::ArchiveInvalidIncident,
+            |queue| {
+                queue.archive_invalid_incident_artifact(&payload.filename, &payload.reason, issuer)
+            },
+        )
+    }
+
+    fn apply_operator_intervention_direct<F>(
+        &self,
+        snapshot: RuntimeSnapshot,
+        action: MailboxCommand,
+        apply: F,
+    ) -> RuntimeControlResult<RuntimeControlActionResult>
+    where
+        F: FnOnce(&QueueStore) -> Result<OperatorInterventionResult, QueueStoreError>,
+    {
+        if snapshot.active_stage.is_some() || !snapshot.active_runs_by_plane.is_empty() {
+            let active_planes = active_planes_label(&snapshot);
+            return Ok(RuntimeControlActionResult::direct(
+                action,
+                false,
+                format!(
+                    "active runtime stage prevents operator intervention; active_planes={active_planes}"
+                ),
+            ));
+        }
+
+        let queue = QueueStore::from_paths(self.paths.clone());
+        let result = apply(&queue)?;
+        self.save_queue_depth_snapshot(snapshot)?;
+        Ok(RuntimeControlActionResult::direct_artifact(
+            action,
+            result.detail(),
+            result.destination_path,
+        ))
+    }
+
+    fn save_queue_depth_snapshot(&self, mut snapshot: RuntimeSnapshot) -> RuntimeControlResult<()> {
+        set_queue_depth(
+            &mut snapshot,
+            Plane::Execution,
+            count_markdown_files(&self.paths.tasks_queue_dir)?,
+        );
+        set_queue_depth(
+            &mut snapshot,
+            Plane::Planning,
+            planning_queue_depth(&self.paths)?,
+        );
+        set_queue_depth(
+            &mut snapshot,
+            Plane::Learning,
+            count_markdown_files(&self.paths.learning_requests_queue_dir)?,
+        );
+        snapshot.updated_at = now_timestamp("updated_at")?;
+        save_snapshot(&self.paths, &snapshot)?;
+        Ok(())
+    }
+
     fn reset_runtime_to_idle(
         &self,
         mut snapshot: RuntimeSnapshot,
@@ -1036,6 +1436,19 @@ where
             message: "must serialize to a JSON object".to_owned(),
         }),
     }
+}
+
+fn intervention_payload_map<T>(
+    path: &Path,
+    payload: &mut T,
+) -> RuntimeControlResult<Map<String, Value>>
+where
+    T: RuntimeJsonContract,
+{
+    payload
+        .validate_contract()
+        .map_err(|source| RuntimeControlError::runtime_json(path.to_path_buf(), source))?;
+    payload_map(path, payload)
 }
 
 fn reason_payload(reason: &str) -> Map<String, Value> {

@@ -825,6 +825,17 @@ pub struct RuntimeSnapshot {
     pub updated_at: Timestamp,
 }
 
+/// Latest operator intervention summary embedded in read-only status payloads.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LatestOperatorIntervention {
+    pub event_type: String,
+    pub occurred_at: Timestamp,
+    pub work_item_kind: Option<WorkItemKind>,
+    pub work_item_id: Option<String>,
+    pub destination_path: Option<String>,
+}
+
 /// Stable read-only payload rendered by `millrace status --format json`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -855,6 +866,7 @@ pub struct ReadOnlyStatusPayload {
     pub blocked_idle: bool,
     pub current_failure_class: Option<String>,
     pub latest_runtime_error_report_path: Option<String>,
+    pub latest_operator_intervention: Option<LatestOperatorIntervention>,
     pub closure_target_root_spec_id: Value,
     pub closure_target_open: Value,
     pub closure_target_blocked_by_lineage_work: Value,
@@ -1141,6 +1153,15 @@ impl RuntimeJsonContract for RecoveryCounters {
     }
 }
 
+runtime_string_enum! {
+    /// Cascade behavior for superseding a blocked task.
+    pub enum MailboxSupersedeCascade {
+        None => "none",
+        Retarget => "retarget",
+        Cancel => "cancel",
+    }
+}
+
 /// Runtime mailbox command envelope.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -1174,6 +1195,14 @@ impl RuntimeJsonContract for MailboxCommandEnvelope {
 pub struct MailboxAddIdeaPayload {
     pub source_name: String,
     pub markdown: String,
+}
+
+impl RuntimeJsonContract for MailboxAddIdeaPayload {
+    const ARTIFACT: &'static str = "mailbox_add_idea_payload";
+
+    fn validate_contract(&mut self) -> Result<(), RuntimeJsonError> {
+        self.validate()
+    }
 }
 
 impl MailboxAddIdeaPayload {
@@ -1229,6 +1258,14 @@ pub struct MailboxAddTaskPayload {
     pub document: TaskDocument,
 }
 
+impl RuntimeJsonContract for MailboxAddTaskPayload {
+    const ARTIFACT: &'static str = "mailbox_add_task_payload";
+
+    fn validate_contract(&mut self) -> Result<(), RuntimeJsonError> {
+        self.validate()
+    }
+}
+
 impl MailboxAddTaskPayload {
     /// Deserializes and validates an add-task payload JSON value.
     pub fn from_json_value(value: Value) -> Result<Self, RuntimeJsonError> {
@@ -1252,6 +1289,14 @@ impl MailboxAddTaskPayload {
 #[serde(deny_unknown_fields)]
 pub struct MailboxAddProbePayload {
     pub document: ProbeDocument,
+}
+
+impl RuntimeJsonContract for MailboxAddProbePayload {
+    const ARTIFACT: &'static str = "mailbox_add_probe_payload";
+
+    fn validate_contract(&mut self) -> Result<(), RuntimeJsonError> {
+        self.validate()
+    }
 }
 
 impl MailboxAddProbePayload {
@@ -1279,6 +1324,14 @@ pub struct MailboxAddSpecPayload {
     pub document: SpecDocument,
 }
 
+impl RuntimeJsonContract for MailboxAddSpecPayload {
+    const ARTIFACT: &'static str = "mailbox_add_spec_payload";
+
+    fn validate_contract(&mut self) -> Result<(), RuntimeJsonError> {
+        self.validate()
+    }
+}
+
 impl MailboxAddSpecPayload {
     /// Deserializes and validates an add-spec payload JSON value.
     pub fn from_json_value(value: Value) -> Result<Self, RuntimeJsonError> {
@@ -1294,6 +1347,209 @@ impl MailboxAddSpecPayload {
             .map_err(|source| RuntimeJsonError::InvalidDocument {
                 message: source.to_string(),
             })
+    }
+}
+
+/// Payload shape for `cancel_work_item` mailbox commands.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MailboxCancelWorkItemPayload {
+    pub work_item_id: String,
+    #[serde(default)]
+    pub work_item_kind: Option<WorkItemKind>,
+    pub reason: String,
+    #[serde(default)]
+    pub force: bool,
+}
+
+impl RuntimeJsonContract for MailboxCancelWorkItemPayload {
+    const ARTIFACT: &'static str = "mailbox_cancel_work_item_payload";
+
+    fn validate_contract(&mut self) -> Result<(), RuntimeJsonError> {
+        self.validate()
+    }
+}
+
+impl MailboxCancelWorkItemPayload {
+    /// Deserializes and validates a cancel-work-item payload JSON value.
+    pub fn from_json_value(value: Value) -> Result<Self, RuntimeJsonError> {
+        let mut decoded: Self = decode_json("mailbox_cancel_work_item_payload", value)?;
+        decoded.validate()?;
+        Ok(decoded)
+    }
+
+    /// Validates the work item id and required reason.
+    pub fn validate(&mut self) -> Result<(), RuntimeJsonError> {
+        validate_reason(&self.reason)?;
+        validate_safe_identifier(&self.work_item_id, "work_item_id")?;
+        Ok(())
+    }
+}
+
+/// Payload shape for `archive_blocked_task` mailbox commands.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MailboxArchiveBlockedTaskPayload {
+    pub task_id: String,
+    pub reason: String,
+}
+
+impl RuntimeJsonContract for MailboxArchiveBlockedTaskPayload {
+    const ARTIFACT: &'static str = "mailbox_archive_blocked_task_payload";
+
+    fn validate_contract(&mut self) -> Result<(), RuntimeJsonError> {
+        self.validate()
+    }
+}
+
+impl MailboxArchiveBlockedTaskPayload {
+    /// Deserializes and validates an archive-blocked-task payload JSON value.
+    pub fn from_json_value(value: Value) -> Result<Self, RuntimeJsonError> {
+        let mut decoded: Self = decode_json("mailbox_archive_blocked_task_payload", value)?;
+        decoded.validate()?;
+        Ok(decoded)
+    }
+
+    /// Validates the blocked task id and required reason.
+    pub fn validate(&mut self) -> Result<(), RuntimeJsonError> {
+        validate_reason(&self.reason)?;
+        validate_safe_identifier(&self.task_id, "task_id")?;
+        Ok(())
+    }
+}
+
+/// Payload shape for `supersede_task` mailbox commands.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MailboxSupersedeTaskPayload {
+    pub old_task_id: String,
+    pub replacement_task_id: String,
+    pub reason: String,
+    #[serde(default = "default_mailbox_supersede_cascade")]
+    pub cascade: MailboxSupersedeCascade,
+}
+
+impl RuntimeJsonContract for MailboxSupersedeTaskPayload {
+    const ARTIFACT: &'static str = "mailbox_supersede_task_payload";
+
+    fn validate_contract(&mut self) -> Result<(), RuntimeJsonError> {
+        self.validate()
+    }
+}
+
+impl MailboxSupersedeTaskPayload {
+    /// Deserializes and validates a supersede-task payload JSON value.
+    pub fn from_json_value(value: Value) -> Result<Self, RuntimeJsonError> {
+        let mut decoded: Self = decode_json("mailbox_supersede_task_payload", value)?;
+        decoded.validate()?;
+        Ok(decoded)
+    }
+
+    /// Validates task ids, cascade value, and required reason.
+    pub fn validate(&mut self) -> Result<(), RuntimeJsonError> {
+        validate_reason(&self.reason)?;
+        validate_safe_identifier(&self.old_task_id, "old_task_id")?;
+        validate_safe_identifier(&self.replacement_task_id, "replacement_task_id")?;
+        Ok(())
+    }
+}
+
+/// Payload shape for `retarget_task_dependency` mailbox commands.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MailboxRetargetTaskDependencyPayload {
+    pub task_id: String,
+    pub old_dependency_id: String,
+    pub new_dependency_id: String,
+    pub reason: String,
+}
+
+impl RuntimeJsonContract for MailboxRetargetTaskDependencyPayload {
+    const ARTIFACT: &'static str = "mailbox_retarget_task_dependency_payload";
+
+    fn validate_contract(&mut self) -> Result<(), RuntimeJsonError> {
+        self.validate()
+    }
+}
+
+impl MailboxRetargetTaskDependencyPayload {
+    /// Deserializes and validates a retarget-task-dependency payload JSON value.
+    pub fn from_json_value(value: Value) -> Result<Self, RuntimeJsonError> {
+        let mut decoded: Self = decode_json("mailbox_retarget_task_dependency_payload", value)?;
+        decoded.validate()?;
+        Ok(decoded)
+    }
+
+    /// Validates dependency ids and required reason.
+    pub fn validate(&mut self) -> Result<(), RuntimeJsonError> {
+        validate_reason(&self.reason)?;
+        validate_safe_identifier(&self.task_id, "task_id")?;
+        validate_safe_identifier(&self.old_dependency_id, "old_dependency_id")?;
+        validate_safe_identifier(&self.new_dependency_id, "new_dependency_id")?;
+        Ok(())
+    }
+}
+
+/// Payload shape shared by incident intervention mailbox commands.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MailboxIncidentInterventionPayload {
+    pub incident_id: String,
+    pub reason: String,
+}
+
+impl RuntimeJsonContract for MailboxIncidentInterventionPayload {
+    const ARTIFACT: &'static str = "mailbox_incident_intervention_payload";
+
+    fn validate_contract(&mut self) -> Result<(), RuntimeJsonError> {
+        self.validate()
+    }
+}
+
+impl MailboxIncidentInterventionPayload {
+    /// Deserializes and validates an incident intervention payload JSON value.
+    pub fn from_json_value(value: Value) -> Result<Self, RuntimeJsonError> {
+        let mut decoded: Self = decode_json("mailbox_incident_intervention_payload", value)?;
+        decoded.validate()?;
+        Ok(decoded)
+    }
+
+    /// Validates the incident id and required reason.
+    pub fn validate(&mut self) -> Result<(), RuntimeJsonError> {
+        validate_reason(&self.reason)?;
+        validate_safe_identifier(&self.incident_id, "incident_id")?;
+        Ok(())
+    }
+}
+
+/// Payload shape for `archive_invalid_incident` mailbox commands.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MailboxArchiveInvalidIncidentPayload {
+    pub filename: String,
+    pub reason: String,
+}
+
+impl RuntimeJsonContract for MailboxArchiveInvalidIncidentPayload {
+    const ARTIFACT: &'static str = "mailbox_archive_invalid_incident_payload";
+
+    fn validate_contract(&mut self) -> Result<(), RuntimeJsonError> {
+        self.validate()
+    }
+}
+
+impl MailboxArchiveInvalidIncidentPayload {
+    /// Deserializes and validates an archive-invalid-incident payload JSON value.
+    pub fn from_json_value(value: Value) -> Result<Self, RuntimeJsonError> {
+        let mut decoded: Self = decode_json("mailbox_archive_invalid_incident_payload", value)?;
+        decoded.validate()?;
+        Ok(decoded)
+    }
+
+    /// Validates that the artifact name is a single relative filename.
+    pub fn validate(&mut self) -> Result<(), RuntimeJsonError> {
+        validate_reason(&self.reason)?;
+        validate_single_relative_filename("filename", &self.filename)
     }
 }
 
@@ -1943,6 +2199,29 @@ fn require_non_blank(field_name: &'static str, value: &str) -> Result<(), Runtim
     }
 }
 
+fn validate_reason(reason: &str) -> Result<(), RuntimeJsonError> {
+    require_non_blank("reason", reason)
+}
+
+fn validate_single_relative_filename(
+    field_name: &'static str,
+    value: &str,
+) -> Result<(), RuntimeJsonError> {
+    if value.trim() != value || value.is_empty() {
+        return Err(RuntimeJsonError::InvalidField {
+            field_name,
+            message: "must be a single relative filename".to_owned(),
+        });
+    }
+    if value.starts_with('/') || value.contains('/') {
+        return Err(RuntimeJsonError::InvalidField {
+            field_name,
+            message: "must be a single relative filename".to_owned(),
+        });
+    }
+    Ok(())
+}
+
 fn require_optional_non_blank(
     field_name: &'static str,
     value: &Option<String>,
@@ -2000,6 +2279,10 @@ fn default_runtime_snapshot_kind() -> String {
 
 fn default_recovery_counters_kind() -> String {
     "recovery_counters".to_owned()
+}
+
+fn default_mailbox_supersede_cascade() -> MailboxSupersedeCascade {
+    MailboxSupersedeCascade::None
 }
 
 fn default_mailbox_command_kind() -> String {

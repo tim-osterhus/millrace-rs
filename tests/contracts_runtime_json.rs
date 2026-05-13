@@ -8,13 +8,17 @@ use tempfile::TempDir;
 use millrace_ai::contracts::{
     AutoRecoveryPreRecoverySnapshot, BlockedDependencyAutoRecoveryDiagnostic, BlockedItemMetadata,
     BlockedOrigin, BlockedTaskRequeueResult, CompileDiagnostics, ExecutionTerminalResult,
-    FailureClassifierCode, FailureScope, LearningTerminalResult, MailboxAddProbePayload,
-    MailboxCommandEnvelope, Plane, PlanningTerminalResult, ReadOnlyStatusPayload, ReconDecision,
-    ReconHandoffTarget, ReconPacketDocument, ReconPacketError, RecoveryCounters, ResultClass,
-    RunTraceGraph, RunnerFailureClass, RunnerFailureMetadata, RuntimeErrorContext,
-    RuntimeJsonContract, RuntimeJsonError, RuntimeMode, RuntimeSnapshot, StageName,
-    StageResultEnvelope, StrandedBlockedDependency, TerminalResult, TokenUsage,
-    UsageGovernanceLedgerEntry, UsageGovernanceState, UsageGovernanceSubscriptionWindow,
+    FailureClassifierCode, FailureScope, LatestOperatorIntervention, LearningTerminalResult,
+    MailboxAddProbePayload, MailboxArchiveBlockedTaskPayload, MailboxArchiveInvalidIncidentPayload,
+    MailboxCancelWorkItemPayload, MailboxCommand, MailboxCommandEnvelope,
+    MailboxIncidentInterventionPayload, MailboxRetargetTaskDependencyPayload,
+    MailboxSupersedeCascade, MailboxSupersedeTaskPayload, Plane, PlanningTerminalResult,
+    ReadOnlyStatusPayload, ReconDecision, ReconHandoffTarget, ReconPacketDocument,
+    ReconPacketError, RecoveryCounters, ResultClass, RunTraceGraph, RunnerFailureClass,
+    RunnerFailureMetadata, RuntimeErrorContext, RuntimeJsonContract, RuntimeJsonError, RuntimeMode,
+    RuntimeSnapshot, StageName, StageResultEnvelope, StrandedBlockedDependency, TerminalResult,
+    Timestamp, TokenUsage, UsageGovernanceLedgerEntry, UsageGovernanceState,
+    UsageGovernanceSubscriptionWindow, WorkItemKind,
 };
 use millrace_ai::recon_packets::{parse_recon_packet, read_recon_packet, render_recon_packet};
 
@@ -451,6 +455,16 @@ fn read_only_status_payload_serializes_python_compatible_json_fields() {
         latest_runtime_error_report_path: Some(
             "millrace-agents/runs/run-001/runtime_error_report.md".to_owned(),
         ),
+        latest_operator_intervention: Some(LatestOperatorIntervention {
+            event_type: "work_item_cancelled".to_owned(),
+            occurred_at: Timestamp::parse("occurred_at", "2026-05-12T12:00:00Z").unwrap(),
+            work_item_kind: Some(WorkItemKind::Task),
+            work_item_id: Some("task-cancelled".to_owned()),
+            destination_path: Some(
+                "millrace-agents/tasks/queue/cancelled/task-cancelled.20260512T120000Z.queue.md"
+                    .to_owned(),
+            ),
+        }),
         closure_target_root_spec_id: json!("spec-root-001"),
         closure_target_open: json!(true),
         closure_target_blocked_by_lineage_work: json!(true),
@@ -465,6 +479,14 @@ fn read_only_status_payload_serializes_python_compatible_json_fields() {
     assert_eq!(value["active_stage"], "mechanic");
     assert_eq!(value["blocked_idle"], true);
     assert_eq!(value["current_failure_class"], "recon_handoff_invalid");
+    assert_eq!(
+        value["latest_operator_intervention"]["event_type"],
+        "work_item_cancelled"
+    );
+    assert_eq!(
+        value["latest_operator_intervention"]["work_item_id"],
+        "task-cancelled"
+    );
     assert_eq!(value["closure_target_open"], true);
 
     let decoded: ReadOnlyStatusPayload =
@@ -1402,6 +1424,451 @@ fn auto_port_v0_18_4_runtime_contract_scout_pins_blocked_recovery_config_and_sta
             "missing v0.18.4 runtime contract scout guarantee {guarantee}"
         );
     }
+}
+
+#[test]
+fn auto_port_v0_18_6_runtime_contract_scout_pins_operator_intervention_and_durable_idea_sources() {
+    let fixture: Value = python_model_dump_fixture(include_str!(
+        "fixtures/runtime_json/auto_port_v0_18_6_runtime_contract_scout.json"
+    ));
+    assert_eq!(fixture["schema_version"], "1.0");
+    assert_eq!(fixture["kind"], "auto_port_v0_18_6_runtime_contract_scout");
+    assert_eq!(fixture["python_reference"]["previous_tag"], "v0.18.4");
+    assert_eq!(
+        fixture["python_reference"]["previous_peeled_commit"],
+        "516e947e90155b6436dbc9efcf932254f34bc39c"
+    );
+    assert_eq!(fixture["python_reference"]["intermediate_tag"], "v0.18.5");
+    assert_eq!(
+        fixture["python_reference"]["intermediate_peeled_commit"],
+        "51374def7e9ea8225f52d95d25abc2fd43f85c9a"
+    );
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.18.6");
+    assert_eq!(
+        fixture["python_reference"]["target_tag_object"],
+        "85d91683f3be3dfa6f2983d3e397ed373f12edba"
+    );
+    assert_eq!(
+        fixture["python_reference"]["target_peeled_commit"],
+        "63e623bc6fcfcf74ae0cc2ce5605a12ae4179873"
+    );
+    assert_eq!(
+        fixture["python_reference"]["diff_range"],
+        "v0.18.4..v0.18.6"
+    );
+    assert_eq!(
+        fixture["rust_reference"]["current_repo_crate_version"],
+        "0.3.4"
+    );
+    assert_eq!(fixture["rust_reference"]["planned_crate_version"], "0.3.5");
+    assert_ne!(
+        fixture["rust_reference"]["planned_crate_version"],
+        fixture["rust_reference"]["current_repo_crate_version"],
+        "v0.18.6 runtime scout must not treat Rust 0.3.4 as the target"
+    );
+
+    let sources: BTreeSet<_> = fixture["contract_sources"]
+        .as_array()
+        .expect("contract source references are present")
+        .iter()
+        .map(|value| value.as_str().expect("contract source"))
+        .collect();
+    for source_path in [
+        "../millrace-py/src/millrace_ai/contracts/__init__.py",
+        "../millrace-py/src/millrace_ai/contracts/enums.py",
+        "../millrace-py/src/millrace_ai/contracts/mailbox.py",
+        "../millrace-py/src/millrace_ai/runtime/control.py",
+        "../millrace-py/src/millrace_ai/runtime/control_mutations.py",
+        "../millrace-py/src/millrace_ai/runtime/mailbox_intake.py",
+        "../millrace-py/src/millrace_ai/runtime/watcher_intake.py",
+        "../millrace-py/src/millrace_ai/runtime/completion_behavior.py",
+        "../millrace-py/src/millrace_ai/workspace/operator_interventions.py",
+        "../millrace-py/src/millrace_ai/workspace/idea_sources.py",
+        "../millrace-py/tests/runtime/test_control.py",
+        "../millrace-py/tests/runtime/test_runtime.py",
+        "../millrace-py/tests/workspace/test_operator_interventions.py",
+    ] {
+        assert!(
+            sources.contains(source_path),
+            "missing v0.18.6 runtime/operator source {source_path}"
+        );
+    }
+
+    let targets: BTreeSet<_> = fixture["expected_rust_contract_targets"]
+        .as_array()
+        .expect("expected Rust contract targets are present")
+        .iter()
+        .map(|value| value.as_str().expect("expected Rust target"))
+        .collect();
+    for target_path in [
+        "src/contracts/enums.rs",
+        "src/contracts/mod.rs",
+        "src/contracts/runtime_json.rs",
+        "src/workspace/queue_store.rs",
+        "src/workspace/runtime_control.rs",
+        "src/runtime/supervisor.rs",
+        "src/runtime/tick.rs",
+        "src/cli/read_only.rs",
+        "tests/contracts_runtime_json.rs",
+        "tests/contracts_public_exports.rs",
+        "tests/workspace_runtime_control.rs",
+        "tests/workspace_queue_state_stores.rs",
+        "tests/runtime_daemon.rs",
+        "tests/parity_cli.rs",
+    ] {
+        assert!(
+            targets.contains(target_path),
+            "missing v0.18.6 Rust contract target {target_path}"
+        );
+    }
+
+    let mailbox = &fixture["mailbox_intervention_contract"];
+    for command in [
+        "cancel_work_item",
+        "archive_blocked_task",
+        "supersede_task",
+        "retarget_task_dependency",
+        "resolve_incident",
+        "cancel_incident",
+        "archive_invalid_incident",
+    ] {
+        assert!(
+            mailbox["command_values"]
+                .as_array()
+                .expect("mailbox command values are present")
+                .iter()
+                .any(|value| value.as_str() == Some(command)),
+            "missing v0.18.6 mailbox command value {command}"
+        );
+        assert!(
+            mailbox["required_reason_payloads"]
+                .as_array()
+                .expect("reason payloads are present")
+                .iter()
+                .any(|value| value.as_str() == Some(command)),
+            "missing v0.18.6 required reason payload {command}"
+        );
+    }
+    for payload_model in [
+        "MailboxCancelWorkItemPayload",
+        "MailboxArchiveBlockedTaskPayload",
+        "MailboxSupersedeTaskPayload",
+        "MailboxRetargetTaskDependencyPayload",
+        "MailboxIncidentInterventionPayload",
+        "MailboxArchiveInvalidIncidentPayload",
+    ] {
+        assert!(
+            mailbox["payload_models"]
+                .as_array()
+                .expect("payload model names are present")
+                .iter()
+                .any(|value| value.as_str() == Some(payload_model)),
+            "missing v0.18.6 mailbox payload model {payload_model}"
+        );
+    }
+    assert_eq!(
+        mailbox["payload_fields"]["cancel_work_item"],
+        json!(["work_item_id", "work_item_kind", "reason", "force"])
+    );
+    assert_eq!(
+        mailbox["payload_fields"]["supersede_task"],
+        json!(["old_task_id", "replacement_task_id", "reason", "cascade"])
+    );
+    assert_eq!(
+        mailbox["payload_fields"]["retarget_task_dependency"],
+        json!([
+            "task_id",
+            "old_dependency_id",
+            "new_dependency_id",
+            "reason"
+        ])
+    );
+    assert_eq!(
+        mailbox["supersede_cascade_values"],
+        json!(["none", "retarget", "cancel"])
+    );
+    for failure in [
+        "empty_reason",
+        "unsafe_work_item_id",
+        "invalid_cascade",
+        "missing_replacement_task_id",
+        "missing_old_dependency_id",
+        "missing_new_dependency_id",
+        "unsafe_invalid_incident_filename",
+    ] {
+        assert!(
+            mailbox["validation_failures"]
+                .as_array()
+                .expect("validation failures are present")
+                .iter()
+                .any(|value| value.as_str() == Some(failure)),
+            "missing v0.18.6 mailbox validation failure {failure}"
+        );
+    }
+
+    let intervention = &fixture["operator_intervention_contract"];
+    assert_eq!(intervention["record_kind"], "operator_intervention");
+    for field in [
+        "schema_version",
+        "kind",
+        "action",
+        "actor",
+        "reason",
+        "issued_at",
+        "applied_at",
+        "work_item_kind",
+        "work_item_id",
+        "source_state",
+        "destination_state",
+        "source_path",
+        "destination_path",
+        "replacement_work_item_id",
+        "affected_dependents",
+    ] {
+        assert!(
+            intervention["record_fields"]
+                .as_array()
+                .expect("operator intervention record fields are present")
+                .iter()
+                .any(|value| value.as_str() == Some(field)),
+            "missing v0.18.6 intervention record field {field}"
+        );
+    }
+    for event_type in [
+        "work_item_cancelled",
+        "blocked_task_archived",
+        "task_superseded",
+        "task_dependency_retargeted",
+        "incident_resolved_by_operator",
+        "incident_cancelled",
+        "invalid_incident_artifact_archived",
+        "mailbox_operator_intervention_applied",
+        "operator_intervention_deferred",
+    ] {
+        assert!(
+            intervention["event_types"]
+                .as_array()
+                .expect("operator intervention event types are present")
+                .iter()
+                .any(|value| value.as_str() == Some(event_type)),
+            "missing v0.18.6 intervention event {event_type}"
+        );
+    }
+
+    let read_only = &fixture["read_only_intervention_contract"];
+    for key in [
+        "cancelled_task_count",
+        "superseded_task_count",
+        "cancelled_incident_count",
+        "operator_resolved_incident_count",
+    ] {
+        assert!(
+            read_only["queue_ls_output_keys"]
+                .as_array()
+                .expect("queue ls output keys are present")
+                .iter()
+                .any(|value| value.as_str() == Some(key)),
+            "missing v0.18.6 queue ls output key {key}"
+        );
+    }
+    assert!(
+        read_only["status_keys"]
+            .as_array()
+            .expect("status keys are present")
+            .iter()
+            .any(|value| value.as_str() == Some("latest_operator_intervention")),
+        "missing v0.18.6 latest operator intervention status key"
+    );
+
+    let durable = &fixture["durable_idea_source_contract"];
+    assert_eq!(
+        durable["durable_source_path_template"],
+        "millrace-agents/intake/ideas/<root_idea_id>.md"
+    );
+    assert_eq!(durable["watcher_event"], "idea_normalized_to_spec");
+    assert_eq!(
+        durable["watcher_failure_event"],
+        "idea_source_artifact_write_failed"
+    );
+    assert_eq!(
+        durable["spec_reference_order"],
+        json!([
+            "millrace-agents/intake/ideas/<root_idea_id>.md",
+            "ideas/inbox/<idea_file>.md"
+        ])
+    );
+    assert_eq!(
+        durable["missing_source_failure_class"],
+        "missing_root_idea_source"
+    );
+    assert_eq!(durable["missing_source_event"], "root_idea_source_missing");
+
+    let guarantees = fixture["no_live_guarantees"]
+        .as_array()
+        .expect("non-live guarantees are present");
+    for guarantee in [
+        "no live Python execution beyond checked-out ../millrace-py diff inspection",
+        "no live Codex runner",
+        "no live Pi runner",
+        "no network",
+        "no credentials",
+        "no web server",
+        "no release upload",
+        "no publishing",
+    ] {
+        assert!(
+            guarantees
+                .iter()
+                .any(|value| value.as_str() == Some(guarantee)),
+            "missing v0.18.6 runtime contract scout guarantee {guarantee}"
+        );
+    }
+}
+
+#[test]
+fn python_v0_18_6_mailbox_intervention_payload_contracts_round_trip_and_validate() {
+    let fixture = python_model_dump_fixture(include_str!(
+        "fixtures/runtime_json/mailbox_intervention_payloads.json"
+    ));
+    assert_eq!(fixture["kind"], "mailbox_intervention_payload_contracts");
+    let valid = &fixture["valid_payloads"];
+
+    let cancel =
+        round_trip_contract::<MailboxCancelWorkItemPayload>(valid["cancel_work_item"].clone());
+    assert_eq!(cancel.work_item_id, "task-cancel-001");
+    assert_eq!(cancel.work_item_kind, Some(WorkItemKind::Task));
+    assert!(!cancel.force);
+
+    let archive_blocked = round_trip_contract::<MailboxArchiveBlockedTaskPayload>(
+        valid["archive_blocked_task"].clone(),
+    );
+    assert_eq!(archive_blocked.task_id, "task-blocked-001");
+
+    let supersede =
+        round_trip_contract::<MailboxSupersedeTaskPayload>(valid["supersede_task"].clone());
+    assert_eq!(supersede.old_task_id, "task-old-001");
+    assert_eq!(supersede.replacement_task_id, "task-new-001");
+    assert_eq!(supersede.cascade, MailboxSupersedeCascade::Retarget);
+
+    let retarget = round_trip_contract::<MailboxRetargetTaskDependencyPayload>(
+        valid["retarget_task_dependency"].clone(),
+    );
+    assert_eq!(retarget.task_id, "task-dependent-001");
+    assert_eq!(retarget.old_dependency_id, "task-old-001");
+    assert_eq!(retarget.new_dependency_id, "task-new-001");
+
+    let resolve = round_trip_contract::<MailboxIncidentInterventionPayload>(
+        valid["resolve_incident"].clone(),
+    );
+    assert_eq!(resolve.incident_id, "incident-resolve-001");
+    let cancel_incident =
+        round_trip_contract::<MailboxIncidentInterventionPayload>(valid["cancel_incident"].clone());
+    assert_eq!(cancel_incident.incident_id, "incident-cancel-001");
+
+    let archive_invalid = round_trip_contract::<MailboxArchiveInvalidIncidentPayload>(
+        valid["archive_invalid_incident"].clone(),
+    );
+    assert_eq!(archive_invalid.filename, "incident-invalid.md");
+
+    for (command, expected) in [
+        ("cancel_work_item", MailboxCommand::CancelWorkItem),
+        ("archive_blocked_task", MailboxCommand::ArchiveBlockedTask),
+        ("supersede_task", MailboxCommand::SupersedeTask),
+        (
+            "retarget_task_dependency",
+            MailboxCommand::RetargetTaskDependency,
+        ),
+        ("resolve_incident", MailboxCommand::ResolveIncident),
+        ("cancel_incident", MailboxCommand::CancelIncident),
+        (
+            "archive_invalid_incident",
+            MailboxCommand::ArchiveInvalidIncident,
+        ),
+    ] {
+        let envelope = round_trip_contract::<MailboxCommandEnvelope>(json!({
+            "schema_version": "1.0",
+            "kind": "mailbox_command",
+            "command_id": format!("cmd-{command}"),
+            "command": command,
+            "issued_at": NOW,
+            "issuer": "operator",
+            "payload": valid[command].clone()
+        }));
+        assert_eq!(envelope.command, expected);
+        assert_eq!(envelope.command.as_str(), command);
+    }
+
+    let missing_cascade = MailboxSupersedeTaskPayload::from_json_value(json!({
+        "old_task_id": "task-old-001",
+        "replacement_task_id": "task-new-001",
+        "reason": "operator corrected task scope"
+    }))
+    .unwrap();
+    assert_eq!(missing_cascade.cascade, MailboxSupersedeCascade::None);
+
+    let invalid = &fixture["validation_failures"];
+    assert!(
+        MailboxCancelWorkItemPayload::from_json_value(invalid["empty_reason"].clone())
+            .unwrap_err()
+            .to_string()
+            .contains("reason")
+    );
+    assert!(matches!(
+        MailboxCancelWorkItemPayload::from_json_value(invalid["unsafe_work_item_id"].clone()),
+        Err(RuntimeJsonError::Contract(_))
+    ));
+    assert!(
+        MailboxCancelWorkItemPayload::from_json_value(invalid["invalid_work_item_kind"].clone())
+            .unwrap_err()
+            .to_string()
+            .contains("WorkItemKind")
+    );
+    assert!(matches!(
+        MailboxArchiveBlockedTaskPayload::from_json_value(invalid["unsafe_task_id"].clone()),
+        Err(RuntimeJsonError::Contract(_))
+    ));
+    assert!(
+        MailboxSupersedeTaskPayload::from_json_value(invalid["invalid_cascade"].clone())
+            .unwrap_err()
+            .to_string()
+            .contains("MailboxSupersedeCascade")
+    );
+    assert!(
+        MailboxSupersedeTaskPayload::from_json_value(
+            invalid["missing_replacement_task_id"].clone()
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("replacement_task_id")
+    );
+    assert!(
+        MailboxRetargetTaskDependencyPayload::from_json_value(
+            invalid["missing_old_dependency_id"].clone()
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("old_dependency_id")
+    );
+    assert!(
+        MailboxRetargetTaskDependencyPayload::from_json_value(
+            invalid["missing_new_dependency_id"].clone()
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("new_dependency_id")
+    );
+    assert!(matches!(
+        MailboxIncidentInterventionPayload::from_json_value(invalid["unsafe_incident_id"].clone()),
+        Err(RuntimeJsonError::Contract(_))
+    ));
+    assert!(
+        MailboxArchiveInvalidIncidentPayload::from_json_value(
+            invalid["unsafe_invalid_incident_filename"].clone()
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("single relative filename")
+    );
 }
 
 #[test]

@@ -7,7 +7,10 @@ use crate::{
         CompileOutcome, CompileWorkspaceOptions, CompiledRunPlan, FrozenGraphPlanePlan,
         MaterializedGraphNodePlan,
     },
-    contracts::{Plane, ResultClass, RuntimeMode, validate_safe_identifier},
+    contracts::{
+        MailboxSupersedeCascade, Plane, ResultClass, RuntimeMode, WorkItemKind,
+        validate_safe_identifier,
+    },
     runtime::{
         BasicTerminalMonitor, RetryBlockedTaskRequest, RuntimeDaemonLoopExitReason,
         RuntimeDaemonLoopOptions, RuntimeMonitorEvent, RuntimeMonitorFanout, RuntimeMonitorSink,
@@ -35,7 +38,7 @@ use render::CliOutput;
 
 pub const PRIMARY_COMMAND_GROUPS: &[&str] = &[
     "run", "status", "runs", "queue", "planning", "config", "control", "compile", "modes",
-    "skills", "doctor", "upgrade", "init", "version",
+    "skills", "incident", "doctor", "upgrade", "init", "version",
 ];
 
 pub const COMPATIBILITY_ALIASES: &[&str] = &[
@@ -77,6 +80,7 @@ fn dispatch(mut args: Vec<String>) -> CliOutput {
         "status" => run_status_group(args),
         "runs" => run_runs_group(args),
         "queue" => run_queue_group(args),
+        "incident" => run_incident_group(args),
         "planning" => run_planning_group(args),
         "config" => run_config_group(args),
         "control" => run_control_group(args),
@@ -1030,7 +1034,7 @@ fn run_runs_trace(paths: &WorkspacePaths, parsed: &ParsedArgs) -> CliOutput {
 fn run_queue_group(mut args: Vec<String>) -> CliOutput {
     if args.is_empty() {
         return CliOutput::parse_error(
-            "missing queue command `ls`, `show`, `add-task`, `add-probe`, `add-spec`, `add-idea`, `retry-blocked`, or `repair-lineage`",
+            "missing queue command `ls`, `show`, `add-task`, `add-probe`, `add-spec`, `add-idea`, `cancel`, `archive-blocked`, `supersede`, `retarget-dependency`, `retry-blocked`, or `repair-lineage`",
         );
     }
     let command = args.remove(0);
@@ -1045,6 +1049,10 @@ fn run_queue_alias(alias_context: &str, command: &str, args: Vec<String>) -> Cli
             | "add-probe"
             | "add-spec"
             | "add-idea"
+            | "cancel"
+            | "archive-blocked"
+            | "supersede"
+            | "retarget-dependency"
             | "retry-blocked"
             | "repair-lineage"
     ) {
@@ -1061,6 +1069,30 @@ fn run_queue_alias(alias_context: &str, command: &str, args: Vec<String>) -> Cli
             value_spec("--reason", EmptyValue::NonBlank),
             value_spec("--root-spec-id", EmptyValue::NonBlank),
             flag_spec("--force"),
+        ],
+        "cancel" => vec![
+            workspace_spec(),
+            value_spec("--kind", EmptyValue::NonBlank),
+            value_spec("--reason", EmptyValue::NonBlank),
+            flag_spec("--force"),
+        ],
+        "archive-blocked" => vec![
+            workspace_spec(),
+            value_spec("--reason", EmptyValue::NonBlank),
+        ],
+        "supersede" => vec![
+            workspace_spec(),
+            value_spec("--replacement", EmptyValue::NonBlank),
+            value_spec("--reason", EmptyValue::NonBlank),
+            value_spec("--cascade", EmptyValue::NonBlank),
+        ],
+        "retarget-dependency" => vec![
+            workspace_spec(),
+            value_spec("--from", EmptyValue::NonBlank),
+            value_spec("--old-dependency", EmptyValue::NonBlank),
+            value_spec("--to", EmptyValue::NonBlank),
+            value_spec("--new-dependency", EmptyValue::NonBlank),
+            value_spec("--reason", EmptyValue::NonBlank),
         ],
         _ => vec![workspace_spec()],
     };
@@ -1097,6 +1129,48 @@ fn run_queue_alias(alias_context: &str, command: &str, args: Vec<String>) -> Cli
         }
         "add-idea" => {
             if let Err(output) = require_one_positional(&parsed, "IDEA_PATH") {
+                return output;
+            }
+        }
+        "cancel" => {
+            if let Err(output) = require_one_positional(&parsed, "WORK_ITEM_ID") {
+                return output;
+            }
+        }
+        "archive-blocked" => {
+            if let Err(output) = require_one_positional(&parsed, "TASK_ID") {
+                return output;
+            }
+        }
+        "supersede" => {
+            if let Err(output) = require_one_positional(&parsed, "OLD_TASK_ID") {
+                return output;
+            }
+            if let Err(output) = require_option(&parsed, "--replacement", "NEW_TASK_ID") {
+                return output;
+            }
+            if let Err(output) = require_option(&parsed, "--reason", "REASON") {
+                return output;
+            }
+        }
+        "retarget-dependency" => {
+            if let Err(output) = require_one_positional(&parsed, "TASK_ID") {
+                return output;
+            }
+            if let Err(output) = require_one_aliased_option(
+                &parsed,
+                "--from",
+                "--old-dependency",
+                "OLD_DEPENDENCY_ID",
+            ) {
+                return output;
+            }
+            if let Err(output) =
+                require_one_aliased_option(&parsed, "--to", "--new-dependency", "NEW_DEPENDENCY_ID")
+            {
+                return output;
+            }
+            if let Err(output) = require_option(&parsed, "--reason", "REASON") {
                 return output;
             }
         }
@@ -1176,6 +1250,52 @@ fn run_queue_alias(alias_context: &str, command: &str, args: Vec<String>) -> Cli
         )
         .map(CliOutput::success)
         .unwrap_or_else(CliOutput::stdout_failure),
+        "cancel" if alias_context == "queue" => run_queue_cancel(
+            &paths,
+            parsed
+                .positionals
+                .first()
+                .expect("queue cancel has one positional"),
+            parsed.value("--kind"),
+            parsed.value("--reason"),
+            parsed.has("--force"),
+        ),
+        "archive-blocked" if alias_context == "queue" => run_queue_archive_blocked(
+            &paths,
+            parsed
+                .positionals
+                .first()
+                .expect("queue archive-blocked has one positional"),
+            parsed.value("--reason"),
+        ),
+        "supersede" if alias_context == "queue" => run_queue_supersede(
+            &paths,
+            parsed
+                .positionals
+                .first()
+                .expect("queue supersede has one positional"),
+            parsed
+                .value("--replacement")
+                .expect("queue supersede has replacement"),
+            parsed.value("--reason"),
+            parsed.value("--cascade"),
+        ),
+        "retarget-dependency" if alias_context == "queue" => run_queue_retarget_dependency(
+            &paths,
+            parsed
+                .positionals
+                .first()
+                .expect("queue retarget-dependency has one positional"),
+            parsed
+                .value("--from")
+                .or_else(|| parsed.value("--old-dependency"))
+                .expect("queue retarget-dependency has old dependency"),
+            parsed
+                .value("--to")
+                .or_else(|| parsed.value("--new-dependency"))
+                .expect("queue retarget-dependency has new dependency"),
+            parsed.value("--reason"),
+        ),
         "retry-blocked" if alias_context == "queue" => run_queue_retry_blocked(
             &paths,
             parsed
@@ -1243,10 +1363,269 @@ fn run_queue_retry_blocked(
     }
 }
 
+fn run_queue_cancel(
+    paths: &WorkspacePaths,
+    work_item_id: &str,
+    kind: Option<&str>,
+    reason: Option<&str>,
+    force: bool,
+) -> CliOutput {
+    let work_item_id = match validate_safe_identifier(work_item_id, "work_item_id") {
+        Ok(work_item_id) => work_item_id,
+        Err(error) => {
+            return CliOutput::stdout_failure(format!("failed to cancel work item: {error}"));
+        }
+    };
+    let work_item_kind = match parse_optional_work_item_kind(kind) {
+        Ok(work_item_kind) => work_item_kind,
+        Err(message) => {
+            return CliOutput::stdout_failure(format!("failed to cancel work item: {message}"));
+        }
+    };
+    let reason = reason.unwrap_or("");
+
+    match RuntimeControl::from_paths(paths.clone()).and_then(|control| {
+        control.cancel_work_item_with_options(
+            work_item_id,
+            work_item_kind,
+            reason,
+            force,
+            "operator",
+        )
+    }) {
+        Ok(result) => CliOutput::success(render_control_result(&result)),
+        Err(error) => CliOutput::stdout_failure(format!("failed to cancel work item: {error}")),
+    }
+}
+
+fn run_queue_archive_blocked(
+    paths: &WorkspacePaths,
+    task_id: &str,
+    reason: Option<&str>,
+) -> CliOutput {
+    let task_id = match validate_safe_identifier(task_id, "task_id") {
+        Ok(task_id) => task_id,
+        Err(error) => {
+            return CliOutput::stdout_failure(format!("failed to archive blocked task: {error}"));
+        }
+    };
+    let reason = reason.unwrap_or("");
+
+    match RuntimeControl::from_paths(paths.clone())
+        .and_then(|control| control.archive_blocked_task(task_id, reason))
+    {
+        Ok(result) => CliOutput::success(render_control_result(&result)),
+        Err(error) => CliOutput::stdout_failure(format!("failed to archive blocked task: {error}")),
+    }
+}
+
+fn run_queue_supersede(
+    paths: &WorkspacePaths,
+    old_task_id: &str,
+    replacement_task_id: &str,
+    reason: Option<&str>,
+    cascade: Option<&str>,
+) -> CliOutput {
+    let old_task_id = match validate_safe_identifier(old_task_id, "old_task_id") {
+        Ok(old_task_id) => old_task_id,
+        Err(error) => {
+            return CliOutput::stdout_failure(format!("failed to supersede task: {error}"));
+        }
+    };
+    let replacement_task_id =
+        match validate_safe_identifier(replacement_task_id, "replacement_task_id") {
+            Ok(replacement_task_id) => replacement_task_id,
+            Err(error) => {
+                return CliOutput::stdout_failure(format!("failed to supersede task: {error}"));
+            }
+        };
+    let cascade = match parse_supersede_cascade(cascade) {
+        Ok(cascade) => cascade,
+        Err(message) => {
+            return CliOutput::stdout_failure(format!("failed to supersede task: {message}"));
+        }
+    };
+    let reason = reason.unwrap_or("");
+
+    match RuntimeControl::from_paths(paths.clone()).and_then(|control| {
+        control.supersede_task_with_cascade(
+            old_task_id,
+            replacement_task_id,
+            reason,
+            cascade,
+            "operator",
+        )
+    }) {
+        Ok(result) => CliOutput::success(render_control_result(&result)),
+        Err(error) => CliOutput::stdout_failure(format!("failed to supersede task: {error}")),
+    }
+}
+
+fn run_queue_retarget_dependency(
+    paths: &WorkspacePaths,
+    task_id: &str,
+    old_dependency_id: &str,
+    new_dependency_id: &str,
+    reason: Option<&str>,
+) -> CliOutput {
+    let task_id = match validate_safe_identifier(task_id, "task_id") {
+        Ok(task_id) => task_id,
+        Err(error) => {
+            return CliOutput::stdout_failure(format!(
+                "failed to retarget task dependency: {error}"
+            ));
+        }
+    };
+    let old_dependency_id = match validate_safe_identifier(old_dependency_id, "old_dependency_id") {
+        Ok(old_dependency_id) => old_dependency_id,
+        Err(error) => {
+            return CliOutput::stdout_failure(format!(
+                "failed to retarget task dependency: {error}"
+            ));
+        }
+    };
+    let new_dependency_id = match validate_safe_identifier(new_dependency_id, "new_dependency_id") {
+        Ok(new_dependency_id) => new_dependency_id,
+        Err(error) => {
+            return CliOutput::stdout_failure(format!(
+                "failed to retarget task dependency: {error}"
+            ));
+        }
+    };
+    let reason = reason.unwrap_or("");
+
+    match RuntimeControl::from_paths(paths.clone()).and_then(|control| {
+        control.retarget_task_dependency(task_id, old_dependency_id, new_dependency_id, reason)
+    }) {
+        Ok(result) => CliOutput::success(render_control_result(&result)),
+        Err(error) => {
+            CliOutput::stdout_failure(format!("failed to retarget task dependency: {error}"))
+        }
+    }
+}
+
+fn parse_optional_work_item_kind(kind: Option<&str>) -> Result<Option<WorkItemKind>, &'static str> {
+    let Some(kind) = kind else {
+        return Ok(None);
+    };
+    let kind = match WorkItemKind::from_value(kind.trim()) {
+        Ok(kind) => kind,
+        Err(_) => return Err("kind must be one of: task, probe, spec, incident"),
+    };
+    match kind {
+        WorkItemKind::Task | WorkItemKind::Probe | WorkItemKind::Spec | WorkItemKind::Incident => {
+            Ok(Some(kind))
+        }
+        WorkItemKind::LearningRequest => Err("kind must be one of: task, probe, spec, incident"),
+    }
+}
+
+fn parse_supersede_cascade(cascade: Option<&str>) -> Result<MailboxSupersedeCascade, &'static str> {
+    let cascade = cascade.unwrap_or("none").trim();
+    MailboxSupersedeCascade::from_value(cascade)
+        .map_err(|_| "cascade must be one of: none, retarget, cancel")
+}
+
 fn run_queue_repair_lineage(paths: &WorkspacePaths, root_spec_id: &str, apply: bool) -> CliOutput {
     match repair_closure_lineage(paths, root_spec_id, apply) {
         Ok(outcome) => CliOutput::success(render_lineage_repair_lines(&outcome, apply)),
         Err(error) => lineage_repair_failure_output(error),
+    }
+}
+
+fn run_incident_group(mut args: Vec<String>) -> CliOutput {
+    if args.is_empty() {
+        return CliOutput::parse_error(
+            "missing incident command `resolve`, `cancel`, or `archive-invalid`",
+        );
+    }
+    let command = args.remove(0);
+    if !matches!(command.as_str(), "resolve" | "cancel" | "archive-invalid") {
+        return CliOutput::parse_error(format!("unknown incident command `{command}`"));
+    }
+
+    let parsed = match parse_or_output(
+        args,
+        &[
+            workspace_spec(),
+            value_spec("--reason", EmptyValue::NonBlank),
+        ],
+    ) {
+        Ok(parsed) => parsed,
+        Err(output) => return output,
+    };
+    let positional_name = if command == "archive-invalid" {
+        "FILENAME"
+    } else {
+        "INCIDENT_ID"
+    };
+    if let Err(output) = require_one_positional(&parsed, positional_name) {
+        return output;
+    }
+    if let Err(output) = reject_extra_positionals(&parsed, 1) {
+        return output;
+    }
+    if let Err(output) = require_option(&parsed, "--reason", "REASON") {
+        return output;
+    }
+    let paths = match require_default_workspace(&parsed) {
+        Ok(paths) => paths,
+        Err(output) => return output,
+    };
+    let value = parsed
+        .positionals
+        .first()
+        .expect("incident command has one positional");
+    let reason = parsed
+        .value("--reason")
+        .expect("incident command has required reason");
+
+    match command.as_str() {
+        "resolve" => run_incident_resolve(&paths, value, reason),
+        "cancel" => run_incident_cancel(&paths, value, reason),
+        "archive-invalid" => run_incident_archive_invalid(&paths, value, reason),
+        _ => unreachable!("incident command validated above"),
+    }
+}
+
+fn run_incident_resolve(paths: &WorkspacePaths, incident_id: &str, reason: &str) -> CliOutput {
+    let incident_id = match validate_safe_identifier(incident_id, "incident_id") {
+        Ok(incident_id) => incident_id,
+        Err(error) => {
+            return CliOutput::stdout_failure(format!("failed to resolve incident: {error}"));
+        }
+    };
+    match RuntimeControl::from_paths(paths.clone())
+        .and_then(|control| control.resolve_incident(incident_id, reason))
+    {
+        Ok(result) => CliOutput::success(render_control_result(&result)),
+        Err(error) => CliOutput::stdout_failure(format!("failed to resolve incident: {error}")),
+    }
+}
+
+fn run_incident_cancel(paths: &WorkspacePaths, incident_id: &str, reason: &str) -> CliOutput {
+    let incident_id = match validate_safe_identifier(incident_id, "incident_id") {
+        Ok(incident_id) => incident_id,
+        Err(error) => {
+            return CliOutput::stdout_failure(format!("failed to cancel incident: {error}"));
+        }
+    };
+    match RuntimeControl::from_paths(paths.clone())
+        .and_then(|control| control.cancel_incident(incident_id, reason))
+    {
+        Ok(result) => CliOutput::success(render_control_result(&result)),
+        Err(error) => CliOutput::stdout_failure(format!("failed to cancel incident: {error}")),
+    }
+}
+
+fn run_incident_archive_invalid(paths: &WorkspacePaths, filename: &str, reason: &str) -> CliOutput {
+    match RuntimeControl::from_paths(paths.clone())
+        .and_then(|control| control.archive_invalid_incident(filename, reason))
+    {
+        Ok(result) => CliOutput::success(render_control_result(&result)),
+        Err(error) => CliOutput::stdout_failure(format!(
+            "failed to archive invalid incident artifact: {error}"
+        )),
     }
 }
 
@@ -1694,6 +2073,32 @@ fn require_one_positional(parsed: &ParsedArgs, name: &str) -> Result<(), CliOutp
         )));
     }
     Ok(())
+}
+
+fn require_option(parsed: &ParsedArgs, option: &str, value_name: &str) -> Result<(), CliOutput> {
+    if parsed.value(option).is_none() {
+        return Err(CliOutput::parse_error(format!(
+            "missing required option `{option} <{value_name}>`"
+        )));
+    }
+    Ok(())
+}
+
+fn require_one_aliased_option(
+    parsed: &ParsedArgs,
+    primary: &str,
+    alias: &str,
+    value_name: &str,
+) -> Result<(), CliOutput> {
+    match (parsed.value(primary), parsed.value(alias)) {
+        (None, None) => Err(CliOutput::parse_error(format!(
+            "missing required option `{primary} <{value_name}>`"
+        ))),
+        (Some(_), Some(_)) => Err(CliOutput::parse_error(format!(
+            "duplicate dependency option `{primary}`/`{alias}`"
+        ))),
+        _ => Ok(()),
+    }
 }
 
 fn optional_command<'a>(

@@ -1,19 +1,21 @@
 mod support;
 
-use std::{fs, process};
+use std::{collections::BTreeSet, fs, process};
 
 use serde_json::Value;
 use tempfile::TempDir;
 
 use millrace_ai::contracts::{
-    ActiveRunRequestKind, ActiveRunState, MailboxCommand, MailboxCommandEnvelope, Plane,
-    ProbeDocument, RuntimeJsonContract, SpecDocument, SpecSourceType, StageName, TaskDocument,
-    Timestamp, WorkItemKind,
+    ActiveRunRequestKind, ActiveRunState, MailboxCommand, MailboxCommandEnvelope,
+    MailboxSupersedeCascade, Plane, ProbeDocument, RuntimeJsonContract, SpecDocument,
+    SpecSourceType, StageName, TaskDocument, Timestamp, WorkItemKind,
 };
+use millrace_ai::work_documents::parse_task_document;
 use millrace_ai::workspace::{
-    RuntimeControl, RuntimeControlMode, RuntimeOwnershipLockOptions,
+    QueueStore, RuntimeControl, RuntimeControlMode, RuntimeOwnershipLockOptions,
     acquire_runtime_ownership_lock_with_options, initialize_workspace, load_snapshot,
 };
+use support::parity::read_json_fixture;
 
 const NOW: &str = "2026-04-15T00:00:00Z";
 
@@ -146,6 +148,88 @@ fn project_active_planning_run(paths: &millrace_ai::WorkspacePaths) {
     snapshot.active_work_item_id = Some("spec-active".to_owned());
     snapshot.active_since = Some(timestamp(NOW));
     millrace_ai::workspace::save_snapshot(paths, &snapshot).unwrap();
+}
+
+#[test]
+fn workspace_runtime_control_v0_18_6_guardrail_fixture_requires_intervention_mailbox_payloads() {
+    let fixture = read_json_fixture("runtime_json/auto_port_v0_18_6_runtime_contract_scout.json");
+    assert_eq!(fixture["kind"], "auto_port_v0_18_6_runtime_contract_scout");
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.18.6");
+    assert_eq!(fixture["rust_reference"]["planned_crate_version"], "0.3.5");
+
+    let mailbox = &fixture["mailbox_intervention_contract"];
+    let commands: BTreeSet<_> = mailbox["command_values"]
+        .as_array()
+        .expect("mailbox command values are present")
+        .iter()
+        .map(|value| value.as_str().expect("mailbox command"))
+        .collect();
+    assert_eq!(
+        commands,
+        BTreeSet::from([
+            "archive_blocked_task",
+            "archive_invalid_incident",
+            "cancel_incident",
+            "cancel_work_item",
+            "resolve_incident",
+            "retarget_task_dependency",
+            "supersede_task",
+        ])
+    );
+    assert_eq!(
+        mailbox["payload_fields"]["cancel_work_item"],
+        serde_json::json!(["work_item_id", "work_item_kind", "reason", "force"])
+    );
+    assert_eq!(
+        mailbox["payload_fields"]["archive_invalid_incident"],
+        serde_json::json!(["filename", "reason"])
+    );
+    assert_eq!(
+        mailbox["payload_fields"]["retarget_task_dependency"],
+        serde_json::json!([
+            "task_id",
+            "old_dependency_id",
+            "new_dependency_id",
+            "reason"
+        ])
+    );
+    for failure in [
+        "empty_reason",
+        "unsafe_work_item_id",
+        "invalid_work_item_kind",
+        "invalid_cascade",
+        "unsafe_invalid_incident_filename",
+    ] {
+        assert!(
+            mailbox["validation_failures"]
+                .as_array()
+                .expect("validation failures are present")
+                .iter()
+                .any(|value| value.as_str() == Some(failure)),
+            "missing v0.18.6 intervention payload validation failure {failure}"
+        );
+    }
+
+    let runtime_control = &fixture["runtime_control_contract"];
+    let methods: BTreeSet<_> = runtime_control["direct_methods"]
+        .as_array()
+        .expect("runtime control methods are present")
+        .iter()
+        .map(|value| value.as_str().expect("runtime control method"))
+        .collect();
+    assert_eq!(methods, commands);
+    assert_eq!(
+        runtime_control["routing_modes"],
+        serde_json::json!(["direct", "mailbox"])
+    );
+    assert_eq!(
+        runtime_control["direct_active_mutation_guard"],
+        "active runtime stage prevents operator intervention"
+    );
+    assert_eq!(
+        runtime_control["daemon_mailbox_guard"],
+        "daemon ownership routes intervention commands through mailbox envelopes"
+    );
 }
 
 #[test]
@@ -471,6 +555,224 @@ fn active_daemon_lock_routes_remaining_control_commands_to_mailbox_envelopes() {
             .root
             .join("ideas/inbox/idea-mailbox-routed.md")
             .exists()
+    );
+}
+
+#[test]
+fn active_daemon_lock_routes_operator_intervention_commands_to_mailbox_envelopes() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+    acquire_runtime_ownership_lock_with_options(
+        &paths,
+        active_lock_options("intervention-daemon-session"),
+    )
+    .unwrap();
+    let control = RuntimeControl::from_paths(paths.clone()).unwrap();
+
+    assert_eq!(
+        control
+            .cancel_work_item_with_options(
+                "task-cancel-mailbox",
+                Some(WorkItemKind::Task),
+                "operator cancelled bad intake",
+                false,
+                "operator",
+            )
+            .unwrap()
+            .mode,
+        RuntimeControlMode::Mailbox
+    );
+    assert_eq!(
+        control
+            .archive_blocked_task("task-blocked-mailbox", "operator archived obsolete task")
+            .unwrap()
+            .mode,
+        RuntimeControlMode::Mailbox
+    );
+    assert_eq!(
+        control
+            .supersede_task_with_cascade(
+                "task-old-mailbox",
+                "task-new-mailbox",
+                "operator corrected task scope",
+                MailboxSupersedeCascade::Cancel,
+                "operator",
+            )
+            .unwrap()
+            .mode,
+        RuntimeControlMode::Mailbox
+    );
+    assert_eq!(
+        control
+            .retarget_task_dependency(
+                "task-dependent-mailbox",
+                "task-old-mailbox",
+                "task-new-mailbox",
+                "operator retargeted dependency",
+            )
+            .unwrap()
+            .mode,
+        RuntimeControlMode::Mailbox
+    );
+    assert_eq!(
+        control
+            .resolve_incident("incident-resolve-mailbox", "operator resolved incident")
+            .unwrap()
+            .mode,
+        RuntimeControlMode::Mailbox
+    );
+    assert_eq!(
+        control
+            .cancel_incident("incident-cancel-mailbox", "operator cancelled incident")
+            .unwrap()
+            .mode,
+        RuntimeControlMode::Mailbox
+    );
+    assert_eq!(
+        control
+            .archive_invalid_incident(
+                "incident-invalid.md",
+                "operator archived invalid incident artifact",
+            )
+            .unwrap()
+            .mode,
+        RuntimeControlMode::Mailbox
+    );
+
+    let envelopes: Vec<_> = mailbox_json_paths(&paths.mailbox_incoming_dir)
+        .iter()
+        .map(|path| read_mailbox(path))
+        .collect();
+    let commands: Vec<_> = envelopes.iter().map(|envelope| envelope.command).collect();
+    assert_eq!(
+        commands,
+        vec![
+            MailboxCommand::ArchiveBlockedTask,
+            MailboxCommand::ArchiveInvalidIncident,
+            MailboxCommand::CancelIncident,
+            MailboxCommand::CancelWorkItem,
+            MailboxCommand::ResolveIncident,
+            MailboxCommand::RetargetTaskDependency,
+            MailboxCommand::SupersedeTask,
+        ]
+    );
+
+    let cancel = envelopes
+        .iter()
+        .find(|envelope| envelope.command == MailboxCommand::CancelWorkItem)
+        .unwrap();
+    assert_eq!(cancel.payload["work_item_id"], "task-cancel-mailbox");
+    assert_eq!(cancel.payload["work_item_kind"], "task");
+    assert_eq!(cancel.payload["reason"], "operator cancelled bad intake");
+    assert_eq!(cancel.payload["force"], false);
+
+    let supersede = envelopes
+        .iter()
+        .find(|envelope| envelope.command == MailboxCommand::SupersedeTask)
+        .unwrap();
+    assert_eq!(supersede.payload["old_task_id"], "task-old-mailbox");
+    assert_eq!(supersede.payload["replacement_task_id"], "task-new-mailbox");
+    assert_eq!(supersede.payload["cascade"], "cancel");
+
+    let retarget = envelopes
+        .iter()
+        .find(|envelope| envelope.command == MailboxCommand::RetargetTaskDependency)
+        .unwrap();
+    assert_eq!(retarget.payload["task_id"], "task-dependent-mailbox");
+    assert_eq!(retarget.payload["old_dependency_id"], "task-old-mailbox");
+    assert_eq!(retarget.payload["new_dependency_id"], "task-new-mailbox");
+
+    let archive_invalid = envelopes
+        .iter()
+        .find(|envelope| envelope.command == MailboxCommand::ArchiveInvalidIncident)
+        .unwrap();
+    assert_eq!(archive_invalid.payload["filename"], "incident-invalid.md");
+}
+
+#[test]
+fn direct_operator_intervention_commands_refuse_active_runtime_stage() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+    let mut snapshot = load_snapshot(&paths).unwrap();
+    snapshot.active_plane = Some(Plane::Execution);
+    snapshot.active_stage = Some(StageName::Builder);
+    snapshot.active_node_id = Some("builder".to_owned());
+    snapshot.active_stage_kind_id = Some("builder".to_owned());
+    snapshot.active_run_id = Some("run-active".to_owned());
+    snapshot.active_work_item_kind = Some(WorkItemKind::Task);
+    snapshot.active_work_item_id = Some("task-active".to_owned());
+    snapshot.active_since = Some(timestamp(NOW));
+    millrace_ai::workspace::save_snapshot(&paths, &snapshot).unwrap();
+    let control = RuntimeControl::from_paths(paths.clone()).unwrap();
+
+    let result = control
+        .cancel_work_item("task-active", "operator cancelled active task")
+        .unwrap();
+
+    assert_eq!(result.mode, RuntimeControlMode::Direct);
+    assert_eq!(result.action, MailboxCommand::CancelWorkItem);
+    assert!(!result.applied);
+    assert!(
+        result
+            .detail
+            .contains("active runtime stage prevents operator intervention")
+    );
+    assert!(mailbox_json_paths(&paths.mailbox_incoming_dir).is_empty());
+}
+
+#[test]
+fn direct_operator_intervention_supersede_retargets_and_refreshes_snapshot() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+    let queue = QueueStore::from_paths(paths.clone());
+    queue.enqueue_task(&task_document("task-old")).unwrap();
+    queue.enqueue_task(&task_document("task-new")).unwrap();
+    let mut dependent = task_document("task-dependent");
+    dependent.depends_on = vec!["task-old".to_owned()];
+    queue.enqueue_task(&dependent).unwrap();
+    let mut snapshot = load_snapshot(&paths).unwrap();
+    snapshot.queue_depth_execution = 999;
+    snapshot.queue_depths_by_plane.insert(Plane::Execution, 999);
+    millrace_ai::workspace::save_snapshot(&paths, &snapshot).unwrap();
+    let control = RuntimeControl::from_paths(paths.clone()).unwrap();
+
+    let result = control
+        .supersede_task_with_cascade(
+            "task-old",
+            "task-new",
+            "replacement task has corrected scope",
+            MailboxSupersedeCascade::Retarget,
+            "operator",
+        )
+        .unwrap();
+
+    assert_eq!(result.mode, RuntimeControlMode::Direct);
+    assert_eq!(result.action, MailboxCommand::SupersedeTask);
+    assert!(result.applied);
+    assert!(result.detail.contains("task_superseded: task task-old"));
+    assert!(result.detail.contains("replacement=task-new"));
+    assert!(result.detail.contains("affected_dependents=task-dependent"));
+    assert_eq!(
+        result.artifact_path.as_ref().unwrap().parent().unwrap(),
+        paths.tasks_queue_dir.join("superseded")
+    );
+    assert!(!paths.tasks_queue_dir.join("task-old.md").exists());
+
+    let dependent = parse_task_document(
+        &fs::read_to_string(paths.tasks_queue_dir.join("task-dependent.md")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(dependent.depends_on, vec!["task-new".to_owned()]);
+    let snapshot = load_snapshot(&paths).unwrap();
+    assert_eq!(snapshot.queue_depth_execution, 2);
+    assert_eq!(
+        snapshot.queue_depths_by_plane.get(&Plane::Execution),
+        Some(&2)
+    );
+    assert!(
+        fs::read_to_string(paths.logs_dir.join("runtime_events.jsonl"))
+            .unwrap()
+            .contains("\"event_type\":\"task_superseded\"")
     );
 }
 

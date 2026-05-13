@@ -10,8 +10,9 @@ millrace init --workspace <workspace>
 ```
 
 Initialization deploys package-managed entrypoints, skills, modes, graphs,
-loops, registry files, runtime config, status/state files, history/outline
-files, and `state/baseline_manifest.json`.
+loops, registry files, runtime config, status/state files, runtime-owned intake
+directories including `millrace-agents/intake/ideas/`, history/outline files,
+and `state/baseline_manifest.json`.
 
 ## Baseline Manifest
 
@@ -51,3 +52,14 @@ runtime docs, parity fixtures, and release evidence. It preserves the same
 package boundary: live runtime workspace artifacts, the optional Python
 `packages/millrace-web` package, `target/**`, and generated Python cache
 artifacts remain excluded from the crate package include rules.
+
+## v0.18.6 Package Evidence
+
+Rust `0.3.5` package evidence covers operator intervention mailbox payloads,
+queue and incident archive/audit mutations, direct and daemon-routed
+runtime-control behavior, queue/status read-only archive inspection, durable
+idea-source preservation under `millrace-agents/intake/ideas/`, closure-target
+missing-source recovery, runtime docs, parity fixtures, and release evidence.
+It preserves the same package boundary: live runtime workspace artifacts, the
+optional Python `packages/millrace-web` package, `target/**`, and generated
+Python cache artifacts remain excluded from the crate package include rules.

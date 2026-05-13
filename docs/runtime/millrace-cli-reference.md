@@ -11,7 +11,7 @@ millrace --version
 millrace version
 ```
 
-For Rust `0.3.4`, both commands print `millrace 0.3.4`.
+For Rust `0.3.5`, both commands print `millrace 0.3.5`.
 
 ## Probe Intake And Inspection
 
@@ -30,15 +30,57 @@ boundary. `millrace queue ls` reports probe queue and lifecycle counts, and
 `millrace queue show <probe-id>` renders canonical probe fields without moving
 or normalizing the inspected document.
 
+## Operator Intervention Inspection
+
+The v0.18.6 operator intervention surface keeps mutating queue and incident
+actions behind `RuntimeControl` while exposing their archived outcomes through
+read-only commands. `millrace queue ls` includes archive counters for
+`cancelled_task_count`, `superseded_task_count`,
+`cancelled_incident_count`, and `operator_resolved_incident_count`.
+`millrace queue show <id>` can inspect cancelled, superseded, and
+operator-resolved archive records across the supported task, probe, spec, and
+incident lifecycle surfaces without moving or repairing them.
+
+`millrace status` and `millrace status show --format json` include
+`latest_operator_intervention` when matching runtime event evidence exists.
+The payload records the event type, timestamp, optional work item kind/id, and
+destination path. Basic daemon monitor output also renders direct operator
+intervention events, mailbox-applied intervention events, and deferred
+intervention events without renaming the underlying runtime event types.
+
+## Operator Intervention Commands
+
+Rust `0.3.5` adds the Python `v0.18.5` operator intervention command family.
+These commands are for bad intake or stale queue cleanup, not retryable
+transient failures:
+
+```bash
+millrace queue cancel <WORK_ITEM_ID> --workspace <workspace> --reason "bad intake"
+millrace queue archive-blocked <TASK_ID> --workspace <workspace> --reason "do not retry"
+millrace queue supersede <OLD_TASK_ID> --workspace <workspace> --replacement <NEW_TASK_ID> --reason "superseded" --cascade retarget
+millrace queue retarget-dependency <TASK_ID> --workspace <workspace> --from <OLD_DEPENDENCY_ID> --to <NEW_DEPENDENCY_ID> --reason "replacement ready"
+millrace incident resolve <INCIDENT_ID> --workspace <workspace> --reason "operator handled"
+millrace incident cancel <INCIDENT_ID> --workspace <workspace> --reason "duplicate"
+millrace incident archive-invalid <FILENAME> --workspace <workspace> --reason "malformed artifact"
+```
+
+All commands validate safe identifiers and non-empty reasons, render the shared
+control-result fields, route through the daemon mailbox when a daemon owns the
+workspace, and archive artifacts with `operator_intervention` ledger and
+runtime-event evidence. `queue archive-blocked` is intentionally separate from
+`queue retry-blocked`: archive-blocked retires a blocked task as operator
+cleanup, while retry-blocked requeues a retryable transient blocked task.
+
 ## Status JSON Diagnostics
 
 Rust `0.3.2` adds the Python `v0.18.2` status JSON diagnostics surface.
 `millrace status` and `millrace status show` accept `--format text|json`; text
 remains the default, while JSON reports the shared read-only status payload,
 including active state, queue depths, closure-target diagnostics,
-`blocked_idle`, `current_failure_class`, and the latest runtime error report
-path. `millrace status watch` remains text-only and rejects JSON format
-requests deterministically.
+`blocked_idle`, `current_failure_class`, the latest runtime error report path,
+and `latest_operator_intervention` when intervention event evidence exists.
+`millrace status watch` remains text-only and rejects JSON format requests
+deterministically.
 
 ## Graph And Trace Inspection
 
@@ -71,8 +113,9 @@ artifacts.
 ## Web Boundary
 
 Python `millrace-web` exposes graph and trace data through read-only dashboard
-routes, and Python `v0.18.4` syncs that optional package to version `0.18.4`.
-Rust `0.3.4` shadows the accepted local inspection behavior through the CLI
+routes, and Python `v0.18.5`/`v0.18.6` sync that optional package through
+version `0.18.6`.
+Rust `0.3.5` shadows the accepted local inspection behavior through the CLI
 commands above and keeps the optional web dashboard as an explicit unsupported
 gap. No Rust web server, dashboard HTTP API, static shell, SSE stream, separate
 dashboard package, or Rust-managed web asset is part of this crate release.

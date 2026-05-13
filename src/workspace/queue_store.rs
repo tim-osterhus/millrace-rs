@@ -4,14 +4,19 @@ use std::{
     collections::BTreeSet,
     fmt, fs, io,
     path::{Path, PathBuf},
+    process,
+    sync::atomic::{AtomicU64, Ordering},
 };
 
+use serde::Serialize;
+use serde_json::{Value, json};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 use crate::{
     contracts::{
-        IncidentDocument, LearningRequestDocument, ProbeDocument, SpecDocument, SpecSourceType,
-        TaskDocument, WorkDocumentError, WorkItemKind,
+        IncidentDocument, LearningRequestDocument, MailboxSupersedeCascade, ProbeDocument,
+        SpecDocument, SpecSourceType, TaskDocument, Timestamp, WorkDocumentError, WorkItemKind,
+        validate_safe_identifier,
     },
     work_documents::{
         parse_incident_document_with_source, parse_learning_request_document_with_source,
@@ -24,6 +29,8 @@ use crate::{
 
 use super::task_lifecycle_integrity::retire_stale_blocked_task_duplicate_after_done;
 use super::{WorkspaceError, WorkspacePaths, initialize_workspace};
+
+static INTERVENTION_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Result type for queue store operations.
 pub type QueueStoreResult<T> = Result<T, QueueStoreError>;
@@ -140,6 +147,185 @@ pub struct QueueInspectionEntry {
     pub title: String,
     /// Canonical filesystem path to the work document.
     pub path: PathBuf,
+}
+
+/// Python-compatible operator intervention action values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OperatorInterventionAction {
+    /// Cancel a queued or blocked work item.
+    Cancel,
+    /// Archive a blocked task without retrying it.
+    ArchiveBlockedTask,
+    /// Supersede an obsolete task with an existing replacement.
+    Supersede,
+    /// Rewrite one queued task dependency.
+    RetargetDependency,
+    /// Resolve an incident by explicit operator action.
+    ResolveIncident,
+    /// Cancel an incident without marking it resolved.
+    CancelIncident,
+    /// Archive an invalid incoming incident artifact.
+    ArchiveInvalidIncident,
+}
+
+impl OperatorInterventionAction {
+    /// Returns the Python-compatible action string.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Cancel => "cancel",
+            Self::ArchiveBlockedTask => "archive_blocked_task",
+            Self::Supersede => "supersede",
+            Self::RetargetDependency => "retarget_dependency",
+            Self::ResolveIncident => "resolve_incident",
+            Self::CancelIncident => "cancel_incident",
+            Self::ArchiveInvalidIncident => "archive_invalid_incident",
+        }
+    }
+}
+
+impl fmt::Display for OperatorInterventionAction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Actor and timestamp context for an operator intervention.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OperatorInterventionContext {
+    /// Actor recorded in the intervention ledger.
+    pub actor: String,
+    /// Timestamp from the caller-visible command, when distinct from application time.
+    pub issued_at: Option<Timestamp>,
+    /// Application timestamp to use for records, events, and archive names.
+    pub applied_at: Option<Timestamp>,
+}
+
+impl OperatorInterventionContext {
+    /// Build a context with current-time issued/applied timestamps.
+    #[must_use]
+    pub fn new(actor: &str) -> Self {
+        Self {
+            actor: actor.to_owned(),
+            issued_at: None,
+            applied_at: None,
+        }
+    }
+
+    /// Build a context with explicit issued/applied timestamps.
+    #[must_use]
+    pub fn with_timestamps(actor: &str, issued_at: Timestamp, applied_at: Timestamp) -> Self {
+        Self {
+            actor: actor.to_owned(),
+            issued_at: Some(issued_at),
+            applied_at: Some(applied_at),
+        }
+    }
+}
+
+/// Persisted audit record for one runtime-owned operator intervention.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct OperatorInterventionRecord {
+    /// Contract schema version.
+    pub schema_version: String,
+    /// Stable record kind.
+    pub kind: String,
+    /// Python-compatible action value.
+    pub action: String,
+    /// Operator or mailbox issuer that requested the action.
+    pub actor: String,
+    /// Required human reason.
+    pub reason: String,
+    /// Caller-visible issue timestamp.
+    pub issued_at: Timestamp,
+    /// Runtime application timestamp.
+    pub applied_at: Timestamp,
+    /// Work item kind acted upon.
+    pub work_item_kind: WorkItemKind,
+    /// Work item id or invalid artifact filename.
+    pub work_item_id: String,
+    /// Source lifecycle state.
+    pub source_state: String,
+    /// Destination lifecycle/archive state.
+    pub destination_state: String,
+    /// Workspace-relative source path.
+    pub source_path: String,
+    /// Workspace-relative destination path.
+    pub destination_path: String,
+    /// Optional replacement task id for supersede/retarget.
+    pub replacement_work_item_id: Option<String>,
+    /// Queued dependents affected by supersede/retarget/cancel cascades.
+    pub affected_dependents: Vec<String>,
+}
+
+/// In-memory result returned by one operator intervention.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OperatorInterventionResult {
+    /// Action that was applied.
+    pub action: OperatorInterventionAction,
+    /// Work item kind acted upon.
+    pub work_item_kind: WorkItemKind,
+    /// Work item id or invalid artifact filename.
+    pub work_item_id: String,
+    /// Source lifecycle state.
+    pub source_state: String,
+    /// Destination lifecycle/archive state.
+    pub destination_state: String,
+    /// Original path.
+    pub source_path: PathBuf,
+    /// Archive or updated path.
+    pub destination_path: PathBuf,
+    /// Runtime event emitted for this intervention.
+    pub event_type: String,
+    /// Optional replacement task id.
+    pub replacement_work_item_id: Option<String>,
+    /// Queued dependent ids affected by this intervention.
+    pub affected_dependents: Vec<String>,
+    /// Persisted audit record.
+    pub record: OperatorInterventionRecord,
+}
+
+impl OperatorInterventionResult {
+    /// Returns the Python-compatible control result detail string.
+    #[must_use]
+    pub fn detail(&self) -> String {
+        let mut detail = format!(
+            "{}: {} {}",
+            self.event_type,
+            self.work_item_kind.as_str(),
+            self.work_item_id
+        );
+        if let Some(replacement) = &self.replacement_work_item_id {
+            detail.push_str(&format!(" replacement={replacement}"));
+        }
+        if !self.affected_dependents.is_empty() {
+            detail.push_str(&format!(
+                " affected_dependents={}",
+                self.affected_dependents.join(",")
+            ));
+        }
+        detail
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LocatedInterventionItem {
+    work_item_kind: WorkItemKind,
+    work_item_id: String,
+    state: String,
+    path: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct QueuedDependent {
+    task_id: String,
+    path: PathBuf,
+}
+
+struct QueueLookupDirectory {
+    kind: WorkItemKind,
+    state: &'static str,
+    path: PathBuf,
 }
 
 /// Queue store facade rooted at one initialized workspace.
@@ -317,6 +503,220 @@ impl QueueStore {
         requeue_learning_request(&self.paths, learning_request_id, reason)
     }
 
+    /// Cancel a queued or blocked work item and preserve it under a cancelled archive.
+    pub fn cancel_work_item(
+        &self,
+        work_item_id: &str,
+        work_item_kind: Option<WorkItemKind>,
+        reason: &str,
+        actor: &str,
+        force: bool,
+    ) -> QueueStoreResult<OperatorInterventionResult> {
+        cancel_work_item(
+            &self.paths,
+            work_item_id,
+            work_item_kind,
+            reason,
+            &OperatorInterventionContext::new(actor),
+            force,
+        )
+    }
+
+    /// Cancel a queued or blocked work item with explicit actor/timestamp context.
+    pub fn cancel_work_item_with_context(
+        &self,
+        work_item_id: &str,
+        work_item_kind: Option<WorkItemKind>,
+        reason: &str,
+        context: &OperatorInterventionContext,
+        force: bool,
+    ) -> QueueStoreResult<OperatorInterventionResult> {
+        cancel_work_item(
+            &self.paths,
+            work_item_id,
+            work_item_kind,
+            reason,
+            context,
+            force,
+        )
+    }
+
+    /// Archive a blocked task without requeueing it.
+    pub fn archive_blocked_task(
+        &self,
+        task_id: &str,
+        reason: &str,
+        actor: &str,
+    ) -> QueueStoreResult<OperatorInterventionResult> {
+        archive_blocked_task(
+            &self.paths,
+            task_id,
+            reason,
+            &OperatorInterventionContext::new(actor),
+        )
+    }
+
+    /// Archive a blocked task with explicit actor/timestamp context.
+    pub fn archive_blocked_task_with_context(
+        &self,
+        task_id: &str,
+        reason: &str,
+        context: &OperatorInterventionContext,
+    ) -> QueueStoreResult<OperatorInterventionResult> {
+        archive_blocked_task(&self.paths, task_id, reason, context)
+    }
+
+    /// Supersede a queued or blocked task with an existing replacement task.
+    pub fn supersede_task(
+        &self,
+        old_task_id: &str,
+        replacement_task_id: &str,
+        reason: &str,
+        cascade: MailboxSupersedeCascade,
+        actor: &str,
+    ) -> QueueStoreResult<OperatorInterventionResult> {
+        supersede_task(
+            &self.paths,
+            old_task_id,
+            replacement_task_id,
+            reason,
+            cascade,
+            &OperatorInterventionContext::new(actor),
+        )
+    }
+
+    /// Supersede a task with explicit actor/timestamp context.
+    pub fn supersede_task_with_context(
+        &self,
+        old_task_id: &str,
+        replacement_task_id: &str,
+        reason: &str,
+        cascade: MailboxSupersedeCascade,
+        context: &OperatorInterventionContext,
+    ) -> QueueStoreResult<OperatorInterventionResult> {
+        supersede_task(
+            &self.paths,
+            old_task_id,
+            replacement_task_id,
+            reason,
+            cascade,
+            context,
+        )
+    }
+
+    /// Retarget one queued task dependency from an old predecessor to an existing replacement.
+    pub fn retarget_queued_task_dependency(
+        &self,
+        task_id: &str,
+        old_dependency_id: &str,
+        new_dependency_id: &str,
+        reason: &str,
+        actor: &str,
+    ) -> QueueStoreResult<OperatorInterventionResult> {
+        retarget_queued_task_dependency(
+            &self.paths,
+            task_id,
+            old_dependency_id,
+            new_dependency_id,
+            reason,
+            &OperatorInterventionContext::new(actor),
+        )
+    }
+
+    /// Retarget a queued task dependency with explicit actor/timestamp context.
+    pub fn retarget_queued_task_dependency_with_context(
+        &self,
+        task_id: &str,
+        old_dependency_id: &str,
+        new_dependency_id: &str,
+        reason: &str,
+        context: &OperatorInterventionContext,
+    ) -> QueueStoreResult<OperatorInterventionResult> {
+        retarget_queued_task_dependency(
+            &self.paths,
+            task_id,
+            old_dependency_id,
+            new_dependency_id,
+            reason,
+            context,
+        )
+    }
+
+    /// Close an incident as operator-resolved.
+    pub fn resolve_incident_by_operator(
+        &self,
+        incident_id: &str,
+        reason: &str,
+        actor: &str,
+    ) -> QueueStoreResult<OperatorInterventionResult> {
+        resolve_incident_by_operator(
+            &self.paths,
+            incident_id,
+            reason,
+            &OperatorInterventionContext::new(actor),
+        )
+    }
+
+    /// Close an incident as operator-resolved with explicit actor/timestamp context.
+    pub fn resolve_incident_by_operator_with_context(
+        &self,
+        incident_id: &str,
+        reason: &str,
+        context: &OperatorInterventionContext,
+    ) -> QueueStoreResult<OperatorInterventionResult> {
+        resolve_incident_by_operator(&self.paths, incident_id, reason, context)
+    }
+
+    /// Cancel an incoming, active, or blocked incident without marking it resolved.
+    pub fn cancel_incident(
+        &self,
+        incident_id: &str,
+        reason: &str,
+        actor: &str,
+    ) -> QueueStoreResult<OperatorInterventionResult> {
+        cancel_incident(
+            &self.paths,
+            incident_id,
+            reason,
+            &OperatorInterventionContext::new(actor),
+        )
+    }
+
+    /// Cancel an incident with explicit actor/timestamp context.
+    pub fn cancel_incident_with_context(
+        &self,
+        incident_id: &str,
+        reason: &str,
+        context: &OperatorInterventionContext,
+    ) -> QueueStoreResult<OperatorInterventionResult> {
+        cancel_incident(&self.paths, incident_id, reason, context)
+    }
+
+    /// Archive an invalid incoming incident artifact by filename.
+    pub fn archive_invalid_incident_artifact(
+        &self,
+        filename: &str,
+        reason: &str,
+        actor: &str,
+    ) -> QueueStoreResult<OperatorInterventionResult> {
+        archive_invalid_incident_artifact(
+            &self.paths,
+            filename,
+            reason,
+            &OperatorInterventionContext::new(actor),
+        )
+    }
+
+    /// Archive an invalid incoming incident artifact with explicit actor/timestamp context.
+    pub fn archive_invalid_incident_artifact_with_context(
+        &self,
+        filename: &str,
+        reason: &str,
+        context: &OperatorInterventionContext,
+    ) -> QueueStoreResult<OperatorInterventionResult> {
+        archive_invalid_incident_artifact(&self.paths, filename, reason, context)
+    }
+
     /// Detect stale active execution queue state against a snapshot identity.
     pub fn detect_execution_stale_state(
         &self,
@@ -417,9 +817,258 @@ pub fn find_queue_item(
     paths: &WorkspacePaths,
     work_item_id: &str,
 ) -> QueueStoreResult<Option<QueueInspectionEntry>> {
-    Ok(inspect_queue_items(paths)?
-        .into_iter()
-        .find(|entry| entry.work_item_id == work_item_id))
+    for directory in queue_lookup_directories(paths) {
+        let direct = directory.path.join(format!("{work_item_id}.md"));
+        if direct.is_file() {
+            let entry = parse_lookup_entry(directory.kind, directory.state, &direct)?;
+            if entry.work_item_id != work_item_id {
+                return Err(QueueStoreError::invalid_state(format!(
+                    "lookup path {} contains {} id {}, expected {work_item_id}",
+                    direct.display(),
+                    entry.work_item_kind.as_str(),
+                    entry.work_item_id
+                )));
+            }
+            return Ok(Some(entry));
+        }
+
+        let archived = archived_lookup_files(&directory.path, work_item_id)?;
+        for path in archived {
+            let entry = parse_lookup_entry(directory.kind, directory.state, &path)?;
+            if entry.work_item_id == work_item_id {
+                return Ok(Some(entry));
+            }
+        }
+    }
+    Ok(None)
+}
+
+fn queue_lookup_directories(paths: &WorkspacePaths) -> Vec<QueueLookupDirectory> {
+    vec![
+        QueueLookupDirectory {
+            kind: WorkItemKind::Task,
+            state: "queue",
+            path: paths.tasks_queue_dir.clone(),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Task,
+            state: "active",
+            path: paths.tasks_active_dir.clone(),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Task,
+            state: "done",
+            path: paths.tasks_done_dir.clone(),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Task,
+            state: "blocked",
+            path: paths.tasks_blocked_dir.clone(),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Task,
+            state: "queue_cancelled",
+            path: paths.tasks_queue_dir.join("cancelled"),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Task,
+            state: "blocked_cancelled",
+            path: paths.tasks_blocked_dir.join("cancelled"),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Task,
+            state: "queue_superseded",
+            path: paths.tasks_queue_dir.join("superseded"),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Task,
+            state: "blocked_superseded",
+            path: paths.tasks_blocked_dir.join("superseded"),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Probe,
+            state: "queue",
+            path: paths.probes_queue_dir.clone(),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Probe,
+            state: "active",
+            path: paths.probes_active_dir.clone(),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Probe,
+            state: "done",
+            path: paths.probes_done_dir.clone(),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Probe,
+            state: "blocked",
+            path: paths.probes_blocked_dir.clone(),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Probe,
+            state: "queue_cancelled",
+            path: paths.probes_queue_dir.join("cancelled"),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Probe,
+            state: "blocked_cancelled",
+            path: paths.probes_blocked_dir.join("cancelled"),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Spec,
+            state: "queue",
+            path: paths.specs_queue_dir.clone(),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Spec,
+            state: "active",
+            path: paths.specs_active_dir.clone(),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Spec,
+            state: "done",
+            path: paths.specs_done_dir.clone(),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Spec,
+            state: "blocked",
+            path: paths.specs_blocked_dir.clone(),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Spec,
+            state: "queue_cancelled",
+            path: paths.specs_queue_dir.join("cancelled"),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Spec,
+            state: "blocked_cancelled",
+            path: paths.specs_blocked_dir.join("cancelled"),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Incident,
+            state: "incoming",
+            path: paths.incidents_incoming_dir.clone(),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Incident,
+            state: "active",
+            path: paths.incidents_active_dir.clone(),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Incident,
+            state: "resolved",
+            path: paths.incidents_resolved_dir.clone(),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Incident,
+            state: "blocked",
+            path: paths.incidents_blocked_dir.clone(),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Incident,
+            state: "incoming_cancelled",
+            path: paths.incidents_incoming_dir.join("cancelled"),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Incident,
+            state: "active_cancelled",
+            path: paths.incidents_active_dir.join("cancelled"),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Incident,
+            state: "blocked_cancelled",
+            path: paths.incidents_blocked_dir.join("cancelled"),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::Incident,
+            state: "operator_resolved",
+            path: paths.incidents_resolved_dir.join("operator"),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::LearningRequest,
+            state: "queue",
+            path: paths.learning_requests_queue_dir.clone(),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::LearningRequest,
+            state: "active",
+            path: paths.learning_requests_active_dir.clone(),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::LearningRequest,
+            state: "done",
+            path: paths.learning_requests_done_dir.clone(),
+        },
+        QueueLookupDirectory {
+            kind: WorkItemKind::LearningRequest,
+            state: "blocked",
+            path: paths.learning_requests_blocked_dir.clone(),
+        },
+    ]
+}
+
+fn archived_lookup_files(directory: &Path, work_item_id: &str) -> QueueStoreResult<Vec<PathBuf>> {
+    if !directory.exists() {
+        return Ok(Vec::new());
+    }
+    let prefix = format!("{work_item_id}.");
+    let mut paths = Vec::new();
+    for entry in fs::read_dir(directory).map_err(|error| QueueStoreError::io(directory, error))? {
+        let entry = entry.map_err(|error| QueueStoreError::io(directory, error))?;
+        let path = entry.path();
+        let Some(filename) = path.file_name().and_then(|value| value.to_str()) else {
+            continue;
+        };
+        if path.is_file() && filename.starts_with(&prefix) && filename.ends_with(".md") {
+            paths.push(path);
+        }
+    }
+    paths.sort();
+    Ok(paths)
+}
+
+fn parse_lookup_entry(
+    kind: WorkItemKind,
+    state: &str,
+    path: &Path,
+) -> QueueStoreResult<QueueInspectionEntry> {
+    let raw = fs::read_to_string(path).map_err(|error| QueueStoreError::io(path, error))?;
+    let (work_item_id, title) = match kind {
+        WorkItemKind::Task => {
+            let document = parse_task_document_with_source(&raw, &path.display().to_string())
+                .map_err(|error| QueueStoreError::work_document(path, error))?;
+            (document.task_id, document.title)
+        }
+        WorkItemKind::Probe => {
+            let document = parse_probe_document_with_source(&raw, &path.display().to_string())
+                .map_err(|error| QueueStoreError::work_document(path, error))?;
+            (document.probe_id, document.title)
+        }
+        WorkItemKind::Spec => {
+            let document = parse_spec_document_with_source(&raw, &path.display().to_string())
+                .map_err(|error| QueueStoreError::work_document(path, error))?;
+            (document.spec_id, document.title)
+        }
+        WorkItemKind::Incident => {
+            let document = parse_incident_document_with_source(&raw, &path.display().to_string())
+                .map_err(|error| QueueStoreError::work_document(path, error))?;
+            (document.incident_id, document.title)
+        }
+        WorkItemKind::LearningRequest => {
+            let document =
+                parse_learning_request_document_with_source(&raw, &path.display().to_string())
+                    .map_err(|error| QueueStoreError::work_document(path, error))?;
+            (document.learning_request_id, document.title)
+        }
+    };
+    Ok(QueueInspectionEntry {
+        work_item_kind: kind,
+        work_item_state: state.to_owned(),
+        work_item_id,
+        title,
+        path: path.to_path_buf(),
+    })
 }
 
 /// List queued root specs whose root differs from the currently actionable closure target.
@@ -965,6 +1614,355 @@ pub fn requeue_learning_request(
         reason,
     )?;
     Ok(destination)
+}
+
+/// Cancel one queued or blocked work item without deleting its document.
+pub fn cancel_work_item(
+    paths: &WorkspacePaths,
+    work_item_id: &str,
+    work_item_kind: Option<WorkItemKind>,
+    reason: &str,
+    context: &OperatorInterventionContext,
+    force: bool,
+) -> QueueStoreResult<OperatorInterventionResult> {
+    let _ = force;
+    validate_safe_identifier(work_item_id, "work_item_id")
+        .map_err(|error| QueueStoreError::invalid_state(error.to_string()))?;
+    let located = locate_cancelable_work_item(paths, work_item_id, work_item_kind)?;
+    archive_located_item(
+        paths,
+        located,
+        ArchiveLocatedOptions {
+            action: OperatorInterventionAction::Cancel,
+            destination_state: "cancelled",
+            archive_name: "cancelled",
+            event_type: "work_item_cancelled",
+            reason,
+            context,
+            replacement_work_item_id: None,
+            affected_dependents: Vec::new(),
+            explicit_archive_parent: None,
+        },
+    )
+}
+
+/// Archive a blocked task that should not be retried.
+pub fn archive_blocked_task(
+    paths: &WorkspacePaths,
+    task_id: &str,
+    reason: &str,
+    context: &OperatorInterventionContext,
+) -> QueueStoreResult<OperatorInterventionResult> {
+    validate_safe_identifier(task_id, "task_id")
+        .map_err(|error| QueueStoreError::invalid_state(error.to_string()))?;
+    let located = locate_exact_task(paths, task_id, &["blocked"])?;
+    archive_located_item(
+        paths,
+        located,
+        ArchiveLocatedOptions {
+            action: OperatorInterventionAction::ArchiveBlockedTask,
+            destination_state: "cancelled",
+            archive_name: "cancelled",
+            event_type: "blocked_task_archived",
+            reason,
+            context,
+            replacement_work_item_id: None,
+            affected_dependents: Vec::new(),
+            explicit_archive_parent: None,
+        },
+    )
+}
+
+/// Supersede a queued or blocked task with an existing queued, active, or done replacement.
+pub fn supersede_task(
+    paths: &WorkspacePaths,
+    old_task_id: &str,
+    replacement_task_id: &str,
+    reason: &str,
+    cascade: MailboxSupersedeCascade,
+    context: &OperatorInterventionContext,
+) -> QueueStoreResult<OperatorInterventionResult> {
+    validate_safe_identifier(old_task_id, "old_task_id")
+        .map_err(|error| QueueStoreError::invalid_state(error.to_string()))?;
+    validate_safe_identifier(replacement_task_id, "replacement_task_id")
+        .map_err(|error| QueueStoreError::invalid_state(error.to_string()))?;
+    if old_task_id == replacement_task_id {
+        return Err(QueueStoreError::invalid_state(
+            "replacement task must be different from superseded task",
+        ));
+    }
+
+    let located = locate_exact_task(paths, old_task_id, &["blocked", "queue"])?;
+    require_replacement_task(paths, replacement_task_id)?;
+    let affected_dependents = queued_dependents(paths, old_task_id)?;
+    let affected_ids = affected_dependents
+        .iter()
+        .map(|dependent| dependent.task_id.clone())
+        .collect::<Vec<_>>();
+    let result = archive_located_item(
+        paths,
+        located,
+        ArchiveLocatedOptions {
+            action: OperatorInterventionAction::Supersede,
+            destination_state: "superseded",
+            archive_name: "superseded",
+            event_type: "task_superseded",
+            reason,
+            context,
+            replacement_work_item_id: Some(replacement_task_id.to_owned()),
+            affected_dependents: affected_ids,
+            explicit_archive_parent: None,
+        },
+    )?;
+
+    match cascade {
+        MailboxSupersedeCascade::None => {}
+        MailboxSupersedeCascade::Retarget => {
+            for dependent in affected_dependents {
+                retarget_queued_task_dependency(
+                    paths,
+                    &dependent.task_id,
+                    old_task_id,
+                    replacement_task_id,
+                    reason,
+                    context,
+                )?;
+            }
+        }
+        MailboxSupersedeCascade::Cancel => {
+            for dependent in affected_dependents {
+                cancel_work_item(
+                    paths,
+                    &dependent.task_id,
+                    Some(WorkItemKind::Task),
+                    reason,
+                    context,
+                    false,
+                )?;
+            }
+        }
+    }
+
+    Ok(result)
+}
+
+/// Rewrite one queued task dependency from an old task id to an existing replacement.
+pub fn retarget_queued_task_dependency(
+    paths: &WorkspacePaths,
+    task_id: &str,
+    old_dependency_id: &str,
+    new_dependency_id: &str,
+    reason: &str,
+    context: &OperatorInterventionContext,
+) -> QueueStoreResult<OperatorInterventionResult> {
+    validate_safe_identifier(task_id, "task_id")
+        .map_err(|error| QueueStoreError::invalid_state(error.to_string()))?;
+    validate_safe_identifier(old_dependency_id, "old_dependency_id")
+        .map_err(|error| QueueStoreError::invalid_state(error.to_string()))?;
+    validate_safe_identifier(new_dependency_id, "new_dependency_id")
+        .map_err(|error| QueueStoreError::invalid_state(error.to_string()))?;
+
+    let cleaned_reason = clean_reason(reason)?;
+    let (issued_at, applied_at, _applied_offset) = intervention_times(context)?;
+    let task_path = paths.tasks_queue_dir.join(format!("{task_id}.md"));
+    if !task_path.is_file() {
+        return Err(QueueStoreError::invalid_state(format!(
+            "task {task_id} is not queued"
+        )));
+    }
+    require_replacement_task(paths, new_dependency_id)?;
+
+    let raw =
+        fs::read_to_string(&task_path).map_err(|error| QueueStoreError::io(&task_path, error))?;
+    let task = parse_task_document_with_source(&raw, &task_path.display().to_string())
+        .map_err(|error| QueueStoreError::work_document(&task_path, error))?;
+    let old_count = task
+        .depends_on
+        .iter()
+        .filter(|dependency| dependency.as_str() == old_dependency_id)
+        .count();
+    if old_count == 0 {
+        return Err(QueueStoreError::invalid_state(format!(
+            "task {task_id} does not depend on {old_dependency_id}"
+        )));
+    }
+    if old_count > 1 {
+        return Err(QueueStoreError::invalid_state(format!(
+            "task {task_id} has duplicate dependency {old_dependency_id}"
+        )));
+    }
+
+    let mut updated = task;
+    updated.depends_on = updated
+        .depends_on
+        .into_iter()
+        .map(|dependency| {
+            if dependency == old_dependency_id {
+                new_dependency_id.to_owned()
+            } else {
+                dependency
+            }
+        })
+        .collect();
+    updated.updated_at = Some(applied_at.clone());
+    write_document(&task_path, &render_task_document(&updated))?;
+
+    let record = build_intervention_record(InterventionRecordInput {
+        paths,
+        action: OperatorInterventionAction::RetargetDependency,
+        work_item_kind: WorkItemKind::Task,
+        work_item_id: task_id,
+        source_state: "queue",
+        destination_state: "queue",
+        source_path: &task_path,
+        destination_path: &task_path,
+        reason: &cleaned_reason,
+        context,
+        issued_at,
+        applied_at,
+        replacement_work_item_id: Some(new_dependency_id.to_owned()),
+        affected_dependents: vec![task_id.to_owned()],
+    })?;
+    append_intervention_record(&paths.tasks_queue_dir.join("interventions.jsonl"), &record)?;
+    write_operator_runtime_event(paths, "task_dependency_retargeted", &record)?;
+    Ok(OperatorInterventionResult {
+        action: OperatorInterventionAction::RetargetDependency,
+        work_item_kind: WorkItemKind::Task,
+        work_item_id: task_id.to_owned(),
+        source_state: "queue".to_owned(),
+        destination_state: "queue".to_owned(),
+        source_path: task_path.clone(),
+        destination_path: task_path,
+        event_type: "task_dependency_retargeted".to_owned(),
+        replacement_work_item_id: Some(new_dependency_id.to_owned()),
+        affected_dependents: vec![task_id.to_owned()],
+        record,
+    })
+}
+
+/// Close an incident as operator-resolved.
+pub fn resolve_incident_by_operator(
+    paths: &WorkspacePaths,
+    incident_id: &str,
+    reason: &str,
+    context: &OperatorInterventionContext,
+) -> QueueStoreResult<OperatorInterventionResult> {
+    validate_safe_identifier(incident_id, "incident_id")
+        .map_err(|error| QueueStoreError::invalid_state(error.to_string()))?;
+    let located = locate_incident(paths, incident_id, &["incoming", "active", "blocked"])?;
+    archive_located_item(
+        paths,
+        located,
+        ArchiveLocatedOptions {
+            action: OperatorInterventionAction::ResolveIncident,
+            destination_state: "resolved",
+            archive_name: "operator",
+            event_type: "incident_resolved_by_operator",
+            reason,
+            context,
+            replacement_work_item_id: None,
+            affected_dependents: Vec::new(),
+            explicit_archive_parent: Some(paths.incidents_resolved_dir.clone()),
+        },
+    )
+}
+
+/// Cancel an incoming, active, or blocked incident without marking it resolved.
+pub fn cancel_incident(
+    paths: &WorkspacePaths,
+    incident_id: &str,
+    reason: &str,
+    context: &OperatorInterventionContext,
+) -> QueueStoreResult<OperatorInterventionResult> {
+    validate_safe_identifier(incident_id, "incident_id")
+        .map_err(|error| QueueStoreError::invalid_state(error.to_string()))?;
+    let located = locate_incident(paths, incident_id, &["incoming", "active", "blocked"])?;
+    archive_located_item(
+        paths,
+        located,
+        ArchiveLocatedOptions {
+            action: OperatorInterventionAction::CancelIncident,
+            destination_state: "cancelled",
+            archive_name: "cancelled",
+            event_type: "incident_cancelled",
+            reason,
+            context,
+            replacement_work_item_id: None,
+            affected_dependents: Vec::new(),
+            explicit_archive_parent: None,
+        },
+    )
+}
+
+/// Archive an invalid incoming incident artifact by filename.
+pub fn archive_invalid_incident_artifact(
+    paths: &WorkspacePaths,
+    filename: &str,
+    reason: &str,
+    context: &OperatorInterventionContext,
+) -> QueueStoreResult<OperatorInterventionResult> {
+    let source_name = validate_single_relative_filename(filename)?;
+    let source = paths.incidents_incoming_dir.join(&source_name);
+    if !source.is_file() {
+        return Err(QueueStoreError::invalid_state(format!(
+            "invalid incident artifact not found: {source_name}"
+        )));
+    }
+    if !source_name.ends_with(".invalid") && !invalid_artifacts_log_mentions(paths, &source_name)? {
+        return Err(QueueStoreError::invalid_state(
+            "invalid incident artifact must end with .invalid or be listed in invalid-artifacts.jsonl",
+        ));
+    }
+
+    let cleaned_reason = clean_reason(reason)?;
+    let (issued_at, applied_at, applied_offset) = intervention_times(context)?;
+    let destination_dir = paths.incidents_incoming_dir.join("invalid-archived");
+    fs::create_dir_all(&destination_dir)
+        .map_err(|error| QueueStoreError::io(&destination_dir, error))?;
+    let destination = destination_dir.join(format!(
+        "{}.{}",
+        source_name,
+        archive_suffix(applied_offset)
+    ));
+    if destination.exists() {
+        return Err(QueueStoreError::invalid_state(format!(
+            "archive destination already exists: {}",
+            destination.display()
+        )));
+    }
+    fs::rename(&source, &destination).map_err(|error| QueueStoreError::io(&source, error))?;
+
+    let record = build_intervention_record(InterventionRecordInput {
+        paths,
+        action: OperatorInterventionAction::ArchiveInvalidIncident,
+        work_item_kind: WorkItemKind::Incident,
+        work_item_id: &source_name,
+        source_state: "incoming_invalid",
+        destination_state: "archived",
+        source_path: &source,
+        destination_path: &destination,
+        reason: &cleaned_reason,
+        context,
+        issued_at,
+        applied_at,
+        replacement_work_item_id: None,
+        affected_dependents: Vec::new(),
+    })?;
+    append_intervention_record(&destination_dir.join("interventions.jsonl"), &record)?;
+    write_operator_runtime_event(paths, "invalid_incident_artifact_archived", &record)?;
+    Ok(OperatorInterventionResult {
+        action: OperatorInterventionAction::ArchiveInvalidIncident,
+        work_item_kind: WorkItemKind::Incident,
+        work_item_id: source_name,
+        source_state: "incoming_invalid".to_owned(),
+        destination_state: "archived".to_owned(),
+        source_path: source,
+        destination_path: destination,
+        event_type: "invalid_incident_artifact_archived".to_owned(),
+        replacement_work_item_id: None,
+        affected_dependents: Vec::new(),
+        record,
+    })
 }
 
 /// Detect stale execution active state.
@@ -1721,6 +2719,488 @@ fn stale_state(reasons: Vec<&'static str>) -> StaleActiveState {
         is_stale: !reasons.is_empty(),
         reasons: reasons.into_iter().collect(),
     }
+}
+
+struct ArchiveLocatedOptions<'a> {
+    action: OperatorInterventionAction,
+    destination_state: &'static str,
+    archive_name: &'static str,
+    event_type: &'static str,
+    reason: &'a str,
+    context: &'a OperatorInterventionContext,
+    replacement_work_item_id: Option<String>,
+    affected_dependents: Vec<String>,
+    explicit_archive_parent: Option<PathBuf>,
+}
+
+struct InterventionRecordInput<'a> {
+    paths: &'a WorkspacePaths,
+    action: OperatorInterventionAction,
+    work_item_kind: WorkItemKind,
+    work_item_id: &'a str,
+    source_state: &'a str,
+    destination_state: &'a str,
+    source_path: &'a Path,
+    destination_path: &'a Path,
+    reason: &'a str,
+    context: &'a OperatorInterventionContext,
+    issued_at: Timestamp,
+    applied_at: Timestamp,
+    replacement_work_item_id: Option<String>,
+    affected_dependents: Vec<String>,
+}
+
+fn archive_located_item(
+    paths: &WorkspacePaths,
+    located: LocatedInterventionItem,
+    options: ArchiveLocatedOptions<'_>,
+) -> QueueStoreResult<OperatorInterventionResult> {
+    let cleaned_reason = clean_reason(options.reason)?;
+    let (issued_at, applied_at, applied_offset) = intervention_times(options.context)?;
+    let archive_parent = options.explicit_archive_parent.unwrap_or_else(|| {
+        located
+            .path
+            .parent()
+            .unwrap_or(paths.runtime_root.as_path())
+            .to_path_buf()
+    });
+    let archive_dir = archive_parent.join(options.archive_name);
+    fs::create_dir_all(&archive_dir).map_err(|error| QueueStoreError::io(&archive_dir, error))?;
+    let destination = archive_dir.join(format!(
+        "{}.{}.{}.md",
+        located.work_item_id,
+        archive_suffix(applied_offset),
+        located.state
+    ));
+    if destination.exists() {
+        return Err(QueueStoreError::invalid_state(format!(
+            "archive destination already exists: {}",
+            destination.display()
+        )));
+    }
+    fs::rename(&located.path, &destination)
+        .map_err(|error| QueueStoreError::io(&located.path, error))?;
+
+    let record = build_intervention_record(InterventionRecordInput {
+        paths,
+        action: options.action,
+        work_item_kind: located.work_item_kind,
+        work_item_id: &located.work_item_id,
+        source_state: &located.state,
+        destination_state: options.destination_state,
+        source_path: &located.path,
+        destination_path: &destination,
+        reason: &cleaned_reason,
+        context: options.context,
+        issued_at,
+        applied_at,
+        replacement_work_item_id: options.replacement_work_item_id.clone(),
+        affected_dependents: options.affected_dependents.clone(),
+    })?;
+    append_intervention_record(&archive_dir.join("interventions.jsonl"), &record)?;
+    write_operator_runtime_event(paths, options.event_type, &record)?;
+    Ok(OperatorInterventionResult {
+        action: options.action,
+        work_item_kind: located.work_item_kind,
+        work_item_id: located.work_item_id,
+        source_state: located.state,
+        destination_state: options.destination_state.to_owned(),
+        source_path: located.path,
+        destination_path: destination,
+        event_type: options.event_type.to_owned(),
+        replacement_work_item_id: options.replacement_work_item_id,
+        affected_dependents: options.affected_dependents,
+        record,
+    })
+}
+
+fn locate_cancelable_work_item(
+    paths: &WorkspacePaths,
+    work_item_id: &str,
+    work_item_kind: Option<WorkItemKind>,
+) -> QueueStoreResult<LocatedInterventionItem> {
+    let mut candidates = Vec::new();
+    let kinds = if let Some(kind) = work_item_kind {
+        vec![kind]
+    } else {
+        vec![
+            WorkItemKind::Task,
+            WorkItemKind::Probe,
+            WorkItemKind::Spec,
+            WorkItemKind::Incident,
+        ]
+    };
+    for kind in kinds {
+        candidates.extend(locate_cancelable_for_kind(paths, work_item_id, kind));
+    }
+    match candidates.len() {
+        0 => Err(QueueStoreError::invalid_state(format!(
+            "cancelable work item not found: {work_item_id}"
+        ))),
+        1 => Ok(candidates.remove(0)),
+        _ => Err(QueueStoreError::invalid_state(format!(
+            "work item id is ambiguous; pass --kind for {work_item_id}"
+        ))),
+    }
+}
+
+fn locate_cancelable_for_kind(
+    paths: &WorkspacePaths,
+    work_item_id: &str,
+    kind: WorkItemKind,
+) -> Vec<LocatedInterventionItem> {
+    let directories: Vec<(&str, &PathBuf)> = match kind {
+        WorkItemKind::Task => vec![
+            ("queue", &paths.tasks_queue_dir),
+            ("blocked", &paths.tasks_blocked_dir),
+        ],
+        WorkItemKind::Probe => vec![
+            ("queue", &paths.probes_queue_dir),
+            ("blocked", &paths.probes_blocked_dir),
+        ],
+        WorkItemKind::Spec => vec![
+            ("queue", &paths.specs_queue_dir),
+            ("blocked", &paths.specs_blocked_dir),
+        ],
+        WorkItemKind::Incident => vec![
+            ("incoming", &paths.incidents_incoming_dir),
+            ("blocked", &paths.incidents_blocked_dir),
+        ],
+        WorkItemKind::LearningRequest => Vec::new(),
+    };
+    directories
+        .into_iter()
+        .filter_map(|(state, directory)| {
+            let path = directory.join(format!("{work_item_id}.md"));
+            path.is_file().then_some(LocatedInterventionItem {
+                work_item_kind: kind,
+                work_item_id: work_item_id.to_owned(),
+                state: state.to_owned(),
+                path,
+            })
+        })
+        .collect()
+}
+
+fn locate_exact_task(
+    paths: &WorkspacePaths,
+    task_id: &str,
+    states: &[&str],
+) -> QueueStoreResult<LocatedInterventionItem> {
+    let mut candidates = Vec::new();
+    for state in states {
+        let directory = match *state {
+            "queue" => &paths.tasks_queue_dir,
+            "active" => &paths.tasks_active_dir,
+            "done" => &paths.tasks_done_dir,
+            "blocked" => &paths.tasks_blocked_dir,
+            _ => {
+                return Err(QueueStoreError::invalid_state(format!(
+                    "unsupported task state: {state}"
+                )));
+            }
+        };
+        let path = directory.join(format!("{task_id}.md"));
+        if path.is_file() {
+            candidates.push(LocatedInterventionItem {
+                work_item_kind: WorkItemKind::Task,
+                work_item_id: task_id.to_owned(),
+                state: (*state).to_owned(),
+                path,
+            });
+        }
+    }
+    match candidates.len() {
+        0 => Err(QueueStoreError::invalid_state(format!(
+            "task {task_id} is not in an allowed state: {}",
+            states.join(", ")
+        ))),
+        1 => Ok(candidates.remove(0)),
+        _ => Err(QueueStoreError::invalid_state(format!(
+            "task {task_id} exists in multiple states"
+        ))),
+    }
+}
+
+fn locate_incident(
+    paths: &WorkspacePaths,
+    incident_id: &str,
+    states: &[&str],
+) -> QueueStoreResult<LocatedInterventionItem> {
+    let mut candidates = Vec::new();
+    for state in states {
+        let directory = match *state {
+            "incoming" => &paths.incidents_incoming_dir,
+            "active" => &paths.incidents_active_dir,
+            "resolved" => &paths.incidents_resolved_dir,
+            "blocked" => &paths.incidents_blocked_dir,
+            _ => {
+                return Err(QueueStoreError::invalid_state(format!(
+                    "unsupported incident state: {state}"
+                )));
+            }
+        };
+        let path = directory.join(format!("{incident_id}.md"));
+        if path.is_file() {
+            candidates.push(LocatedInterventionItem {
+                work_item_kind: WorkItemKind::Incident,
+                work_item_id: incident_id.to_owned(),
+                state: (*state).to_owned(),
+                path,
+            });
+        }
+    }
+    match candidates.len() {
+        0 => Err(QueueStoreError::invalid_state(format!(
+            "incident {incident_id} is not in an allowed state: {}",
+            states.join(", ")
+        ))),
+        1 => Ok(candidates.remove(0)),
+        _ => Err(QueueStoreError::invalid_state(format!(
+            "incident {incident_id} exists in multiple states"
+        ))),
+    }
+}
+
+fn require_replacement_task(paths: &WorkspacePaths, task_id: &str) -> QueueStoreResult<()> {
+    for directory in [
+        &paths.tasks_queue_dir,
+        &paths.tasks_active_dir,
+        &paths.tasks_done_dir,
+    ] {
+        if directory.join(format!("{task_id}.md")).is_file() {
+            return Ok(());
+        }
+    }
+    Err(QueueStoreError::invalid_state(format!(
+        "replacement task is not queued, active, or done: {task_id}"
+    )))
+}
+
+fn queued_dependents(
+    paths: &WorkspacePaths,
+    old_task_id: &str,
+) -> QueueStoreResult<Vec<QueuedDependent>> {
+    let mut dependents = Vec::new();
+    for path in list_markdown_files(&paths.tasks_queue_dir)? {
+        let raw = match fs::read_to_string(&path) {
+            Ok(raw) => raw,
+            Err(_) => continue,
+        };
+        let Ok(task) = parse_task_document_with_source(&raw, &path.display().to_string()) else {
+            continue;
+        };
+        if task
+            .depends_on
+            .iter()
+            .any(|dependency| dependency == old_task_id)
+        {
+            dependents.push(QueuedDependent {
+                task_id: task.task_id,
+                path,
+            });
+        }
+    }
+    dependents.sort_by(|left, right| left.path.cmp(&right.path));
+    Ok(dependents)
+}
+
+fn build_intervention_record(
+    input: InterventionRecordInput<'_>,
+) -> QueueStoreResult<OperatorInterventionRecord> {
+    let actor = clean_actor(&input.context.actor)?;
+    Ok(OperatorInterventionRecord {
+        schema_version: "1.0".to_owned(),
+        kind: "operator_intervention".to_owned(),
+        action: input.action.as_str().to_owned(),
+        actor,
+        reason: input.reason.to_owned(),
+        issued_at: input.issued_at,
+        applied_at: input.applied_at,
+        work_item_kind: input.work_item_kind,
+        work_item_id: input.work_item_id.to_owned(),
+        source_state: input.source_state.to_owned(),
+        destination_state: input.destination_state.to_owned(),
+        source_path: workspace_relative_path(input.paths, input.source_path),
+        destination_path: workspace_relative_path(input.paths, input.destination_path),
+        replacement_work_item_id: input.replacement_work_item_id,
+        affected_dependents: input.affected_dependents,
+    })
+}
+
+fn append_intervention_record(
+    path: &Path,
+    record: &OperatorInterventionRecord,
+) -> QueueStoreResult<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| QueueStoreError::io(parent, error))?;
+    }
+    let line = serde_json::to_string(record).map_err(|error| QueueStoreError::InvalidState {
+        message: error.to_string(),
+    })? + "\n";
+    use std::io::Write;
+    let mut file = fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(path)
+        .map_err(|error| QueueStoreError::io(path, error))?;
+    file.write_all(line.as_bytes())
+        .map_err(|error| QueueStoreError::io(path, error))
+}
+
+fn write_operator_runtime_event(
+    paths: &WorkspacePaths,
+    event_type: &str,
+    record: &OperatorInterventionRecord,
+) -> QueueStoreResult<PathBuf> {
+    let log_path = paths.logs_dir.join("runtime_events.jsonl");
+    if let Some(parent) = log_path.parent() {
+        fs::create_dir_all(parent).map_err(|error| QueueStoreError::io(parent, error))?;
+    }
+    let data = serde_json::to_value(record).map_err(|error| QueueStoreError::InvalidState {
+        message: error.to_string(),
+    })?;
+    let data = match data {
+        Value::Object(map) => map,
+        _ => {
+            return Err(QueueStoreError::invalid_state(
+                "operator intervention record must serialize to an object",
+            ));
+        }
+    };
+    let payload = json!({
+        "schema_version": "1.0",
+        "kind": "runtime_event",
+        "event_type": event_type,
+        "occurred_at": record.applied_at.as_str(),
+        "data": data,
+    });
+    let line = serde_json::to_string(&payload).map_err(|error| QueueStoreError::InvalidState {
+        message: error.to_string(),
+    })? + "\n";
+    use std::io::Write;
+    let mut file = fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(&log_path)
+        .map_err(|error| QueueStoreError::io(&log_path, error))?;
+    file.write_all(line.as_bytes())
+        .map_err(|error| QueueStoreError::io(&log_path, error))?;
+    Ok(log_path)
+}
+
+fn intervention_times(
+    context: &OperatorInterventionContext,
+) -> QueueStoreResult<(Timestamp, Timestamp, OffsetDateTime)> {
+    let (default_applied, _default_offset) = current_timestamp_contract("applied_at")?;
+    let applied_at = context.applied_at.clone().unwrap_or(default_applied);
+    let applied_offset = offset_from_timestamp("applied_at", &applied_at)?;
+    let issued_at = context
+        .issued_at
+        .clone()
+        .unwrap_or_else(|| applied_at.clone());
+    offset_from_timestamp("issued_at", &issued_at)?;
+    Ok((issued_at, applied_at, applied_offset))
+}
+
+fn current_timestamp_contract(
+    field_name: &'static str,
+) -> QueueStoreResult<(Timestamp, OffsetDateTime)> {
+    let now = OffsetDateTime::now_utc();
+    let rendered = now
+        .format(&Rfc3339)
+        .unwrap_or_else(|_| "1970-01-01T00:00:00Z".to_owned());
+    let timestamp = Timestamp::parse(field_name, &rendered)
+        .map_err(|error| QueueStoreError::invalid_state(error.to_string()))?;
+    Ok((timestamp, now))
+}
+
+fn offset_from_timestamp(
+    field_name: &'static str,
+    timestamp: &Timestamp,
+) -> QueueStoreResult<OffsetDateTime> {
+    OffsetDateTime::parse(timestamp.as_str(), &Rfc3339)
+        .map_err(|error| QueueStoreError::invalid_state(format!("{field_name}: {error}")))
+}
+
+fn archive_suffix(value: OffsetDateTime) -> String {
+    format!(
+        "{:04}{:02}{:02}T{:02}{:02}{:02}Z.{:08x}",
+        value.year(),
+        u8::from(value.month()),
+        value.day(),
+        value.hour(),
+        value.minute(),
+        value.second(),
+        intervention_suffix()
+    )
+}
+
+fn intervention_suffix() -> u64 {
+    let counter = INTERVENTION_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let now = OffsetDateTime::now_utc().unix_timestamp_nanos() as u64;
+    (now ^ counter ^ u64::from(process::id())) & 0xffff_ffff
+}
+
+fn clean_reason(reason: &str) -> QueueStoreResult<String> {
+    let cleaned = reason.trim();
+    if cleaned.is_empty() {
+        return Err(QueueStoreError::invalid_state("reason is required"));
+    }
+    Ok(cleaned.to_owned())
+}
+
+fn clean_actor(actor: &str) -> QueueStoreResult<String> {
+    let cleaned = actor.trim();
+    if cleaned.is_empty() {
+        return Err(QueueStoreError::invalid_state("actor is required"));
+    }
+    Ok(cleaned.to_owned())
+}
+
+fn validate_single_relative_filename(filename: &str) -> QueueStoreResult<String> {
+    let cleaned = filename.trim();
+    if cleaned != filename
+        || cleaned.is_empty()
+        || cleaned.starts_with('/')
+        || cleaned.contains('/')
+        || cleaned.contains('\\')
+    {
+        return Err(QueueStoreError::invalid_state(
+            "filename must be a single relative filename",
+        ));
+    }
+    Ok(cleaned.to_owned())
+}
+
+fn invalid_artifacts_log_mentions(
+    paths: &WorkspacePaths,
+    filename: &str,
+) -> QueueStoreResult<bool> {
+    let log_path = paths.incidents_incoming_dir.join("invalid-artifacts.jsonl");
+    if !log_path.is_file() {
+        return Ok(false);
+    }
+    let raw =
+        fs::read_to_string(&log_path).map_err(|error| QueueStoreError::io(&log_path, error))?;
+    for line in raw.lines().filter(|line| !line.trim().is_empty()) {
+        if line.contains(filename) {
+            return Ok(true);
+        }
+        if let Ok(value) = serde_json::from_str::<Value>(line) {
+            if value.to_string().contains(filename) {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
+}
+
+fn workspace_relative_path(paths: &WorkspacePaths, path: &Path) -> String {
+    path.strip_prefix(&paths.root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/")
 }
 
 fn task_path(directory: &Path, task_id: &str) -> PathBuf {

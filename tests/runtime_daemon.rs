@@ -13,7 +13,7 @@ use millrace_ai::contracts::{
     TaskDocument, TerminalResult, Timestamp, TokenUsage, WatcherMode, WorkItemKind,
 };
 use millrace_ai::work_documents::{
-    parse_learning_request_document, parse_spec_document, render_task_document,
+    parse_learning_request_document, parse_spec_document, parse_task_document, render_task_document,
 };
 use millrace_ai::workspace::{
     QueueStore, RuntimeOwnershipLockOptions, RuntimeOwnershipLockState,
@@ -299,6 +299,123 @@ fn runtime_daemon_v0_18_4_guardrail_fixture_requires_auto_recovery_idle_cycle_su
         .collect();
     assert!(monitor_events.contains("blocked_dependency_auto_requeued"));
     assert!(monitor_events.contains("blocked_lineage_requires_operator_review"));
+}
+
+#[test]
+fn runtime_daemon_v0_18_6_guardrail_fixture_requires_intervention_mailbox_and_durable_idea_source_surfaces()
+ {
+    let fixture = read_json_fixture("runtime_json/auto_port_v0_18_6_runtime_contract_scout.json");
+    assert_eq!(fixture["kind"], "auto_port_v0_18_6_runtime_contract_scout");
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.18.6");
+    assert_eq!(fixture["rust_reference"]["planned_crate_version"], "0.3.5");
+
+    let daemon = &fixture["daemon_mailbox_contract"];
+    let applied_commands: BTreeSet<_> = daemon["applied_commands"]
+        .as_array()
+        .expect("daemon applied commands are present")
+        .iter()
+        .map(|value| value.as_str().expect("applied command"))
+        .collect();
+    assert_eq!(
+        applied_commands,
+        BTreeSet::from([
+            "archive_blocked_task",
+            "archive_invalid_incident",
+            "cancel_incident",
+            "cancel_work_item",
+            "resolve_incident",
+            "retarget_task_dependency",
+            "supersede_task",
+        ])
+    );
+    assert_eq!(
+        daemon["processed_archive"],
+        "millrace-agents/state/mailbox/processed/<COMMAND_ID>.json"
+    );
+    assert_eq!(
+        daemon["failed_archive"],
+        "millrace-agents/state/mailbox/failed/<COMMAND_ID>.json"
+    );
+    assert_eq!(daemon["defer_reason"], "active_runtime_stage");
+    assert_eq!(
+        daemon["applied_event"],
+        "mailbox_operator_intervention_applied"
+    );
+    assert_eq!(daemon["deferred_event"], "operator_intervention_deferred");
+
+    let monitor_events: BTreeSet<_> = daemon["monitor_events"]
+        .as_array()
+        .expect("daemon monitor events are present")
+        .iter()
+        .map(|value| value.as_str().expect("monitor event"))
+        .collect();
+    for event_type in [
+        "operator_intervention_deferred",
+        "mailbox_operator_intervention_applied",
+        "work_item_cancelled",
+        "task_superseded",
+        "incident_cancelled",
+        "invalid_incident_artifact_archived",
+    ] {
+        assert!(
+            monitor_events.contains(event_type),
+            "missing v0.18.6 daemon intervention monitor event {event_type}"
+        );
+    }
+
+    let read_only = &fixture["read_only_intervention_contract"];
+    assert_eq!(
+        read_only["status_keys"],
+        json!(["latest_operator_intervention"])
+    );
+    for field in [
+        "event_type",
+        "occurred_at",
+        "work_item_kind",
+        "work_item_id",
+        "destination_path",
+    ] {
+        assert!(
+            read_only["latest_operator_intervention_fields"]
+                .as_array()
+                .expect("latest operator intervention fields are present")
+                .iter()
+                .any(|value| value.as_str() == Some(field)),
+            "missing latest operator intervention status field {field}"
+        );
+    }
+
+    let durable = &fixture["durable_idea_source_contract"];
+    assert_eq!(
+        durable["durable_source_path_template"],
+        "millrace-agents/intake/ideas/<root_idea_id>.md"
+    );
+    assert_eq!(durable["watcher_event"], "idea_normalized_to_spec");
+    assert_eq!(
+        durable["watcher_failure_event"],
+        "idea_source_artifact_write_failed"
+    );
+    assert_eq!(
+        durable["spec_reference_order"],
+        json!([
+            "millrace-agents/intake/ideas/<root_idea_id>.md",
+            "ideas/inbox/<idea_file>.md"
+        ])
+    );
+    assert_eq!(
+        durable["closure_source_preference"],
+        json!([
+            "durable idea source artifact",
+            "legacy spec references",
+            "transient ideas/inbox source"
+        ])
+    );
+    assert_eq!(
+        durable["missing_source_failure_class"],
+        "missing_root_idea_source"
+    );
+    assert_eq!(durable["missing_source_event"], "root_idea_source_missing");
+    assert_eq!(durable["blocked_status_marker"], "### BLOCKED");
 }
 
 #[derive(Debug, Default)]
@@ -1183,6 +1300,69 @@ fn basic_monitor_renders_reload_watcher_governance_and_fanout_lines() {
 }
 
 #[test]
+fn basic_monitor_renders_operator_intervention_events() {
+    let output = render_monitor_events(&[
+        monitor_event(
+            "work_item_cancelled",
+            "2026-05-12T12:00:00Z",
+            json!({
+                "work_item_kind": "task",
+                "work_item_id": "task-cancel-monitor",
+                "destination_path": "millrace-agents/tasks/queue/cancelled/task-cancel-monitor.20260512T120000Z.queue.md"
+            }),
+        ),
+        monitor_event(
+            "task_superseded",
+            "2026-05-12T12:00:01Z",
+            json!({
+                "work_item_kind": "task",
+                "work_item_id": "task-old-monitor",
+                "destination_path": "millrace-agents/tasks/queue/superseded/task-old-monitor.20260512T120001Z.queue.md",
+                "replacement_work_item_id": "task-new-monitor",
+                "affected_dependents": ["task-dependent-monitor"]
+            }),
+        ),
+        monitor_event(
+            "mailbox_operator_intervention_applied",
+            "2026-05-12T12:00:02Z",
+            json!({
+                "command": "cancel_work_item",
+                "command_id": "cmd-cancel-monitor",
+                "event_type": "work_item_cancelled",
+                "work_item_kind": "probe",
+                "work_item_id": "probe-cancel-monitor",
+                "destination_path": "millrace-agents/probes/queue/cancelled/probe-cancel-monitor.20260512T120002Z.queue.md"
+            }),
+        ),
+        monitor_event(
+            "operator_intervention_deferred",
+            "2026-05-12T12:00:03Z",
+            json!({
+                "command": "supersede_task",
+                "work_item_kind": "task",
+                "work_item_id": "task-deferred-monitor",
+                "reason": "active_runtime_stage",
+                "active_planes": ["execution"],
+                "deferred_command_id": "cmd-supersede-monitor.deferred"
+            }),
+        ),
+    ]);
+
+    assert!(output.contains(
+        "[12:00:00] operator intervention event=work_item_cancelled work=task:task-cancel-monitor destination=millrace-agents/tasks/queue/cancelled/task-cancel-monitor.20260512T120000Z.queue.md"
+    ));
+    assert!(output.contains(
+        "[12:00:01] operator intervention event=task_superseded work=task:task-old-monitor destination=millrace-agents/tasks/queue/superseded/task-old-monitor.20260512T120001Z.queue.md replacement=task-new-monitor affected=task-dependent-monitor"
+    ));
+    assert!(output.contains(
+        "[12:00:02] mailbox operator intervention applied command=cancel_work_item event=work_item_cancelled work=probe:probe-cancel-monitor destination=millrace-agents/probes/queue/cancelled/probe-cancel-monitor.20260512T120002Z.queue.md command_id=cmd-cancel-monitor"
+    ));
+    assert!(output.contains(
+        "[12:00:03] operator intervention deferred command=supersede_task reason=active_runtime_stage active=execution work=task:task-deferred-monitor deferred_command_id=cmd-supersede-monitor.deferred"
+    ));
+}
+
+#[test]
 fn monitor_events_parse_persisted_runtime_event_jsonl_data_payloads() {
     let events = runtime_monitor_events_from_jsonl(
         r#"{"schema_version":"1.0","kind":"runtime_event","event_type":"runtime_tick_idle","occurred_at":"2026-04-29T02:14:03Z","data":{"reason":"no_work"}}"#,
@@ -1863,6 +2043,80 @@ fn daemon_mailbox_drains_control_and_intake_commands_into_processed_archives() {
 }
 
 #[test]
+fn daemon_mailbox_applies_operator_intervention_when_idle_and_records_audit() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    let queue = QueueStore::from_paths(paths.clone());
+    queue.enqueue_task(&task_document("task-old")).unwrap();
+    queue.enqueue_task(&task_document("task-new")).unwrap();
+    let mut dependent = task_document("task-dependent");
+    dependent.depends_on = vec!["task-old".to_owned()];
+    queue.enqueue_task(&dependent).unwrap();
+    let mut session =
+        startup_runtime_daemon_for_paths(&paths, daemon_options("mailbox-intervention")).unwrap();
+    let mut supervisor = RuntimeDaemonSupervisor::new(supervisor_runner());
+
+    enqueue_mailbox(
+        &paths,
+        "01-supersede",
+        MailboxCommand::SupersedeTask,
+        json!({
+            "old_task_id": "task-old",
+            "replacement_task_id": "task-new",
+            "reason": "replacement task has corrected scope",
+            "cascade": "retarget"
+        }),
+    );
+    enqueue_mailbox(&paths, "02-stop", MailboxCommand::Stop, Value::Null);
+
+    let outcome = supervisor
+        .run_cycle(&mut session, runtime_tick_options())
+        .unwrap();
+
+    assert_eq!(outcome.kind, millrace_ai::RuntimeTickOutcomeKind::Stopped);
+    assert!(paths.tasks_queue_dir.join("task-new.md").is_file());
+    assert!(!paths.tasks_queue_dir.join("task-old.md").exists());
+    let dependent = parse_task_document(
+        &fs::read_to_string(paths.tasks_queue_dir.join("task-dependent.md")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(dependent.depends_on, vec!["task-new".to_owned()]);
+    let superseded_dir = paths.tasks_queue_dir.join("superseded");
+    assert_eq!(
+        read_json_lines(&superseded_dir.join("interventions.jsonl"))[0]["action"],
+        "supersede"
+    );
+    assert_eq!(
+        read_json_lines(&paths.tasks_queue_dir.join("interventions.jsonl"))[0]["action"],
+        "retarget_dependency"
+    );
+    assert_eq!(session.snapshot.queue_depth_execution, 2);
+    assert_eq!(
+        archive_command_ids(&paths.mailbox_processed_dir),
+        vec!["01-supersede", "02-stop"]
+    );
+    let processed = archive_values(&paths.mailbox_processed_dir);
+    assert_eq!(processed[0]["result"]["applied"], true);
+    assert!(
+        processed[0]["result"]["detail"]
+            .as_str()
+            .unwrap()
+            .contains("task_superseded: task task-old")
+    );
+    let events = runtime_events(&paths);
+    for event_type in [
+        "task_superseded",
+        "task_dependency_retargeted",
+        "mailbox_operator_intervention_applied",
+    ] {
+        assert!(
+            events.iter().any(|event| event["event_type"] == event_type),
+            "missing event {event_type}"
+        );
+    }
+}
+
+#[test]
 fn daemon_mailbox_preserves_invalid_and_failed_payloads_and_continues() {
     let temp = TempDir::new().unwrap();
     let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
@@ -2237,13 +2491,24 @@ fn daemon_watcher_startup_scan_normalizes_idea_before_claiming_work() {
     assert_eq!(generated.summary, "Build watcher intake.");
     assert_eq!(generated.root_idea_id.as_deref(), Some("idea-Root-Idea"));
     assert_eq!(generated.root_spec_id.as_deref(), Some("idea-Root-Idea"));
-    assert_eq!(generated.references, vec!["ideas/inbox/Root Idea.md"]);
+    assert_eq!(
+        generated.references,
+        vec![
+            "millrace-agents/intake/ideas/idea-Root-Idea.md",
+            "ideas/inbox/Root Idea.md"
+        ]
+    );
+    assert_eq!(
+        fs::read_to_string(paths.intake_ideas_dir.join("idea-Root-Idea.md")).unwrap(),
+        "# Root Idea Title\n\nBuild watcher intake.\n"
+    );
     assert_eq!(session.snapshot.queue_depth_planning, 1);
 
     let events = runtime_events(&paths);
     assert!(events.iter().any(|event| {
         event["event_type"] == "idea_normalized_to_spec"
             && event["data"]["spec_id"] == "idea-Root-Idea"
+            && event["data"]["source_artifact"] == "millrace-agents/intake/ideas/idea-Root-Idea.md"
     }));
     assert!(events.iter().any(|event| {
         event["event_type"] == "watcher_events_consumed"
@@ -3203,6 +3468,64 @@ fn daemon_loop_uses_configured_idle_sleep_without_spinning() {
             .count()
             >= 3
     );
+    assert_eq!(
+        inspect_runtime_ownership_lock(&paths).state,
+        RuntimeOwnershipLockState::Absent
+    );
+}
+
+#[test]
+fn daemon_loop_continues_after_missing_root_idea_source_blocks_planning() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    let queue = QueueStore::from_paths(paths.clone());
+    queue
+        .enqueue_spec(&spec_document("spec-daemon-missing-source"))
+        .unwrap();
+    queue.claim_next_planning_item(None).unwrap().unwrap();
+    queue.mark_spec_done("spec-daemon-missing-source").unwrap();
+    let mut session =
+        startup_runtime_daemon_for_paths(&paths, daemon_options("loop-missing-source")).unwrap();
+    let mut supervisor = RuntimeDaemonSupervisor::new(supervisor_runner());
+    let mut sleeper = RecordingSleeper::default();
+    let mut options = RuntimeDaemonLoopOptions::max_ticks(2);
+    options.tick_options = runtime_tick_options();
+
+    let outcome = run_runtime_daemon_supervisor_loop_with_sleeper(
+        &mut session,
+        &mut supervisor,
+        options,
+        &mut sleeper,
+    )
+    .unwrap();
+
+    assert_eq!(outcome.completed_tick_count, 2);
+    assert_eq!(outcome.exit_reason, RuntimeDaemonLoopExitReason::MaxTicks);
+    assert!(
+        outcome
+            .cycle_outcomes
+            .iter()
+            .all(|cycle| cycle.kind == millrace_ai::RuntimeTickOutcomeKind::NoWork)
+    );
+    assert_eq!(load_planning_status(&paths).unwrap(), "### BLOCKED");
+    assert_eq!(
+        load_snapshot(&paths)
+            .unwrap()
+            .current_failure_class
+            .as_deref(),
+        Some("missing_root_idea_source")
+    );
+    assert!(runtime_events(&paths).iter().any(|event| {
+        event["event_type"] == "root_idea_source_missing"
+            && event["data"]["root_idea_id"] == "idea-daemon"
+            && event["data"]["candidates"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|candidate| {
+                    candidate.as_str() == Some("millrace-agents/intake/ideas/idea-daemon.md")
+                })
+    }));
     assert_eq!(
         inspect_runtime_ownership_lock(&paths).state,
         RuntimeOwnershipLockState::Absent

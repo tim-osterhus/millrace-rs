@@ -6158,6 +6158,76 @@ fn serial_tick_opens_closure_target_when_root_spec_claim_activates() {
 }
 
 #[test]
+fn serial_tick_closure_target_prefers_durable_idea_source_over_legacy_references() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    write_idea(&paths, "idea-001", "# Idea 001\n\nTransient inbox copy.\n");
+    millrace_ai::workspace::write_idea_source_artifact(
+        &paths,
+        "idea-001",
+        "# Idea 001\n\nDurable runtime-owned copy.\n",
+    )
+    .unwrap();
+    let mut spec = spec_document("spec-root-durable");
+    spec.references = vec!["ideas/inbox/idea-001.md".to_owned()];
+    QueueStore::from_paths(paths.clone())
+        .enqueue_spec(&spec)
+        .unwrap();
+
+    let mut session =
+        startup_runtime_once_for_paths(&paths, startup_options("tick-root-durable")).unwrap();
+    let outcome = run_serial_runtime_tick(
+        &mut session,
+        tick_options("run-root-durable", "request-root-durable"),
+    )
+    .unwrap();
+
+    assert_eq!(
+        outcome.stage_request.unwrap().request_kind,
+        RequestKind::ActiveWorkItem
+    );
+    let target =
+        millrace_ai::workspace::load_closure_target_state(&paths, "spec-root-durable").unwrap();
+    assert!(target.closure_open);
+    assert_eq!(
+        fs::read_to_string(paths.arbiter_idea_contracts_dir.join("idea-001.md")).unwrap(),
+        "# Idea 001\n\nDurable runtime-owned copy.\n"
+    );
+
+    session.finish().unwrap();
+}
+
+#[test]
+fn serial_tick_closure_target_falls_back_to_legacy_idea_reference() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    write_idea(&paths, "idea-001", "# Idea 001\n\nLegacy reference copy.\n");
+    let mut spec = spec_document("spec-root-legacy");
+    spec.references = vec!["ideas/inbox/idea-001.md".to_owned()];
+    QueueStore::from_paths(paths.clone())
+        .enqueue_spec(&spec)
+        .unwrap();
+
+    let mut session =
+        startup_runtime_once_for_paths(&paths, startup_options("tick-root-legacy")).unwrap();
+    run_serial_runtime_tick(
+        &mut session,
+        tick_options("run-root-legacy", "request-root-legacy"),
+    )
+    .unwrap();
+
+    let target =
+        millrace_ai::workspace::load_closure_target_state(&paths, "spec-root-legacy").unwrap();
+    assert!(target.closure_open);
+    assert_eq!(
+        fs::read_to_string(paths.arbiter_idea_contracts_dir.join("idea-001.md")).unwrap(),
+        "# Idea 001\n\nLegacy reference copy.\n"
+    );
+
+    session.finish().unwrap();
+}
+
+#[test]
 fn serial_tick_backfills_closure_target_from_done_root_spec() {
     let temp = TempDir::new().unwrap();
     let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
@@ -6201,6 +6271,56 @@ fn serial_tick_backfills_closure_target_from_done_root_spec() {
     assert!(runtime_events(&paths).iter().any(|event| {
         event["event_type"] == "completion_behavior_target_backfilled"
             && event["data"]["root_spec_id"] == "spec-root-backfill"
+    }));
+
+    session.finish().unwrap();
+}
+
+#[test]
+fn serial_tick_blocks_planning_when_backfill_root_idea_source_is_missing() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    let queue = QueueStore::from_paths(paths.clone());
+    queue
+        .enqueue_spec(&spec_document("spec-root-missing-source"))
+        .unwrap();
+    queue.claim_next_planning_item(None).unwrap().unwrap();
+    queue.mark_spec_done("spec-root-missing-source").unwrap();
+
+    let mut session =
+        startup_runtime_once_for_paths(&paths, startup_options("tick-missing-source")).unwrap();
+    let outcome = run_serial_runtime_tick(
+        &mut session,
+        tick_options("run-missing-source", "request-missing-source"),
+    )
+    .unwrap();
+
+    assert_eq!(outcome.kind, RuntimeTickOutcomeKind::NoWork);
+    assert!(outcome.stage_request.is_none());
+    assert_eq!(load_planning_status(&paths).unwrap(), "### BLOCKED");
+    assert_eq!(
+        load_snapshot(&paths)
+            .unwrap()
+            .current_failure_class
+            .as_deref(),
+        Some("missing_root_idea_source")
+    );
+    let events = runtime_events(&paths);
+    assert!(events.iter().any(|event| {
+        event["event_type"] == "completion_behavior_blocked"
+            && event["data"]["reason"] == "missing_root_idea_source"
+            && event["data"]["spec_id"] == "spec-root-missing-source"
+    }));
+    assert!(events.iter().any(|event| {
+        event["event_type"] == "root_idea_source_missing"
+            && event["data"]["root_idea_id"] == "idea-001"
+            && event["data"]["candidates"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|candidate| {
+                    candidate.as_str() == Some("millrace-agents/intake/ideas/idea-001.md")
+                })
     }));
 
     session.finish().unwrap();

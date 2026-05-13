@@ -39,9 +39,9 @@ missing Rust test references in that fixture. `web_dashboard_parity_decision.jso
 records the Python v0.17.3 optional `packages/millrace-web` surface as an
 intentional unsupported Rust parity gap, records the Python v0.17.4 package
 version/dependency sync, records the Python v0.18.0 graph/trace dashboard
-evidence for that same gap, and records the Python v0.18.1, v0.18.2, and
-v0.18.3 and v0.18.4 package/runtime app version sync without authorizing a Rust web
-implementation. It names
+evidence for that same gap, and records the Python v0.18.1, v0.18.2,
+v0.18.3, v0.18.4, v0.18.5, and v0.18.6 package/runtime app version sync
+without authorizing a Rust web implementation. It names
 the workspace registry, summary DTO, queue/run/snapshot/baseline/compiled-plan/
 Arbiter/usage-governance/event readers, static shell, CLI/server boundary, and
 package-boundary tests, while documenting that Rust currently keeps the
@@ -197,6 +197,29 @@ source-package mapping, dirty-worktree package verification, generated-cache
 package exclusion evidence, and the Python v0.18.4 `millrace-web`
 package/version unsupported-gap evidence. It also confirms Builder release
 evidence does not require publish, upload, push, tag, or deployment commands.
+
+`auto_port_v0_18_6_parity_evidence.json` records target-facing guardrails for
+the Python `v0.18.4..v0.18.6` to Rust `0.3.5` auto-port. It maps every
+generated scout path to an expected Rust implementation, test, documentation,
+fixture, package evidence, or unsupported-gap evidence target; pins the
+v0.18.4, v0.18.5, and v0.18.6 Python release commits, Rust `0.3.4 -> 0.3.5`
+transition, operator intervention mailbox contracts, archive/audit ledgers,
+direct and daemon-routed control surfaces, queue/status read-only evidence,
+durable idea source behavior, closure recovery evidence, required checks, and
+the Python v0.18.5/v0.18.6 `millrace-web` package/version unsupported-gap
+evidence.
+
+`auto_port_v0_18_6_release_parity_evidence.json` records the Rust `0.3.5`
+final release-parity evidence for Python `v0.18.4..v0.18.6`, including
+version-visible CLI metadata, generated-scout path mapping evidence, package
+include rules, README/changelog/roadmap/runtime docs, operator intervention
+commands, intervention archive/audit/read-only package-readiness evidence,
+durable idea-source and closure recovery evidence, required Builder
+verification command results, source-package mapping, dirty-worktree package
+verification, generated-cache package exclusion evidence, and the Python
+v0.18.5/v0.18.6 `millrace-web` package/version unsupported gap. It also
+confirms Builder release evidence does not require publish, upload, push, tag,
+or deployment commands.
 
 The evidence is intentionally not a byte-for-byte transcript. Paths, generated
 ids, timestamps, package versions, command ids, run ids, compact run handles,

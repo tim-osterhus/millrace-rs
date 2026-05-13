@@ -71,8 +71,31 @@ to requeue at most one eligible stranded predecessor, write
 and return a recovered tick without dispatching queued dependents in that same
 cycle.
 
+For the Python `v0.18.6` operator intervention surface, daemon mailbox intake
+applies the same cancel, archive, supersede, retarget, resolve, and invalid
+incident archive commands through the shared queue-store mutation boundary when
+the daemon is idle, archives processed or failed mailbox commands with
+evidence, and defers intervention commands while runtime planes are active.
+Read-only queue inspection now exposes intervention archive counters and can
+render cancelled, superseded, and operator-resolved records. Status text/JSON
+projects the latest operator intervention from runtime event evidence, and the
+basic monitor renders direct, mailbox-applied, and deferred intervention
+events without changing the underlying event names.
+
+The same `v0.18.6` parity line preserves watcher-seeded idea sources under
+`millrace-agents/intake/ideas/<root_idea_id>.md`. Generated root specs list
+that durable runtime-owned artifact before the transient `ideas/inbox` path,
+and `idea_normalized_to_spec` events include `source_artifact` evidence.
+Closure-target creation and backlog backfill prefer durable idea artifacts
+before legacy spec references or inbox fallbacks. When backlog-drain recovery
+cannot find any valid root idea source candidate, Planning is marked blocked
+with `missing_root_idea_source`, the runtime emits `root_idea_source_missing`
+candidate evidence, and the daemon loop continues through normal bounded-cycle
+behavior.
+
 The optional Python `millrace-web` package remains outside the accepted Rust
-runtime boundary, including the Python `v0.18.4` package/runtime version sync.
+runtime boundary, including the Python `v0.18.5` and `v0.18.6`
+package/runtime version syncs.
 Rust inspection stays local and read-only through CLI commands
 such as `queue ls/show`, `status show`, `runs ls/show/tail`, `modes show`,
 `config show`, `compile show`, `compile graph`, and `runs trace <run_id>`.

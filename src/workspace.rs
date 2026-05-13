@@ -8,6 +8,8 @@ use std::{
 
 use serde_json::json;
 
+use crate::contracts::validate_safe_identifier;
+
 #[path = "workspace/doctor.rs"]
 mod doctor;
 #[path = "workspace/lineage_repair.rs"]
@@ -44,8 +46,10 @@ pub use managed_assets::{
     write_baseline_manifest,
 };
 pub use queue_store::{
-    QueueClaim, QueueInspectionEntry, QueueStore, QueueStoreError, QueueStoreResult,
-    StaleActiveState, claim_next_execution_task, claim_next_learning_request,
+    OperatorInterventionAction, OperatorInterventionContext, OperatorInterventionRecord,
+    OperatorInterventionResult, QueueClaim, QueueInspectionEntry, QueueStore, QueueStoreError,
+    QueueStoreResult, StaleActiveState, archive_blocked_task, archive_invalid_incident_artifact,
+    cancel_incident, cancel_work_item, claim_next_execution_task, claim_next_learning_request,
     claim_next_planning_item, detect_execution_stale_state, detect_learning_stale_state,
     detect_planning_stale_state, enqueue_incident, enqueue_learning_request, enqueue_probe,
     enqueue_spec, enqueue_task, find_queue_item, inspect_queue_items, list_deferred_root_spec_ids,
@@ -53,6 +57,7 @@ pub use queue_store::{
     mark_learning_request_done, mark_probe_blocked, mark_probe_done, mark_spec_blocked,
     mark_spec_done, mark_task_blocked, mark_task_done, requeue_blocked_task, requeue_incident,
     requeue_learning_request, requeue_probe, requeue_spec, requeue_task,
+    resolve_incident_by_operator, retarget_queued_task_dependency, supersede_task,
 };
 pub use runtime_control::{
     RuntimeControl, RuntimeControlActionResult, RuntimeControlError, RuntimeControlMode,
@@ -228,6 +233,11 @@ pub struct WorkspacePaths {
     /// Blocked probe directory.
     pub probes_blocked_dir: PathBuf,
 
+    /// Runtime-owned intake artifact root directory.
+    pub intake_dir: PathBuf,
+    /// Durable runtime-owned source copies for idea intake.
+    pub intake_ideas_dir: PathBuf,
+
     /// Recon artifact root directory.
     pub recon_dir: PathBuf,
     /// Durable recon packet directory.
@@ -379,6 +389,8 @@ impl WorkspacePaths {
             &self.probes_active_dir,
             &self.probes_done_dir,
             &self.probes_blocked_dir,
+            &self.intake_dir,
+            &self.intake_ideas_dir,
             &self.recon_dir,
             &self.recon_packets_dir,
             &self.recon_reports_dir,
@@ -431,6 +443,7 @@ pub fn workspace_paths(root: impl AsRef<Path>) -> WorkspacePaths {
     let specs_dir = runtime_root.join("specs");
     let incidents_dir = runtime_root.join("incidents");
     let probes_dir = runtime_root.join("probes");
+    let intake_dir = runtime_root.join("intake");
     let recon_dir = runtime_root.join("recon");
     let learning_dir = runtime_root.join("learning");
     let learning_requests_dir = learning_dir.join("requests");
@@ -470,6 +483,8 @@ pub fn workspace_paths(root: impl AsRef<Path>) -> WorkspacePaths {
         probes_active_dir: probes_dir.join("active"),
         probes_done_dir: probes_dir.join("done"),
         probes_blocked_dir: probes_dir.join("blocked"),
+        intake_dir: intake_dir.clone(),
+        intake_ideas_dir: intake_dir.join("ideas"),
         recon_dir: recon_dir.clone(),
         recon_packets_dir: recon_dir.join("packets"),
         recon_reports_dir: recon_dir.join("reports"),
@@ -526,6 +541,31 @@ pub fn workspace_paths(root: impl AsRef<Path>) -> WorkspacePaths {
     }
 }
 
+/// Return the durable runtime-owned source artifact path for one root idea id.
+pub fn idea_source_artifact_path(
+    paths: &WorkspacePaths,
+    root_idea_id: &str,
+) -> state_store::StateStoreResult<PathBuf> {
+    validate_safe_identifier(root_idea_id, "root_idea_id").map_err(|error| {
+        state_store::StateStoreError::from(WorkspaceError::InvalidPath {
+            path: PathBuf::from(root_idea_id),
+            message: error.to_string(),
+        })
+    })?;
+    Ok(paths.intake_ideas_dir.join(format!("{root_idea_id}.md")))
+}
+
+/// Persist original idea markdown under runtime-owned durable intake storage.
+pub fn write_idea_source_artifact(
+    paths: &WorkspacePaths,
+    root_idea_id: &str,
+    markdown: &str,
+) -> state_store::StateStoreResult<PathBuf> {
+    let path = idea_source_artifact_path(paths, root_idea_id)?;
+    state_store::atomic_write_text(&path, markdown)?;
+    Ok(path)
+}
+
 /// Resolve a workspace and reject targets missing the canonical initialized baseline.
 pub fn require_initialized_workspace(root: impl AsRef<Path>) -> WorkspaceResult<WorkspacePaths> {
     let paths = workspace_paths(root);
@@ -540,6 +580,7 @@ pub fn require_initialized_workspace_paths(paths: &WorkspacePaths) -> WorkspaceR
         &paths.state_dir,
         &paths.tasks_queue_dir,
         &paths.probes_queue_dir,
+        &paths.intake_ideas_dir,
         &paths.specs_queue_dir,
         &paths.incidents_incoming_dir,
         &paths.recon_packets_dir,

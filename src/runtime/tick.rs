@@ -24,7 +24,10 @@ use crate::{
         ActiveRunRequestKind, ActiveRunState, ClosureTargetState, ContractError, IncidentDecision,
         IncidentDocument, IncidentSeverity, LearningRequestDocument, LearningTerminalResult,
         MailboxAddIdeaPayload, MailboxAddProbePayload, MailboxAddSpecPayload,
-        MailboxAddTaskPayload, MailboxCommand, MailboxCommandEnvelope, PauseSource, Plane,
+        MailboxAddTaskPayload, MailboxArchiveBlockedTaskPayload,
+        MailboxArchiveInvalidIncidentPayload, MailboxCancelWorkItemPayload, MailboxCommand,
+        MailboxCommandEnvelope, MailboxIncidentInterventionPayload,
+        MailboxRetargetTaskDependencyPayload, MailboxSupersedeTaskPayload, PauseSource, Plane,
         PlanningTerminalResult, ReconDecision, ReconPacketDocument, RecoveryCounters,
         ReloadOutcome, ResultClass, RootIntakeKind, RuntimeErrorCode, RuntimeErrorContext,
         RuntimeJsonContract, RuntimeSnapshot, SpecDocument, SpecSourceType, StageName,
@@ -45,12 +48,14 @@ use crate::{
         parse_task_document_with_source, parse_task_json_import_with_source,
     },
     workspace::{
-        LineageRepairError, QueueClaim, QueueStore, QueueStoreError, StateStoreError,
-        WorkspacePaths, atomic_write_text, load_closure_target_state, load_recovery_counters,
+        LineageRepairError, OperatorInterventionContext, OperatorInterventionResult, QueueClaim,
+        QueueStore, QueueStoreError, StateStoreError, WorkspacePaths, atomic_write_text,
+        idea_source_artifact_path, load_closure_target_state, load_recovery_counters,
         load_usage_governance_ledger, load_usage_governance_state, reset_forward_progress_counters,
         save_closure_target_state, save_recovery_counters, save_snapshot,
         save_usage_governance_state, scan_closure_lineage_drift, set_execution_status,
-        set_learning_status, set_planning_status, write_lineage_drift_diagnostic,
+        set_learning_status, set_planning_status, write_idea_source_artifact,
+        write_lineage_drift_diagnostic,
     },
 };
 
@@ -1314,9 +1319,11 @@ fn recover_or_backfill_missing_closure_target(
             }
         }
         Err(LineageRepairError::MissingClosureTarget { .. }) => {
+            let candidates = root_idea_source_candidates(&session.paths, &spec);
             let Some(target) =
                 create_closure_target_for_root_spec(session, &spec_path, &spec, now)?
             else {
+                mark_root_idea_source_missing(session, &spec, &spec_path, &candidates, now)?;
                 return Ok(None);
             };
             write_runtime_event(
@@ -1413,6 +1420,53 @@ fn create_closure_target_for_root_spec(
     Ok(Some(target))
 }
 
+fn mark_root_idea_source_missing(
+    session: &mut RuntimeStartupSession,
+    spec: &SpecDocument,
+    spec_path: &Path,
+    candidates: &[PathBuf],
+    now: &Timestamp,
+) -> RuntimeTickResult<()> {
+    mark_completion_behavior_blocked(
+        session,
+        "missing_root_idea_source",
+        &spec.spec_id,
+        spec_path,
+        now,
+    )?;
+    write_runtime_event(
+        &session.paths,
+        "root_idea_source_missing",
+        json_object([
+            (
+                "root_idea_id",
+                spec.root_idea_id
+                    .clone()
+                    .map(Value::String)
+                    .unwrap_or(Value::Null),
+            ),
+            ("spec_id", Value::String(spec.spec_id.clone())),
+            (
+                "spec_path",
+                Value::String(workspace_relative(&session.paths, spec_path)),
+            ),
+            (
+                "candidates",
+                Value::Array(
+                    candidates
+                        .iter()
+                        .map(|candidate| {
+                            Value::String(workspace_relative(&session.paths, candidate))
+                        })
+                        .collect(),
+                ),
+            ),
+        ]),
+        now,
+    )?;
+    Ok(())
+}
+
 fn latest_root_spec_candidate(
     paths: &WorkspacePaths,
 ) -> RuntimeTickResult<Option<(PathBuf, SpecDocument)>> {
@@ -1485,6 +1539,11 @@ fn load_root_idea_markdown(
 
 fn root_idea_source_candidates(paths: &WorkspacePaths, spec: &SpecDocument) -> Vec<PathBuf> {
     let mut candidates = Vec::new();
+    if let Some(root_idea_id) = &spec.root_idea_id {
+        if let Ok(path) = idea_source_artifact_path(paths, root_idea_id) {
+            push_unique_path(&mut candidates, path);
+        }
+    }
     for reference in &spec.references {
         push_unique_path(&mut candidates, resolve_reference_path(paths, reference));
     }
@@ -5121,6 +5180,26 @@ fn normalize_idea_watch_event(
     let (title, summary) = derive_idea_title_summary(&content, fallback);
     let spec_id = safe_spec_id_from_idea_path(idea_path);
     let idea_reference = workspace_relative(&session.paths, idea_path);
+    let source_artifact = match write_idea_source_artifact(&session.paths, &spec_id, &content) {
+        Ok(path) => path,
+        Err(error) => {
+            write_runtime_event(
+                &session.paths,
+                "idea_source_artifact_write_failed",
+                json_object([
+                    (
+                        "idea_path",
+                        Value::String(workspace_relative(&session.paths, idea_path)),
+                    ),
+                    ("spec_id", Value::String(spec_id)),
+                    ("error", Value::String(error.to_string())),
+                ]),
+                now,
+            )?;
+            return Ok(false);
+        }
+    };
+    let source_artifact_reference = workspace_relative(&session.paths, &source_artifact);
 
     if idea_already_represented(&session.paths, &spec_id, &idea_reference)? {
         write_idea_normalization_skipped_event(
@@ -5155,7 +5234,7 @@ fn normalize_idea_watch_event(
         required_skills: Vec::new(),
         decomposition_hints: Vec::new(),
         acceptance: vec!["planner processes this idea-derived spec".to_owned()],
-        references: vec![idea_reference],
+        references: idea_references(&source_artifact_reference, &idea_reference),
         created_at: now.clone(),
         created_by: "watcher".to_owned(),
         updated_at: None,
@@ -5184,6 +5263,7 @@ fn normalize_idea_watch_event(
                 "idea_path",
                 Value::String(workspace_relative(&session.paths, idea_path)),
             ),
+            ("source_artifact", Value::String(source_artifact_reference)),
             ("spec_id", Value::String(spec_id)),
             (
                 "spec_path",
@@ -5193,6 +5273,14 @@ fn normalize_idea_watch_event(
         now,
     )?;
     Ok(true)
+}
+
+fn idea_references(durable_reference: &str, transient_reference: &str) -> Vec<String> {
+    if durable_reference == transient_reference {
+        vec![durable_reference.to_owned()]
+    } else {
+        vec![durable_reference.to_owned(), transient_reference.to_owned()]
+    }
 }
 
 fn write_idea_normalization_skipped_event(
@@ -5508,7 +5596,316 @@ fn apply_mailbox_command(
         MailboxCommand::RetryActive => retry_active_from_mailbox(session, envelope, now),
         MailboxCommand::ClearStaleState => clear_stale_from_mailbox(session, envelope, now),
         MailboxCommand::ReloadConfig => reload_config_from_mailbox(session, envelope, now),
+        MailboxCommand::CancelWorkItem => {
+            let payload = MailboxCancelWorkItemPayload::from_json_value(Value::Object(
+                envelope.payload.clone(),
+            ))
+            .map_err(|source| RuntimeTickError::InvalidState {
+                message: format!("mailbox cancel_work_item payload is invalid: {source}"),
+            })?;
+            let mut extra = json_object([
+                ("work_item_id", Value::String(payload.work_item_id.clone())),
+                ("reason", Value::String(payload.reason.clone())),
+                ("force", Value::Bool(payload.force)),
+            ]);
+            if let Some(kind) = payload.work_item_kind {
+                extra.insert(
+                    "work_item_kind".to_owned(),
+                    Value::String(kind.as_str().to_owned()),
+                );
+            }
+            apply_operator_intervention_from_mailbox(
+                session,
+                envelope,
+                now,
+                extra,
+                |queue, context| {
+                    queue.cancel_work_item_with_context(
+                        &payload.work_item_id,
+                        payload.work_item_kind,
+                        &payload.reason,
+                        context,
+                        payload.force,
+                    )
+                },
+            )
+        }
+        MailboxCommand::ArchiveBlockedTask => {
+            let payload = MailboxArchiveBlockedTaskPayload::from_json_value(Value::Object(
+                envelope.payload.clone(),
+            ))
+            .map_err(|source| RuntimeTickError::InvalidState {
+                message: format!("mailbox archive_blocked_task payload is invalid: {source}"),
+            })?;
+            apply_operator_intervention_from_mailbox(
+                session,
+                envelope,
+                now,
+                json_object([
+                    ("task_id", Value::String(payload.task_id.clone())),
+                    ("reason", Value::String(payload.reason.clone())),
+                ]),
+                |queue, context| {
+                    queue.archive_blocked_task_with_context(
+                        &payload.task_id,
+                        &payload.reason,
+                        context,
+                    )
+                },
+            )
+        }
+        MailboxCommand::SupersedeTask => {
+            let payload = MailboxSupersedeTaskPayload::from_json_value(Value::Object(
+                envelope.payload.clone(),
+            ))
+            .map_err(|source| RuntimeTickError::InvalidState {
+                message: format!("mailbox supersede_task payload is invalid: {source}"),
+            })?;
+            apply_operator_intervention_from_mailbox(
+                session,
+                envelope,
+                now,
+                json_object([
+                    ("old_task_id", Value::String(payload.old_task_id.clone())),
+                    (
+                        "replacement_task_id",
+                        Value::String(payload.replacement_task_id.clone()),
+                    ),
+                    ("reason", Value::String(payload.reason.clone())),
+                    (
+                        "cascade",
+                        Value::String(payload.cascade.as_str().to_owned()),
+                    ),
+                ]),
+                |queue, context| {
+                    queue.supersede_task_with_context(
+                        &payload.old_task_id,
+                        &payload.replacement_task_id,
+                        &payload.reason,
+                        payload.cascade,
+                        context,
+                    )
+                },
+            )
+        }
+        MailboxCommand::RetargetTaskDependency => {
+            let payload = MailboxRetargetTaskDependencyPayload::from_json_value(Value::Object(
+                envelope.payload.clone(),
+            ))
+            .map_err(|source| RuntimeTickError::InvalidState {
+                message: format!("mailbox retarget_task_dependency payload is invalid: {source}"),
+            })?;
+            apply_operator_intervention_from_mailbox(
+                session,
+                envelope,
+                now,
+                json_object([
+                    ("task_id", Value::String(payload.task_id.clone())),
+                    (
+                        "old_dependency_id",
+                        Value::String(payload.old_dependency_id.clone()),
+                    ),
+                    (
+                        "new_dependency_id",
+                        Value::String(payload.new_dependency_id.clone()),
+                    ),
+                    ("reason", Value::String(payload.reason.clone())),
+                ]),
+                |queue, context| {
+                    queue.retarget_queued_task_dependency_with_context(
+                        &payload.task_id,
+                        &payload.old_dependency_id,
+                        &payload.new_dependency_id,
+                        &payload.reason,
+                        context,
+                    )
+                },
+            )
+        }
+        MailboxCommand::ResolveIncident | MailboxCommand::CancelIncident => {
+            let payload = MailboxIncidentInterventionPayload::from_json_value(Value::Object(
+                envelope.payload.clone(),
+            ))
+            .map_err(|source| RuntimeTickError::InvalidState {
+                message: format!(
+                    "mailbox {} payload is invalid: {source}",
+                    envelope.command.as_str()
+                ),
+            })?;
+            apply_operator_intervention_from_mailbox(
+                session,
+                envelope,
+                now,
+                json_object([
+                    ("incident_id", Value::String(payload.incident_id.clone())),
+                    ("reason", Value::String(payload.reason.clone())),
+                ]),
+                |queue, context| match envelope.command {
+                    MailboxCommand::ResolveIncident => queue
+                        .resolve_incident_by_operator_with_context(
+                            &payload.incident_id,
+                            &payload.reason,
+                            context,
+                        ),
+                    MailboxCommand::CancelIncident => queue.cancel_incident_with_context(
+                        &payload.incident_id,
+                        &payload.reason,
+                        context,
+                    ),
+                    _ => unreachable!("incident intervention command checked by match arm"),
+                },
+            )
+        }
+        MailboxCommand::ArchiveInvalidIncident => {
+            let payload = MailboxArchiveInvalidIncidentPayload::from_json_value(Value::Object(
+                envelope.payload.clone(),
+            ))
+            .map_err(|source| RuntimeTickError::InvalidState {
+                message: format!("mailbox archive_invalid_incident payload is invalid: {source}"),
+            })?;
+            apply_operator_intervention_from_mailbox(
+                session,
+                envelope,
+                now,
+                json_object([
+                    ("filename", Value::String(payload.filename.clone())),
+                    ("reason", Value::String(payload.reason.clone())),
+                ]),
+                |queue, context| {
+                    queue.archive_invalid_incident_artifact_with_context(
+                        &payload.filename,
+                        &payload.reason,
+                        context,
+                    )
+                },
+            )
+        }
     }
+}
+
+fn apply_operator_intervention_from_mailbox<F>(
+    session: &mut RuntimeStartupSession,
+    envelope: &MailboxCommandEnvelope,
+    now: &Timestamp,
+    extra: Map<String, Value>,
+    apply: F,
+) -> RuntimeTickResult<Map<String, Value>>
+where
+    F: FnOnce(
+        &QueueStore,
+        &OperatorInterventionContext,
+    ) -> Result<OperatorInterventionResult, QueueStoreError>,
+{
+    let active_planes = operator_intervention_active_planes(&session.snapshot);
+    if !active_planes.is_empty() {
+        return defer_active_operator_intervention_from_mailbox(
+            session,
+            envelope,
+            now,
+            extra,
+            active_planes,
+        );
+    }
+
+    let queue = QueueStore::from_paths(session.paths.clone());
+    let context = OperatorInterventionContext::with_timestamps(
+        &envelope.issuer,
+        envelope.issued_at.clone(),
+        now.clone(),
+    );
+    let result = apply(&queue, &context)?;
+    refresh_queue_depths(&session.paths, &mut session.snapshot)?;
+    session.snapshot.updated_at = now.clone();
+    save_snapshot(&session.paths, &session.snapshot)?;
+
+    let destination_path = workspace_relative(&session.paths, &result.destination_path);
+    let mut event_data = json_object([
+        ("event_type", Value::String(result.event_type.clone())),
+        (
+            "work_item_kind",
+            Value::String(result.work_item_kind.as_str().to_owned()),
+        ),
+        ("work_item_id", Value::String(result.work_item_id.clone())),
+        ("destination_path", Value::String(destination_path.clone())),
+    ]);
+    if let Some(replacement) = &result.replacement_work_item_id {
+        event_data.insert(
+            "replacement_work_item_id".to_owned(),
+            Value::String(replacement.clone()),
+        );
+    }
+    if !result.affected_dependents.is_empty() {
+        event_data.insert(
+            "affected_dependents".to_owned(),
+            Value::Array(
+                result
+                    .affected_dependents
+                    .iter()
+                    .cloned()
+                    .map(Value::String)
+                    .collect(),
+            ),
+        );
+    }
+    write_runtime_event(
+        &session.paths,
+        "mailbox_operator_intervention_applied",
+        mailbox_event_data(envelope, extend_json_object(extra, event_data)),
+        now,
+    )?;
+    Ok(mailbox_result_with_path(
+        true,
+        result.detail(),
+        destination_path,
+    ))
+}
+
+fn defer_active_operator_intervention_from_mailbox(
+    session: &mut RuntimeStartupSession,
+    envelope: &MailboxCommandEnvelope,
+    now: &Timestamp,
+    extra: Map<String, Value>,
+    active_planes: Vec<String>,
+) -> RuntimeTickResult<Map<String, Value>> {
+    let deferred_command_id = deferred_reload_command_id(envelope);
+    let deferred = MailboxCommandEnvelope {
+        command_id: deferred_command_id.clone(),
+        issued_at: now.clone(),
+        ..envelope.clone()
+    };
+    write_mailbox_envelope(&session.paths, &deferred)?;
+    session.snapshot.updated_at = now.clone();
+    save_snapshot(&session.paths, &session.snapshot)?;
+
+    let active_planes_json = active_planes
+        .iter()
+        .cloned()
+        .map(Value::String)
+        .collect::<Vec<_>>();
+    write_runtime_event(
+        &session.paths,
+        "operator_intervention_deferred",
+        mailbox_event_data(
+            envelope,
+            extend_json_object(
+                extra,
+                json_object([
+                    ("reason", Value::String("active_runtime_stage".to_owned())),
+                    ("active_planes", Value::Array(active_planes_json.clone())),
+                    ("deferred_command_id", Value::String(deferred_command_id)),
+                ]),
+            ),
+        ),
+        now,
+    )?;
+
+    let mut result = mailbox_result(
+        false,
+        "operator intervention deferred until runtime is idle",
+    );
+    result.insert("deferred".to_owned(), Value::Bool(true));
+    result.insert("active_planes".to_owned(), Value::Array(active_planes_json));
+    Ok(result)
 }
 
 fn retry_active_from_mailbox(
@@ -6190,6 +6587,15 @@ fn active_plane_values(snapshot: &RuntimeSnapshot) -> Vec<String> {
         .filter(|plane| snapshot.active_runs_by_plane.contains_key(plane))
         .map(|plane| plane.as_str().to_owned())
         .collect()
+}
+
+fn operator_intervention_active_planes(snapshot: &RuntimeSnapshot) -> Vec<String> {
+    let active_planes = active_plane_values(snapshot);
+    if active_planes.is_empty() && snapshot.active_stage.is_some() {
+        vec!["legacy".to_owned()]
+    } else {
+        active_planes
+    }
 }
 
 fn deferred_reload_command_id(envelope: &MailboxCommandEnvelope) -> String {
@@ -7202,6 +7608,14 @@ where
         .into_iter()
         .map(|(key, value)| (key.to_owned(), value))
         .collect()
+}
+
+fn extend_json_object(
+    mut base: Map<String, Value>,
+    extra: Map<String, Value>,
+) -> Map<String, Value> {
+    base.extend(extra);
+    base
 }
 
 fn invalid_state(message: impl Into<String>) -> RuntimeTickError {

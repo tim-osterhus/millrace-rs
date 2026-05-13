@@ -16,10 +16,10 @@ use crate::{
         inspect_workspace_plan_currentness_for_paths,
     },
     contracts::{
-        ClosureTargetState, PauseSource, Plane, ReadOnlyStatusPayload, RunTraceGraph,
-        RuntimeErrorContext, RuntimeSnapshot, StageResultEnvelope, SubscriptionQuotaTelemetryState,
-        TokenUsage, UsageGovernanceBlockerSource, WorkDocument, WorkItemKind,
-        validate_safe_identifier,
+        ClosureTargetState, LatestOperatorIntervention, PauseSource, Plane, ReadOnlyStatusPayload,
+        RunTraceGraph, RuntimeErrorContext, RuntimeSnapshot, StageResultEnvelope,
+        SubscriptionQuotaTelemetryState, Timestamp, TokenUsage, UsageGovernanceBlockerSource,
+        WorkDocument, WorkItemKind, validate_safe_identifier,
     },
     runtime::{StageRunRequest, inspect_run_trace_id, load_runtime_startup_config},
     work_documents::read_work_document,
@@ -139,6 +139,16 @@ pub fn queue_ls_lines(paths: &WorkspacePaths) -> Result<Vec<String>, String> {
     let planning_active =
         probe_active + spec_active + count_kind_state(&counts, "incident", "active");
     let learning_active = count_kind_state(&counts, "learning_request", "active");
+    let cancelled_task_count = count_markdown_files(&paths.tasks_queue_dir.join("cancelled"))?
+        + count_markdown_files(&paths.tasks_blocked_dir.join("cancelled"))?;
+    let superseded_task_count = count_markdown_files(&paths.tasks_queue_dir.join("superseded"))?
+        + count_markdown_files(&paths.tasks_blocked_dir.join("superseded"))?;
+    let cancelled_incident_count =
+        count_markdown_files(&paths.incidents_incoming_dir.join("cancelled"))?
+            + count_markdown_files(&paths.incidents_active_dir.join("cancelled"))?
+            + count_markdown_files(&paths.incidents_blocked_dir.join("cancelled"))?;
+    let operator_resolved_incident_count =
+        count_markdown_files(&paths.incidents_resolved_dir.join("operator"))?;
 
     let mut lines = vec![
         format!("execution_queue_depth: {execution_queue_depth}"),
@@ -158,6 +168,10 @@ pub fn queue_ls_lines(paths: &WorkspacePaths) -> Result<Vec<String>, String> {
         format!("active_spec_count: {spec_active}"),
         format!("active_incident_count: {incident_active}"),
         format!("active_learning_request_count: {learning_active}"),
+        format!("cancelled_task_count: {cancelled_task_count}"),
+        format!("superseded_task_count: {superseded_task_count}"),
+        format!("cancelled_incident_count: {cancelled_incident_count}"),
+        format!("operator_resolved_incident_count: {operator_resolved_incident_count}"),
         format!(
             "task_queue_count: {}",
             count_kind_state(&counts, "task", "queue")
@@ -610,6 +624,10 @@ fn render_status_lines(paths: &WorkspacePaths) -> Result<Vec<String>, String> {
             "latest_runtime_error_report_path: {}",
             option_str(payload.latest_runtime_error_report_path.as_deref())
         ),
+        format!(
+            "latest_operator_intervention: {}",
+            operator_intervention_status_text(payload.latest_operator_intervention.as_ref())
+        ),
     ];
     lines.extend(render_active_run_lines(&status.snapshot));
     lines.extend(render_baseline_manifest_lines(
@@ -661,6 +679,7 @@ fn inspect_status(paths: &WorkspacePaths) -> Result<StatusInspection, String> {
     let queue_depths = status_queue_depths(paths)?;
     let closure_status = closure_target_status(paths)?;
     let latest_runtime_error_report_path = latest_runtime_error_report_path(paths)?;
+    let latest_operator_intervention = latest_operator_intervention(paths)?;
     let active_run_count = snapshot.active_runs_by_plane.len() as u64;
     let blocked_idle = blocked_idle(
         process_running,
@@ -697,6 +716,7 @@ fn inspect_status(paths: &WorkspacePaths) -> Result<StatusInspection, String> {
         blocked_idle,
         current_failure_class: snapshot.current_failure_class.clone(),
         latest_runtime_error_report_path,
+        latest_operator_intervention,
         closure_target_root_spec_id: closure_status.root_spec_id,
         closure_target_open: closure_status.open,
         closure_target_blocked_by_lineage_work: closure_status.blocked_by_lineage_work,
@@ -1028,6 +1048,113 @@ fn latest_runtime_error_report_path(paths: &WorkspacePaths) -> Result<Option<Str
         )
     })?;
     Ok(Some(context.report_path))
+}
+
+const OPERATOR_INTERVENTION_EVENT_TYPES: &[&str] = &[
+    "work_item_cancelled",
+    "blocked_task_archived",
+    "task_superseded",
+    "task_dependency_retargeted",
+    "incident_resolved_by_operator",
+    "incident_cancelled",
+    "invalid_incident_artifact_archived",
+];
+
+fn latest_operator_intervention(
+    paths: &WorkspacePaths,
+) -> Result<Option<LatestOperatorIntervention>, String> {
+    let event_log = paths.logs_dir.join("runtime_events.jsonl");
+    if !event_log.is_file() {
+        return Ok(None);
+    }
+    let raw = fs::read_to_string(&event_log).map_err(|error| {
+        format!(
+            "failed to read runtime event log {}: {error}",
+            event_log.display()
+        )
+    })?;
+    for line in raw.lines().rev().filter(|line| !line.trim().is_empty()) {
+        let value: Value = serde_json::from_str(line).map_err(|error| {
+            format!(
+                "failed to decode runtime event log {}: {error}",
+                event_log.display()
+            )
+        })?;
+        let object = value.as_object().ok_or_else(|| {
+            format!(
+                "failed to decode runtime event log {}: event payload must be an object",
+                event_log.display()
+            )
+        })?;
+        let Some(event_type) = object.get("event_type").and_then(Value::as_str) else {
+            continue;
+        };
+        if !OPERATOR_INTERVENTION_EVENT_TYPES.contains(&event_type) {
+            continue;
+        }
+        let occurred_at_raw = object
+            .get("occurred_at")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                format!(
+                    "failed to decode runtime event log {}: operator intervention event is missing occurred_at",
+                    event_log.display()
+                )
+            })?;
+        let occurred_at = Timestamp::parse("occurred_at", occurred_at_raw).map_err(|error| {
+            format!(
+                "failed to decode runtime event log {}: {error}",
+                event_log.display()
+            )
+        })?;
+        let data = object.get("data").and_then(Value::as_object);
+        let work_item_kind = data
+            .and_then(|data| data.get("work_item_kind"))
+            .and_then(Value::as_str)
+            .map(WorkItemKind::from_value)
+            .transpose()
+            .map_err(|error| {
+                format!(
+                    "failed to decode runtime event log {}: {error}",
+                    event_log.display()
+                )
+            })?;
+        let work_item_id = data
+            .and_then(|data| data.get("work_item_id"))
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned);
+        let destination_path = data
+            .and_then(|data| data.get("destination_path"))
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned);
+        return Ok(Some(LatestOperatorIntervention {
+            event_type: event_type.to_owned(),
+            occurred_at,
+            work_item_kind,
+            work_item_id,
+            destination_path,
+        }));
+    }
+    Ok(None)
+}
+
+fn operator_intervention_status_text(intervention: Option<&LatestOperatorIntervention>) -> String {
+    let Some(intervention) = intervention else {
+        return "none".to_owned();
+    };
+    let mut parts = vec![
+        format!("event={}", intervention.event_type),
+        format!("occurred_at={}", intervention.occurred_at.as_str()),
+    ];
+    if let Some(work_item_id) = &intervention.work_item_id {
+        parts.push(format!("work_item_id={work_item_id}"));
+    }
+    if let Some(destination_path) = &intervention.destination_path {
+        parts.push(format!("destination_path={destination_path}"));
+    }
+    parts.join(" ")
 }
 
 fn blocked_idle(

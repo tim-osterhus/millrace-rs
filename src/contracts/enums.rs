@@ -499,6 +499,13 @@ string_enum! {
         AddIdea => "add_idea",
         RetryActive => "retry_active",
         ClearStaleState => "clear_stale_state",
+        CancelWorkItem => "cancel_work_item",
+        ArchiveBlockedTask => "archive_blocked_task",
+        SupersedeTask => "supersede_task",
+        RetargetTaskDependency => "retarget_task_dependency",
+        ResolveIncident => "resolve_incident",
+        CancelIncident => "cancel_incident",
+        ArchiveInvalidIncident => "archive_invalid_incident",
     }
 }
 

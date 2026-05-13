@@ -1,0 +1,313 @@
+{
+  "schema_version": "1.0",
+  "kind": "auto_port_v0_18_6_runtime_contract_scout",
+  "python_reference": {
+    "previous_tag": "v0.18.4",
+    "previous_peeled_commit": "516e947e90155b6436dbc9efcf932254f34bc39c",
+    "intermediate_tag": "v0.18.5",
+    "intermediate_peeled_commit": "51374def7e9ea8225f52d95d25abc2fd43f85c9a",
+    "target_tag": "v0.18.6",
+    "target_tag_object": "85d91683f3be3dfa6f2983d3e397ed373f12edba",
+    "target_peeled_commit": "63e623bc6fcfcf74ae0cc2ce5605a12ae4179873",
+    "diff_range": "v0.18.4..v0.18.6"
+  },
+  "rust_reference": {
+    "current_repo_crate_version": "0.3.4",
+    "current_repo_version_role": "released_target_for_python_v0.18.4",
+    "planned_crate_version": "0.3.5",
+    "planned_version_role": "target_release_for_python_v0.18.6"
+  },
+  "contract_sources": [
+    "../millrace-py/src/millrace_ai/cli/app.py",
+    "../millrace-py/src/millrace_ai/cli/commands/incident.py",
+    "../millrace-py/src/millrace_ai/cli/commands/queue.py",
+    "../millrace-py/src/millrace_ai/cli/shared.py",
+    "../millrace-py/src/millrace_ai/cli/status_view.py",
+    "../millrace-py/src/millrace_ai/contracts/__init__.py",
+    "../millrace-py/src/millrace_ai/contracts/enums.py",
+    "../millrace-py/src/millrace_ai/contracts/mailbox.py",
+    "../millrace-py/src/millrace_ai/runtime/completion_behavior.py",
+    "../millrace-py/src/millrace_ai/runtime/control.py",
+    "../millrace-py/src/millrace_ai/runtime/control_mutations.py",
+    "../millrace-py/src/millrace_ai/runtime/mailbox_intake.py",
+    "../millrace-py/src/millrace_ai/runtime/watcher_intake.py",
+    "../millrace-py/src/millrace_ai/workspace/idea_sources.py",
+    "../millrace-py/src/millrace_ai/workspace/operator_interventions.py",
+    "../millrace-py/src/millrace_ai/workspace/paths.py",
+    "../millrace-py/src/millrace_ai/workspace/queue_store.py",
+    "../millrace-py/tests/cli/test_cli.py",
+    "../millrace-py/tests/integration/test_operator_intervention_cleanup.py",
+    "../millrace-py/tests/runtime/test_completion_behavior.py",
+    "../millrace-py/tests/runtime/test_control.py",
+    "../millrace-py/tests/runtime/test_runtime.py",
+    "../millrace-py/tests/workspace/test_operator_interventions.py"
+  ],
+  "expected_rust_contract_targets": [
+    "src/contracts/enums.rs",
+    "src/contracts/mod.rs",
+    "src/contracts/runtime_json.rs",
+    "src/contracts/work_documents.rs",
+    "src/lib.rs",
+    "src/workspace.rs",
+    "src/workspace/queue_store.rs",
+    "src/workspace/runtime_control.rs",
+    "src/workspace/state_store.rs",
+    "src/runtime/mod.rs",
+    "src/runtime/startup.rs",
+    "src/runtime/supervisor.rs",
+    "src/runtime/tick.rs",
+    "src/runtime/monitor.rs",
+    "src/cli/mod.rs",
+    "src/cli/parser.rs",
+    "src/cli/read_only.rs",
+    "src/cli/render.rs",
+    "tests/contracts_public_exports.rs",
+    "tests/contracts_runtime_json.rs",
+    "tests/workspace_runtime_control.rs",
+    "tests/workspace_queue_state_stores.rs",
+    "tests/runtime_daemon.rs",
+    "tests/parity_cli.rs",
+    "tests/fixtures/cli_parity/auto_port_v0_18_6_parity_evidence.json",
+    "tests/fixtures/runtime_json/auto_port_v0_18_6_runtime_contract_scout.json"
+  ],
+  "mailbox_intervention_contract": {
+    "command_values": [
+      "cancel_work_item",
+      "archive_blocked_task",
+      "supersede_task",
+      "retarget_task_dependency",
+      "resolve_incident",
+      "cancel_incident",
+      "archive_invalid_incident"
+    ],
+    "payload_models": [
+      "MailboxCancelWorkItemPayload",
+      "MailboxArchiveBlockedTaskPayload",
+      "MailboxSupersedeTaskPayload",
+      "MailboxRetargetTaskDependencyPayload",
+      "MailboxIncidentInterventionPayload",
+      "MailboxArchiveInvalidIncidentPayload"
+    ],
+    "required_reason_payloads": [
+      "cancel_work_item",
+      "archive_blocked_task",
+      "supersede_task",
+      "retarget_task_dependency",
+      "resolve_incident",
+      "cancel_incident",
+      "archive_invalid_incident"
+    ],
+    "payload_fields": {
+      "cancel_work_item": [
+        "work_item_id",
+        "work_item_kind",
+        "reason",
+        "force"
+      ],
+      "archive_blocked_task": [
+        "task_id",
+        "reason"
+      ],
+      "supersede_task": [
+        "old_task_id",
+        "replacement_task_id",
+        "reason",
+        "cascade"
+      ],
+      "retarget_task_dependency": [
+        "task_id",
+        "old_dependency_id",
+        "new_dependency_id",
+        "reason"
+      ],
+      "resolve_incident": [
+        "incident_id",
+        "reason"
+      ],
+      "cancel_incident": [
+        "incident_id",
+        "reason"
+      ],
+      "archive_invalid_incident": [
+        "filename",
+        "reason"
+      ]
+    },
+    "validation_failures": [
+      "empty_reason",
+      "unsafe_work_item_id",
+      "unsafe_task_id",
+      "invalid_work_item_kind",
+      "invalid_cascade",
+      "missing_replacement_task_id",
+      "missing_old_dependency_id",
+      "missing_new_dependency_id",
+      "unsafe_incident_id",
+      "unsafe_invalid_incident_filename"
+    ],
+    "supersede_cascade_values": [
+      "none",
+      "retarget",
+      "cancel"
+    ]
+  },
+  "operator_intervention_contract": {
+    "record_kind": "operator_intervention",
+    "record_fields": [
+      "schema_version",
+      "kind",
+      "action",
+      "actor",
+      "reason",
+      "issued_at",
+      "applied_at",
+      "work_item_kind",
+      "work_item_id",
+      "source_state",
+      "destination_state",
+      "source_path",
+      "destination_path",
+      "replacement_work_item_id",
+      "affected_dependents"
+    ],
+    "actions": [
+      "cancel",
+      "archive_blocked_task",
+      "supersede",
+      "retarget_dependency",
+      "resolve_incident",
+      "cancel_incident",
+      "archive_invalid_incident"
+    ],
+    "archive_path_templates": [
+      "millrace-agents/tasks/queue/cancelled/<TASK_ID>.<TIMESTAMP>.<STATE>.md",
+      "millrace-agents/tasks/blocked/cancelled/<TASK_ID>.<TIMESTAMP>.blocked.md",
+      "millrace-agents/tasks/blocked/superseded/<TASK_ID>.<TIMESTAMP>.blocked.md",
+      "millrace-agents/incidents/active/cancelled/<INCIDENT_ID>.<TIMESTAMP>.active.md",
+      "millrace-agents/incidents/resolved/operator/<INCIDENT_ID>.<TIMESTAMP>.<STATE>.md",
+      "millrace-agents/incidents/incoming/invalid-archived/<FILENAME>.<TIMESTAMP>"
+    ],
+    "ledger_files": [
+      "interventions.jsonl",
+      "millrace-agents/tasks/queue/interventions.jsonl"
+    ],
+    "event_types": [
+      "work_item_cancelled",
+      "blocked_task_archived",
+      "task_superseded",
+      "task_dependency_retargeted",
+      "incident_resolved_by_operator",
+      "incident_cancelled",
+      "invalid_incident_artifact_archived",
+      "mailbox_operator_intervention_applied",
+      "operator_intervention_deferred"
+    ],
+    "snapshot_refresh_fields": [
+      "queue_depth_execution",
+      "queue_depth_planning",
+      "queue_depth_learning",
+      "queue_depths_by_plane",
+      "updated_at"
+    ]
+  },
+  "runtime_control_contract": {
+    "direct_methods": [
+      "cancel_work_item",
+      "archive_blocked_task",
+      "supersede_task",
+      "retarget_task_dependency",
+      "resolve_incident",
+      "cancel_incident",
+      "archive_invalid_incident"
+    ],
+    "routing_modes": [
+      "direct",
+      "mailbox"
+    ],
+    "direct_active_mutation_guard": "active runtime stage prevents operator intervention",
+    "daemon_mailbox_guard": "daemon ownership routes intervention commands through mailbox envelopes"
+  },
+  "daemon_mailbox_contract": {
+    "applied_commands": [
+      "cancel_work_item",
+      "archive_blocked_task",
+      "supersede_task",
+      "retarget_task_dependency",
+      "resolve_incident",
+      "cancel_incident",
+      "archive_invalid_incident"
+    ],
+    "processed_archive": "millrace-agents/state/mailbox/processed/<COMMAND_ID>.json",
+    "failed_archive": "millrace-agents/state/mailbox/failed/<COMMAND_ID>.json",
+    "deferred_command_id_template": "<COMMAND>-deferred-<HEX8>",
+    "defer_reason": "active_runtime_stage",
+    "applied_event": "mailbox_operator_intervention_applied",
+    "deferred_event": "operator_intervention_deferred",
+    "monitor_events": [
+      "operator_intervention_deferred",
+      "mailbox_operator_intervention_applied",
+      "work_item_cancelled",
+      "blocked_task_archived",
+      "task_superseded",
+      "task_dependency_retargeted",
+      "incident_resolved_by_operator",
+      "incident_cancelled",
+      "invalid_incident_artifact_archived"
+    ]
+  },
+  "read_only_intervention_contract": {
+    "queue_ls_output_keys": [
+      "cancelled_task_count",
+      "superseded_task_count",
+      "cancelled_incident_count",
+      "operator_resolved_incident_count"
+    ],
+    "queue_show_states": [
+      "queue_cancelled",
+      "blocked_cancelled",
+      "queue_superseded",
+      "blocked_superseded",
+      "incoming_cancelled",
+      "active_cancelled",
+      "blocked_cancelled",
+      "operator_resolved"
+    ],
+    "status_keys": [
+      "latest_operator_intervention"
+    ],
+    "latest_operator_intervention_fields": [
+      "event_type",
+      "occurred_at",
+      "work_item_kind",
+      "work_item_id",
+      "destination_path"
+    ]
+  },
+  "durable_idea_source_contract": {
+    "durable_source_path_template": "millrace-agents/intake/ideas/<root_idea_id>.md",
+    "watcher_event": "idea_normalized_to_spec",
+    "watcher_failure_event": "idea_source_artifact_write_failed",
+    "spec_reference_order": [
+      "millrace-agents/intake/ideas/<root_idea_id>.md",
+      "ideas/inbox/<idea_file>.md"
+    ],
+    "closure_source_preference": [
+      "durable idea source artifact",
+      "legacy spec references",
+      "transient ideas/inbox source"
+    ],
+    "missing_source_failure_class": "missing_root_idea_source",
+    "missing_source_event": "root_idea_source_missing",
+    "blocked_status_marker": "### BLOCKED"
+  },
+  "no_live_guarantees": [
+    "no live Python execution beyond checked-out ../millrace-py diff inspection",
+    "no live Codex runner",
+    "no live Pi runner",
+    "no network",
+    "no credentials",
+    "no web server",
+    "no release upload",
+    "no publishing"
+  ]
+}

@@ -53,6 +53,10 @@ fn workspace_paths_resolve_python_shaped_contract_surfaces() {
         root.join("millrace-agents/probes/active")
     );
     assert_eq!(
+        paths.intake_ideas_dir,
+        root.join("millrace-agents/intake/ideas")
+    );
+    assert_eq!(
         paths.recon_packets_dir,
         root.join("millrace-agents/recon/packets")
     );
@@ -146,6 +150,8 @@ fn directories_cover_the_canonical_workspace_tree_without_legacy_roles() {
         "millrace-agents/incidents/blocked",
         "millrace-agents/incidents/incoming",
         "millrace-agents/incidents/resolved",
+        "millrace-agents/intake",
+        "millrace-agents/intake/ideas",
         "millrace-agents/learning",
         "millrace-agents/learning/requests",
         "millrace-agents/learning/requests/active",

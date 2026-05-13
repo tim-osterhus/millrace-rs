@@ -169,6 +169,13 @@ fn enum_values_match_python_reference_contracts() {
             "add_idea",
             "retry_active",
             "clear_stale_state",
+            "cancel_work_item",
+            "archive_blocked_task",
+            "supersede_task",
+            "retarget_task_dependency",
+            "resolve_incident",
+            "cancel_incident",
+            "archive_invalid_incident",
         ]
     );
     assert_eq!(

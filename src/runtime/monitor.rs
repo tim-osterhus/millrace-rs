@@ -290,6 +290,21 @@ impl BasicMonitorRenderer {
                     &event.payload,
                 )]
             }
+            event_type @ ("work_item_cancelled"
+            | "blocked_task_archived"
+            | "task_superseded"
+            | "task_dependency_retargeted"
+            | "incident_resolved_by_operator"
+            | "incident_cancelled"
+            | "invalid_incident_artifact_archived") => {
+                vec![render_operator_intervention(event_type, &event.payload)]
+            }
+            "mailbox_operator_intervention_applied" => {
+                vec![render_mailbox_operator_intervention_applied(&event.payload)]
+            }
+            "operator_intervention_deferred" => {
+                vec![render_operator_intervention_deferred(&event.payload)]
+            }
             _ => Vec::new(),
         };
 
@@ -605,6 +620,67 @@ fn render_blocked_lineage_requires_operator_review(payload: &Map<String, Value>)
         string(payload.get("reason")),
         string(payload.get("diagnostics_path"))
     )
+}
+
+fn render_operator_intervention(event_type: &str, payload: &Map<String, Value>) -> String {
+    let mut parts = vec![
+        "operator intervention".to_owned(),
+        format!("event={event_type}"),
+    ];
+    if let Some(work_ref) = work_ref(payload) {
+        parts.push(format!("work={work_ref}"));
+    }
+    if let Some(destination) = optional_string(payload.get("destination_path")) {
+        parts.push(format!("destination={destination}"));
+    }
+    if let Some(replacement) = optional_string(payload.get("replacement_work_item_id")) {
+        parts.push(format!("replacement={replacement}"));
+    }
+    if let Some(affected) = compact_list(payload.get("affected_dependents")) {
+        parts.push(format!("affected={affected}"));
+    }
+    parts.join(" ")
+}
+
+fn render_mailbox_operator_intervention_applied(payload: &Map<String, Value>) -> String {
+    let mut parts = vec![
+        "mailbox operator intervention applied".to_owned(),
+        format!("command={}", string(payload.get("command"))),
+        format!(
+            "event={}",
+            string_or_default(payload.get("event_type"), "unknown")
+        ),
+    ];
+    if let Some(work_ref) = work_ref(payload) {
+        parts.push(format!("work={work_ref}"));
+    }
+    if let Some(destination) = optional_string(payload.get("destination_path")) {
+        parts.push(format!("destination={destination}"));
+    }
+    parts.push(format!(
+        "command_id={}",
+        string_or_default(payload.get("command_id"), "unknown")
+    ));
+    parts.join(" ")
+}
+
+fn render_operator_intervention_deferred(payload: &Map<String, Value>) -> String {
+    let mut parts = vec![
+        "operator intervention deferred".to_owned(),
+        format!("command={}", string(payload.get("command"))),
+        format!(
+            "reason={}",
+            string_or_default(payload.get("reason"), "unknown")
+        ),
+        format!("active={}", plane_list(payload.get("active_planes"))),
+    ];
+    if let Some(work_ref) = work_ref(payload) {
+        parts.push(format!("work={work_ref}"));
+    }
+    if let Some(deferred_command_id) = optional_string(payload.get("deferred_command_id")) {
+        parts.push(format!("deferred_command_id={deferred_command_id}"));
+    }
+    parts.join(" ")
 }
 
 fn seed_stage_started(
@@ -923,6 +999,17 @@ fn plane_list(value: Option<&Value>) -> String {
             }
         })
         .unwrap_or_else(|| "unknown".to_owned())
+}
+
+fn compact_list(value: Option<&Value>) -> Option<String> {
+    let items = value.and_then(Value::as_array)?;
+    let text = items
+        .iter()
+        .map(value_to_string)
+        .filter(|item| !item.is_empty())
+        .collect::<Vec<_>>()
+        .join(",");
+    (!text.is_empty()).then_some(text)
 }
 
 fn normalize_marker(value: &str) -> String {

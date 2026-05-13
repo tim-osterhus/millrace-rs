@@ -1,0 +1,533 @@
+{
+  "schema_version": "1.0",
+  "kind": "auto_port_v0_18_6_parity_evidence",
+  "summary": "Target-facing scout evidence for the Python v0.18.4..v0.18.6 auto-port. This fixture pins Python v0.18.4 and Rust 0.3.4 as previous baselines, Python v0.18.5 as the included intermediate release, Python v0.18.6 and Rust 0.3.5 as targets, and requires source references, changed-path mappings, mailbox payloads, audited operator intervention archive and ledger surfaces, daemon/read-only intervention surfaces, durable idea-source behavior, closure recovery behavior, release checks, and explicit millrace-web package/version unsupported-gap evidence.",
+  "active_guardrail_tests": [
+    {
+      "file": "tests/parity_cli.rs",
+      "name": "committed_auto_port_v0_18_6_parity_fixture_covers_operator_intervention_durable_idea_source_and_web_guardrails"
+    },
+    {
+      "file": "tests/parity_cli.rs",
+      "name": "rust_cli_queue_operator_interventions_render_control_results_and_mutate_workspace"
+    },
+    {
+      "file": "tests/parity_cli.rs",
+      "name": "rust_cli_incident_interventions_render_control_results_and_validate_filenames"
+    },
+    {
+      "file": "tests/parity_cli.rs",
+      "name": "rust_cli_intervention_commands_route_to_mailbox_when_daemon_owns_workspace"
+    },
+    {
+      "file": "tests/parity_cli.rs",
+      "name": "rust_cli_intervention_commands_reject_empty_unsafe_ambiguous_and_invalid_targets"
+    },
+    {
+      "file": "tests/parity_cli.rs",
+      "name": "rust_cli_direct_intervention_refuses_active_runtime_stage_without_mailbox"
+    },
+    {
+      "file": "tests/contracts_runtime_json.rs",
+      "name": "auto_port_v0_18_6_runtime_contract_scout_pins_operator_intervention_and_durable_idea_sources"
+    },
+    {
+      "file": "tests/workspace_runtime_control.rs",
+      "name": "workspace_runtime_control_v0_18_6_guardrail_fixture_requires_intervention_mailbox_payloads"
+    },
+    {
+      "file": "tests/workspace_queue_state_stores.rs",
+      "name": "workspace_queue_v0_18_6_guardrail_fixture_requires_operator_intervention_archive_audit_surface"
+    },
+    {
+      "file": "tests/runtime_daemon.rs",
+      "name": "runtime_daemon_v0_18_6_guardrail_fixture_requires_intervention_mailbox_and_durable_idea_source_surfaces"
+    }
+  ],
+  "python_reference": {
+    "previous_tag": "v0.18.4",
+    "previous_peeled_commit": "516e947e90155b6436dbc9efcf932254f34bc39c",
+    "intermediate_tag": "v0.18.5",
+    "intermediate_peeled_commit": "51374def7e9ea8225f52d95d25abc2fd43f85c9a",
+    "target_tag": "v0.18.6",
+    "target_tag_object": "85d91683f3be3dfa6f2983d3e397ed373f12edba",
+    "target_peeled_commit": "63e623bc6fcfcf74ae0cc2ce5605a12ae4179873",
+    "diff_range": "v0.18.4..v0.18.6",
+    "generated_scout": "millrace-agents/auto-port/generated/auto-port-python-v0.18.4-to-v0.18.6-rust-0.3.5.md"
+  },
+  "rust_reference": {
+    "current_repo_crate_version": "0.3.4",
+    "current_repo_version_role": "released_target_for_python_v0.18.4",
+    "planned_crate_version": "0.3.5",
+    "planned_version_role": "target_release_for_python_v0.18.6"
+  },
+  "required_surfaces": [
+    "mailbox_intervention_contracts",
+    "operator_intervention_archive_audit",
+    "cli_runtime_control_interventions",
+    "daemon_readonly_intervention_surfaces",
+    "durable_idea_source_closure_recovery",
+    "docs_operator_skill_release_evidence",
+    "web_version_package_evidence",
+    "source_reference_guardrails",
+    "release_validation_guardrails"
+  ],
+  "required_coverage_axes": [
+    "python_diff_pin",
+    "python_intermediate_release_pin",
+    "rust_version_transition_pin",
+    "auto_port_state_currentness",
+    "generated_scout_changed_paths",
+    "mailbox_command_enum_values",
+    "mailbox_payload_validation",
+    "intervention_payload_exports",
+    "direct_runtime_control_interventions",
+    "daemon_mailbox_intervention_routing",
+    "safe_active_mutation_deferral",
+    "intervention_archive_paths",
+    "intervention_audit_jsonl_schema",
+    "intervention_runtime_events",
+    "queue_depth_snapshot_refresh",
+    "queue_cancel_supersede_retarget_cli",
+    "incident_intervention_cli",
+    "queue_archive_inspection",
+    "status_latest_intervention",
+    "durable_idea_source_artifacts",
+    "watcher_source_reference_order",
+    "closure_target_source_preference",
+    "missing_root_idea_source_block",
+    "docs_source_refs",
+    "operator_skill_source_refs",
+    "web_version_package_evidence",
+    "expected_rust_target_mapping",
+    "release_check_evidence",
+    "no_live_external_dependencies"
+  ],
+  "required_release_checks": [
+    "git -C ../millrace-py diff --name-only v0.18.4..v0.18.6",
+    "cargo fmt --check",
+    "cargo test --test parity_cli",
+    "cargo test --test contracts_runtime_json",
+    "cargo test --test workspace_runtime_control",
+    "cargo test --test workspace_queue_state_stores",
+    "cargo test --test runtime_daemon"
+  ],
+  "mailbox_intervention_contract": {
+    "command_values": [
+      "cancel_work_item",
+      "archive_blocked_task",
+      "supersede_task",
+      "retarget_task_dependency",
+      "resolve_incident",
+      "cancel_incident",
+      "archive_invalid_incident"
+    ],
+    "payload_validation": [
+      "required non-empty reason",
+      "safe work item id",
+      "safe task id",
+      "optional work item kind",
+      "reserved force flag",
+      "supersede cascade none|retarget|cancel",
+      "dependency retarget old and new ids",
+      "safe incident id",
+      "single relative invalid incident filename"
+    ]
+  },
+  "operator_intervention_contract": {
+    "record_kind": "operator_intervention",
+    "record_fields": [
+      "schema_version",
+      "kind",
+      "action",
+      "actor",
+      "reason",
+      "issued_at",
+      "applied_at",
+      "work_item_kind",
+      "work_item_id",
+      "source_state",
+      "destination_state",
+      "source_path",
+      "destination_path",
+      "replacement_work_item_id",
+      "affected_dependents"
+    ],
+    "actions": [
+      "cancel",
+      "archive_blocked_task",
+      "supersede",
+      "retarget_dependency",
+      "resolve_incident",
+      "cancel_incident",
+      "archive_invalid_incident"
+    ],
+    "archive_path_templates": [
+      "tasks/queue/cancelled/<TASK_ID>.<TIMESTAMP>.<STATE>.md",
+      "tasks/blocked/cancelled/<TASK_ID>.<TIMESTAMP>.blocked.md",
+      "tasks/blocked/superseded/<TASK_ID>.<TIMESTAMP>.blocked.md",
+      "incidents/active/cancelled/<INCIDENT_ID>.<TIMESTAMP>.active.md",
+      "incidents/resolved/operator/<INCIDENT_ID>.<TIMESTAMP>.<STATE>.md",
+      "incidents/incoming/invalid-archived/<FILENAME>.<TIMESTAMP>"
+    ],
+    "event_types": [
+      "work_item_cancelled",
+      "blocked_task_archived",
+      "task_superseded",
+      "task_dependency_retargeted",
+      "incident_resolved_by_operator",
+      "incident_cancelled",
+      "invalid_incident_artifact_archived",
+      "mailbox_operator_intervention_applied",
+      "operator_intervention_deferred"
+    ],
+    "queue_ls_output_keys": [
+      "cancelled_task_count",
+      "superseded_task_count",
+      "cancelled_incident_count",
+      "operator_resolved_incident_count"
+    ],
+    "status_output_keys": [
+      "latest_operator_intervention"
+    ]
+  },
+  "cli_intervention_contract": {
+    "commands": [
+      "queue cancel",
+      "queue archive-blocked",
+      "queue supersede",
+      "queue retarget-dependency",
+      "incident resolve",
+      "incident cancel",
+      "incident archive-invalid"
+    ],
+    "control_result_output_keys": [
+      "action",
+      "mode",
+      "applied",
+      "detail",
+      "command_id",
+      "mailbox_path",
+      "artifact_path"
+    ],
+    "validation_guards": [
+      "direct success",
+      "mailbox-routed daemon ownership",
+      "active-stage direct deferral",
+      "empty reason rejection",
+      "unsafe id rejection",
+      "ambiguous cancellation requires --kind",
+      "replacement existence",
+      "cascade retarget",
+      "cascade cancel",
+      "absent dependency rejection",
+      "invalid incident filename rejection"
+    ]
+  },
+  "durable_idea_source_contract": {
+    "durable_source_path_template": "millrace-agents/intake/ideas/<root_idea_id>.md",
+    "watcher_success_event": "idea_normalized_to_spec",
+    "watcher_failure_event": "idea_source_artifact_write_failed",
+    "spec_reference_order": [
+      "millrace-agents/intake/ideas/<root_idea_id>.md",
+      "ideas/inbox/<idea_file>.md"
+    ],
+    "closure_source_preference": [
+      "durable idea source artifact",
+      "legacy spec references",
+      "transient ideas/inbox source"
+    ],
+    "missing_source_failure_class": "missing_root_idea_source",
+    "missing_source_event": "root_idea_source_missing"
+  },
+  "source_reference_surfaces": [
+    {
+      "surface": "mailbox_intervention_contracts",
+      "coverage": [
+        "mailbox_command_enum_values",
+        "mailbox_payload_validation",
+        "intervention_payload_exports",
+        "expected_rust_target_mapping"
+      ],
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/contracts/__init__.py",
+        "../millrace-py/src/millrace_ai/contracts/enums.py",
+        "../millrace-py/src/millrace_ai/contracts/mailbox.py",
+        "../millrace-py/tests/runtime/test_control.py"
+      ],
+      "expected_rust_targets": [
+        "src/lib.rs",
+        "src/contracts/enums.rs",
+        "src/contracts/mod.rs",
+        "src/contracts/runtime_json.rs",
+        "src/contracts/work_documents.rs",
+        "tests/contracts_public_exports.rs",
+        "tests/contracts_runtime_json.rs",
+        "tests/workspace_runtime_control.rs",
+        "tests/fixtures/runtime_json/auto_port_v0_18_6_runtime_contract_scout.json"
+      ]
+    },
+    {
+      "surface": "operator_intervention_archive_audit",
+      "coverage": [
+        "intervention_archive_paths",
+        "intervention_audit_jsonl_schema",
+        "intervention_runtime_events",
+        "queue_depth_snapshot_refresh",
+        "expected_rust_target_mapping"
+      ],
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/runtime/control_mutations.py",
+        "../millrace-py/src/millrace_ai/workspace/operator_interventions.py",
+        "../millrace-py/src/millrace_ai/workspace/queue_store.py",
+        "../millrace-py/tests/integration/test_operator_intervention_cleanup.py",
+        "../millrace-py/tests/workspace/test_operator_interventions.py"
+      ],
+      "expected_rust_targets": [
+        "src/workspace.rs",
+        "src/workspace/queue_store.rs",
+        "src/workspace/runtime_control.rs",
+        "src/workspace/state_store.rs",
+        "src/workspace/task_lifecycle_integrity.rs",
+        "tests/workspace_queue_state_stores.rs",
+        "tests/workspace_runtime_control.rs",
+        "tests/contracts_runtime_json.rs",
+        "tests/fixtures/runtime_json/auto_port_v0_18_6_runtime_contract_scout.json"
+      ]
+    },
+    {
+      "surface": "cli_runtime_control_interventions",
+      "coverage": [
+        "direct_runtime_control_interventions",
+        "queue_cancel_supersede_retarget_cli",
+        "incident_intervention_cli",
+        "safe_active_mutation_deferral",
+        "expected_rust_target_mapping"
+      ],
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/cli/app.py",
+        "../millrace-py/src/millrace_ai/cli/commands/incident.py",
+        "../millrace-py/src/millrace_ai/cli/commands/queue.py",
+        "../millrace-py/src/millrace_ai/cli/shared.py",
+        "../millrace-py/src/millrace_ai/runtime/control.py",
+        "../millrace-py/tests/cli/test_cli.py",
+        "../millrace-py/tests/runtime/test_control.py"
+      ],
+      "expected_rust_targets": [
+        "src/cli/mod.rs",
+        "src/cli/intake.rs",
+        "src/cli/parser.rs",
+        "src/cli/read_only.rs",
+        "src/cli/render.rs",
+        "src/workspace/runtime_control.rs",
+        "tests/parity_cli.rs",
+        "tests/workspace_runtime_control.rs",
+        "tests/fixtures/cli_parity/auto_port_v0_18_6_parity_evidence.json"
+      ]
+    },
+    {
+      "surface": "daemon_readonly_intervention_surfaces",
+      "coverage": [
+        "daemon_mailbox_intervention_routing",
+        "safe_active_mutation_deferral",
+        "queue_archive_inspection",
+        "status_latest_intervention",
+        "intervention_runtime_events",
+        "expected_rust_target_mapping"
+      ],
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/cli/status_view.py",
+        "../millrace-py/src/millrace_ai/runtime/mailbox_intake.py",
+        "../millrace-py/src/millrace_ai/runtime/control.py",
+        "../millrace-py/src/millrace_ai/workspace/queue_store.py",
+        "../millrace-py/tests/cli/test_cli.py",
+        "../millrace-py/tests/runtime/test_runtime.py"
+      ],
+      "expected_rust_targets": [
+        "src/runtime/mod.rs",
+        "src/runtime/startup.rs",
+        "src/runtime/supervisor.rs",
+        "src/runtime/tick.rs",
+        "src/runtime/monitor.rs",
+        "src/cli/read_only.rs",
+        "src/cli/render.rs",
+        "src/workspace/runtime_control.rs",
+        "tests/runtime_daemon.rs",
+        "tests/parity_cli.rs",
+        "tests/contracts_runtime_json.rs",
+        "tests/fixtures/runtime_json/auto_port_v0_18_6_runtime_contract_scout.json"
+      ]
+    },
+    {
+      "surface": "durable_idea_source_closure_recovery",
+      "coverage": [
+        "durable_idea_source_artifacts",
+        "watcher_source_reference_order",
+        "closure_target_source_preference",
+        "missing_root_idea_source_block",
+        "expected_rust_target_mapping"
+      ],
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/runtime/completion_behavior.py",
+        "../millrace-py/src/millrace_ai/runtime/watcher_intake.py",
+        "../millrace-py/src/millrace_ai/workspace/idea_sources.py",
+        "../millrace-py/src/millrace_ai/workspace/paths.py",
+        "../millrace-py/tests/runtime/test_completion_behavior.py",
+        "../millrace-py/tests/runtime/test_runtime.py"
+      ],
+      "expected_rust_targets": [
+        "src/workspace.rs",
+        "src/workspace/state_store.rs",
+        "src/runtime/startup.rs",
+        "src/runtime/supervisor.rs",
+        "src/runtime/tick.rs",
+        "src/runtime/monitor.rs",
+        "tests/runtime_daemon.rs",
+        "tests/workspace_init_parity.rs",
+        "tests/fixtures/runtime_json/auto_port_v0_18_6_runtime_contract_scout.json"
+      ]
+    },
+    {
+      "surface": "docs_operator_skill_release_evidence",
+      "coverage": [
+        "docs_source_refs",
+        "operator_skill_source_refs",
+        "expected_rust_target_mapping"
+      ],
+      "python_sources": [
+        "../millrace-py/CHANGELOG.md",
+        "../millrace-py/README.md",
+        "../millrace-py/docs/runtime/millrace-arbiter-and-completion-behavior.md",
+        "../millrace-py/docs/runtime/millrace-cli-reference.md",
+        "../millrace-py/docs/runtime/millrace-runtime-architecture.md",
+        "../millrace-py/docs/skills/millrace-ops-agent-manual/SKILL.md",
+        "../millrace-py/docs/source-package-map.md"
+      ],
+      "expected_rust_targets": [
+        "CHANGELOG.md",
+        "README.md",
+        "ROADMAP.md",
+        "docs/rust-port-roadmap.md",
+        "docs/source-package-map.md",
+        "docs/testing.md",
+        "docs/runtime/millrace-arbiter-and-completion-behavior.md",
+        "docs/runtime/millrace-cli-reference.md",
+        "docs/runtime/millrace-runtime-architecture.md",
+        "docs/runtime/millrace-workspace-baselines-and-upgrades.md",
+        "millrace-agents/outline.md",
+        "tests/fixtures/cli_parity/README.md",
+        "tests/fixtures/cli_parity/auto_port_v0_18_6_release_parity_evidence.json",
+        "tests/fixtures/runtime_json/README.md"
+      ]
+    },
+    {
+      "surface": "web_version_package_evidence",
+      "coverage": [
+        "web_version_package_evidence",
+        "expected_rust_target_mapping"
+      ],
+      "python_sources": [
+        "../millrace-py/packages/millrace-web/CHANGELOG.md",
+        "../millrace-py/packages/millrace-web/pyproject.toml",
+        "../millrace-py/packages/millrace-web/src/millrace_web/__init__.py",
+        "../millrace-py/packages/millrace-web/src/millrace_web/app.py"
+      ],
+      "expected_rust_targets": [
+        "tests/fixtures/cli_parity/web_dashboard_parity_decision.json"
+      ]
+    },
+    {
+      "surface": "source_reference_guardrails",
+      "coverage": [
+        "python_diff_pin",
+        "python_intermediate_release_pin",
+        "rust_version_transition_pin",
+        "auto_port_state_currentness",
+        "generated_scout_changed_paths",
+        "expected_rust_target_mapping"
+      ],
+      "python_sources": [
+        "../millrace-py diff v0.18.4..v0.18.6",
+        "../millrace-py tag v0.18.4 peeled commit 516e947e90155b6436dbc9efcf932254f34bc39c",
+        "../millrace-py tag v0.18.5 peeled commit 51374def7e9ea8225f52d95d25abc2fd43f85c9a",
+        "../millrace-py tag v0.18.6 tag object 85d91683f3be3dfa6f2983d3e397ed373f12edba",
+        "../millrace-py tag v0.18.6 peeled commit 63e623bc6fcfcf74ae0cc2ce5605a12ae4179873"
+      ],
+      "expected_rust_targets": [
+        "millrace-agents/auto-port/generated/auto-port-python-v0.18.4-to-v0.18.6-rust-0.3.5.md",
+        "millrace-agents/auto-port/state.json",
+        "tests/fixtures/cli_parity/auto_port_v0_18_6_parity_evidence.json",
+        "tests/fixtures/runtime_json/auto_port_v0_18_6_runtime_contract_scout.json",
+        "tests/parity_cli.rs",
+        "tests/support/parity.rs"
+      ]
+    },
+    {
+      "surface": "release_validation_guardrails",
+      "coverage": [
+        "release_check_evidence",
+        "no_live_external_dependencies",
+        "expected_rust_target_mapping"
+      ],
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/__init__.py",
+        "../millrace-py/packages/millrace-web/pyproject.toml"
+      ],
+      "expected_rust_targets": [
+        "Cargo.toml",
+        "Cargo.lock",
+        "tests/parity_cli.rs",
+        "tests/fixtures/cli_parity/auto_port_v0_18_6_parity_evidence.json",
+        "tests/fixtures/cli_parity/auto_port_v0_18_6_release_parity_evidence.json"
+      ]
+    }
+  ],
+  "changed_path_mappings": [
+    {"python_path": "CHANGELOG.md", "surface": "docs_operator_skill_release_evidence", "change_role": "python_release_notes", "rust_targets": [{"kind": "documentation", "path": "CHANGELOG.md"}]},
+    {"python_path": "README.md", "surface": "docs_operator_skill_release_evidence", "change_role": "readme_operator_intervention_summary", "rust_targets": [{"kind": "documentation", "path": "README.md"}]},
+    {"python_path": "docs/runtime/millrace-arbiter-and-completion-behavior.md", "surface": "docs_operator_skill_release_evidence", "change_role": "arbiter_completion_durable_source_docs", "rust_targets": [{"kind": "documentation", "path": "docs/runtime/millrace-arbiter-and-completion-behavior.md"}, {"kind": "documentation", "path": "docs/runtime/millrace-runtime-architecture.md"}]},
+    {"python_path": "docs/runtime/millrace-cli-reference.md", "surface": "docs_operator_skill_release_evidence", "change_role": "operator_intervention_cli_docs", "rust_targets": [{"kind": "documentation", "path": "docs/runtime/millrace-cli-reference.md"}]},
+    {"python_path": "docs/runtime/millrace-runtime-architecture.md", "surface": "docs_operator_skill_release_evidence", "change_role": "intervention_archive_architecture_docs", "rust_targets": [{"kind": "documentation", "path": "docs/runtime/millrace-runtime-architecture.md"}]},
+    {"python_path": "docs/skills/millrace-ops-agent-manual/SKILL.md", "surface": "docs_operator_skill_release_evidence", "change_role": "operator_skill_intervention_guidance", "rust_targets": [{"kind": "documentation", "path": "docs/source-package-map.md"}, {"kind": "documentation", "path": "docs/testing.md"}, {"kind": "documentation", "path": "millrace-agents/outline.md"}]},
+    {"python_path": "docs/source-package-map.md", "surface": "docs_operator_skill_release_evidence", "change_role": "idea_source_package_map_docs", "rust_targets": [{"kind": "documentation", "path": "docs/source-package-map.md"}]},
+    {"python_path": "packages/millrace-web/CHANGELOG.md", "surface": "web_version_package_evidence", "change_role": "web_package_release_notes", "rust_targets": [{"kind": "package_evidence", "path": "tests/fixtures/cli_parity/web_dashboard_parity_decision.json"}, {"kind": "unsupported_gap_evidence", "path": "tests/fixtures/cli_parity/web_dashboard_parity_decision.json"}]},
+    {"python_path": "packages/millrace-web/pyproject.toml", "surface": "web_version_package_evidence", "change_role": "web_package_version", "rust_targets": [{"kind": "package_evidence", "path": "tests/fixtures/cli_parity/web_dashboard_parity_decision.json"}, {"kind": "unsupported_gap_evidence", "path": "tests/fixtures/cli_parity/web_dashboard_parity_decision.json"}]},
+    {"python_path": "packages/millrace-web/src/millrace_web/__init__.py", "surface": "web_version_package_evidence", "change_role": "web_package_version_export", "rust_targets": [{"kind": "package_evidence", "path": "tests/fixtures/cli_parity/web_dashboard_parity_decision.json"}, {"kind": "unsupported_gap_evidence", "path": "tests/fixtures/cli_parity/web_dashboard_parity_decision.json"}]},
+    {"python_path": "packages/millrace-web/src/millrace_web/app.py", "surface": "web_version_package_evidence", "change_role": "web_app_version", "rust_targets": [{"kind": "package_evidence", "path": "tests/fixtures/cli_parity/web_dashboard_parity_decision.json"}, {"kind": "unsupported_gap_evidence", "path": "tests/fixtures/cli_parity/web_dashboard_parity_decision.json"}]},
+    {"python_path": "src/millrace_ai/__init__.py", "surface": "release_validation_guardrails", "change_role": "python_package_version", "rust_targets": [{"kind": "package_evidence", "path": "Cargo.toml"}, {"kind": "package_evidence", "path": "Cargo.lock"}, {"kind": "fixture", "path": "tests/fixtures/cli_parity/auto_port_v0_18_6_parity_evidence.json"}, {"kind": "fixture", "path": "tests/fixtures/cli_parity/auto_port_v0_18_6_release_parity_evidence.json"}]},
+    {"python_path": "src/millrace_ai/cli/app.py", "surface": "cli_runtime_control_interventions", "change_role": "incident_command_group_registration", "rust_targets": [{"kind": "implementation", "path": "src/cli/mod.rs"}, {"kind": "implementation", "path": "src/cli/parser.rs"}, {"kind": "test", "path": "tests/parity_cli.rs"}]},
+    {"python_path": "src/millrace_ai/cli/commands/incident.py", "surface": "cli_runtime_control_interventions", "change_role": "incident_intervention_commands", "rust_targets": [{"kind": "implementation", "path": "src/cli/mod.rs"}, {"kind": "implementation", "path": "src/cli/parser.rs"}, {"kind": "implementation", "path": "src/cli/render.rs"}, {"kind": "test", "path": "tests/parity_cli.rs"}]},
+    {"python_path": "src/millrace_ai/cli/commands/queue.py", "surface": "cli_runtime_control_interventions", "change_role": "queue_intervention_commands", "rust_targets": [{"kind": "implementation", "path": "src/cli/mod.rs"}, {"kind": "implementation", "path": "src/cli/parser.rs"}, {"kind": "implementation", "path": "src/cli/render.rs"}, {"kind": "test", "path": "tests/parity_cli.rs"}]},
+    {"python_path": "src/millrace_ai/cli/shared.py", "surface": "cli_runtime_control_interventions", "change_role": "archive_lookup_for_queue_show", "rust_targets": [{"kind": "implementation", "path": "src/cli/read_only.rs"}, {"kind": "test", "path": "tests/parity_cli.rs"}]},
+    {"python_path": "src/millrace_ai/cli/status_view.py", "surface": "daemon_readonly_intervention_surfaces", "change_role": "latest_operator_intervention_status", "rust_targets": [{"kind": "implementation", "path": "src/cli/read_only.rs"}, {"kind": "implementation", "path": "src/cli/render.rs"}, {"kind": "test", "path": "tests/parity_cli.rs"}, {"kind": "fixture", "path": "tests/fixtures/runtime_json/auto_port_v0_18_6_runtime_contract_scout.json"}]},
+    {"python_path": "src/millrace_ai/contracts/__init__.py", "surface": "mailbox_intervention_contracts", "change_role": "public_mailbox_payload_exports", "rust_targets": [{"kind": "implementation", "path": "src/lib.rs"}, {"kind": "implementation", "path": "src/contracts/mod.rs"}, {"kind": "test", "path": "tests/contracts_public_exports.rs"}, {"kind": "fixture", "path": "tests/fixtures/runtime_json/auto_port_v0_18_6_runtime_contract_scout.json"}]},
+    {"python_path": "src/millrace_ai/contracts/enums.py", "surface": "mailbox_intervention_contracts", "change_role": "mailbox_command_enum_values", "rust_targets": [{"kind": "implementation", "path": "src/contracts/enums.rs"}, {"kind": "test", "path": "tests/contracts_runtime_json.rs"}, {"kind": "fixture", "path": "tests/fixtures/runtime_json/auto_port_v0_18_6_runtime_contract_scout.json"}]},
+    {"python_path": "src/millrace_ai/contracts/mailbox.py", "surface": "mailbox_intervention_contracts", "change_role": "mailbox_intervention_payload_validation", "rust_targets": [{"kind": "implementation", "path": "src/contracts/runtime_json.rs"}, {"kind": "implementation", "path": "src/contracts/work_documents.rs"}, {"kind": "test", "path": "tests/contracts_runtime_json.rs"}, {"kind": "test", "path": "tests/workspace_runtime_control.rs"}, {"kind": "fixture", "path": "tests/fixtures/runtime_json/auto_port_v0_18_6_runtime_contract_scout.json"}]},
+    {"python_path": "src/millrace_ai/runtime/completion_behavior.py", "surface": "durable_idea_source_closure_recovery", "change_role": "closure_target_missing_root_idea_source_recovery", "rust_targets": [{"kind": "implementation", "path": "src/runtime/tick.rs"}, {"kind": "implementation", "path": "src/runtime/supervisor.rs"}, {"kind": "implementation", "path": "src/workspace/state_store.rs"}, {"kind": "test", "path": "tests/runtime_daemon.rs"}, {"kind": "fixture", "path": "tests/fixtures/runtime_json/auto_port_v0_18_6_runtime_contract_scout.json"}]},
+    {"python_path": "src/millrace_ai/runtime/control.py", "surface": "cli_runtime_control_interventions", "change_role": "runtime_control_intervention_facade", "rust_targets": [{"kind": "implementation", "path": "src/workspace/runtime_control.rs"}, {"kind": "test", "path": "tests/workspace_runtime_control.rs"}, {"kind": "fixture", "path": "tests/fixtures/runtime_json/auto_port_v0_18_6_runtime_contract_scout.json"}]},
+    {"python_path": "src/millrace_ai/runtime/control_mutations.py", "surface": "operator_intervention_archive_audit", "change_role": "direct_intervention_mutation_boundary", "rust_targets": [{"kind": "implementation", "path": "src/workspace/runtime_control.rs"}, {"kind": "implementation", "path": "src/workspace/queue_store.rs"}, {"kind": "test", "path": "tests/workspace_runtime_control.rs"}, {"kind": "test", "path": "tests/workspace_queue_state_stores.rs"}]},
+    {"python_path": "src/millrace_ai/runtime/mailbox_intake.py", "surface": "daemon_readonly_intervention_surfaces", "change_role": "daemon_mailbox_intervention_intake", "rust_targets": [{"kind": "implementation", "path": "src/runtime/supervisor.rs"}, {"kind": "implementation", "path": "src/runtime/tick.rs"}, {"kind": "implementation", "path": "src/runtime/monitor.rs"}, {"kind": "test", "path": "tests/runtime_daemon.rs"}, {"kind": "fixture", "path": "tests/fixtures/runtime_json/auto_port_v0_18_6_runtime_contract_scout.json"}]},
+    {"python_path": "src/millrace_ai/runtime/watcher_intake.py", "surface": "durable_idea_source_closure_recovery", "change_role": "watcher_durable_idea_source_reference", "rust_targets": [{"kind": "implementation", "path": "src/runtime/supervisor.rs"}, {"kind": "implementation", "path": "src/runtime/tick.rs"}, {"kind": "test", "path": "tests/runtime_daemon.rs"}, {"kind": "fixture", "path": "tests/fixtures/runtime_json/auto_port_v0_18_6_runtime_contract_scout.json"}]},
+    {"python_path": "src/millrace_ai/workspace/idea_sources.py", "surface": "durable_idea_source_closure_recovery", "change_role": "durable_idea_source_artifact_helpers", "rust_targets": [{"kind": "implementation", "path": "src/workspace.rs"}, {"kind": "implementation", "path": "src/workspace/state_store.rs"}, {"kind": "test", "path": "tests/workspace_init_parity.rs"}, {"kind": "test", "path": "tests/runtime_daemon.rs"}]},
+    {"python_path": "src/millrace_ai/workspace/operator_interventions.py", "surface": "operator_intervention_archive_audit", "change_role": "operator_intervention_archive_and_ledger_boundary", "rust_targets": [{"kind": "implementation", "path": "src/workspace.rs"}, {"kind": "implementation", "path": "src/workspace/queue_store.rs"}, {"kind": "test", "path": "tests/workspace_queue_state_stores.rs"}, {"kind": "test", "path": "tests/workspace_runtime_control.rs"}, {"kind": "fixture", "path": "tests/fixtures/runtime_json/auto_port_v0_18_6_runtime_contract_scout.json"}]},
+    {"python_path": "src/millrace_ai/workspace/paths.py", "surface": "durable_idea_source_closure_recovery", "change_role": "durable_intake_ideas_path", "rust_targets": [{"kind": "implementation", "path": "src/workspace.rs"}, {"kind": "implementation", "path": "src/workspace/state_store.rs"}, {"kind": "test", "path": "tests/workspace_init_parity.rs"}]},
+    {"python_path": "src/millrace_ai/workspace/queue_store.py", "surface": "operator_intervention_archive_audit", "change_role": "queue_store_intervention_facade", "rust_targets": [{"kind": "implementation", "path": "src/workspace.rs"}, {"kind": "implementation", "path": "src/workspace/queue_store.rs"}, {"kind": "test", "path": "tests/workspace_queue_state_stores.rs"}, {"kind": "test", "path": "tests/parity_cli.rs"}]},
+    {"python_path": "tests/cli/test_cli.py", "surface": "cli_runtime_control_interventions", "change_role": "cli_intervention_status_and_queue_tests", "rust_targets": [{"kind": "test", "path": "tests/parity_cli.rs"}, {"kind": "fixture", "path": "tests/fixtures/cli_parity/auto_port_v0_18_6_parity_evidence.json"}]},
+    {"python_path": "tests/integration/test_operator_intervention_cleanup.py", "surface": "operator_intervention_archive_audit", "change_role": "operator_intervention_cleanup_integration_tests", "rust_targets": [{"kind": "test", "path": "tests/workspace_queue_state_stores.rs"}, {"kind": "test", "path": "tests/workspace_runtime_control.rs"}, {"kind": "fixture", "path": "tests/fixtures/cli_parity/auto_port_v0_18_6_parity_evidence.json"}]},
+    {"python_path": "tests/runtime/test_completion_behavior.py", "surface": "durable_idea_source_closure_recovery", "change_role": "closure_recovery_runtime_tests", "rust_targets": [{"kind": "test", "path": "tests/runtime_daemon.rs"}, {"kind": "fixture", "path": "tests/fixtures/runtime_json/auto_port_v0_18_6_runtime_contract_scout.json"}]},
+    {"python_path": "tests/runtime/test_control.py", "surface": "cli_runtime_control_interventions", "change_role": "runtime_control_intervention_tests", "rust_targets": [{"kind": "test", "path": "tests/workspace_runtime_control.rs"}, {"kind": "fixture", "path": "tests/fixtures/runtime_json/auto_port_v0_18_6_runtime_contract_scout.json"}]},
+    {"python_path": "tests/runtime/test_runtime.py", "surface": "daemon_readonly_intervention_surfaces", "change_role": "daemon_mailbox_and_watcher_runtime_tests", "rust_targets": [{"kind": "test", "path": "tests/runtime_daemon.rs"}, {"kind": "fixture", "path": "tests/fixtures/runtime_json/auto_port_v0_18_6_runtime_contract_scout.json"}]},
+    {"python_path": "tests/workspace/test_operator_interventions.py", "surface": "operator_intervention_archive_audit", "change_role": "workspace_operator_intervention_tests", "rust_targets": [{"kind": "test", "path": "tests/workspace_queue_state_stores.rs"}, {"kind": "fixture", "path": "tests/fixtures/cli_parity/auto_port_v0_18_6_parity_evidence.json"}]}
+  ],
+  "non_live_guarantees": [
+    "no live Python execution beyond checked-out ../millrace-py diff inspection",
+    "no live Codex runner",
+    "no live Pi runner",
+    "no network",
+    "no credentials",
+    "no web server",
+    "no remote skill installation",
+    "no release upload",
+    "no publishing"
+  ]
+}

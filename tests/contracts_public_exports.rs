@@ -9,7 +9,10 @@ use millrace_ai::contracts::{
     GraphExportTerminalState, IdentifierErrorReason, IncidentDecision, IncidentDocument,
     IncidentSeverity, LearningRequestAction, LearningRequestDocument, LearningStageName,
     LearningTerminalResult, LoopEdgeKind, MailboxAddIdeaPayload, MailboxAddProbePayload,
-    MailboxCommand, MailboxCommandEnvelope, OutcomeResultClasses, PauseSource, Plane,
+    MailboxArchiveBlockedTaskPayload, MailboxArchiveInvalidIncidentPayload,
+    MailboxCancelWorkItemPayload, MailboxCommand, MailboxCommandEnvelope,
+    MailboxIncidentInterventionPayload, MailboxRetargetTaskDependencyPayload,
+    MailboxSupersedeCascade, MailboxSupersedeTaskPayload, OutcomeResultClasses, PauseSource, Plane,
     PlanningStageName, PlanningTerminalResult, ProbeDocument, ProbeStatusHint, ReconConfidence,
     ReconDecision, ReconHandoffTarget, ReconPacketDocument, ReconPacketError, ReconPathFinding,
     ReconRiskLevel, ReconVerificationPlan, RecoveryCounterEntry, RecoveryCounters, ReloadOutcome,
@@ -94,8 +97,15 @@ fn public_contract_exports_remain_importable() {
         type_name::<LoopEdgeKind>(),
         type_name::<MailboxAddIdeaPayload>(),
         type_name::<MailboxAddProbePayload>(),
+        type_name::<MailboxArchiveBlockedTaskPayload>(),
+        type_name::<MailboxArchiveInvalidIncidentPayload>(),
+        type_name::<MailboxCancelWorkItemPayload>(),
         type_name::<MailboxCommand>(),
         type_name::<MailboxCommandEnvelope>(),
+        type_name::<MailboxIncidentInterventionPayload>(),
+        type_name::<MailboxRetargetTaskDependencyPayload>(),
+        type_name::<MailboxSupersedeCascade>(),
+        type_name::<MailboxSupersedeTaskPayload>(),
         type_name::<OutcomeResultClasses>(),
         type_name::<PauseSource>(),
         type_name::<Plane>(),
@@ -185,7 +195,13 @@ fn public_contract_exports_remain_importable() {
     );
 
     assert_runtime_contract::<CompileDiagnostics>();
+    assert_runtime_contract::<MailboxArchiveBlockedTaskPayload>();
+    assert_runtime_contract::<MailboxArchiveInvalidIncidentPayload>();
+    assert_runtime_contract::<MailboxCancelWorkItemPayload>();
     assert_runtime_contract::<MailboxCommandEnvelope>();
+    assert_runtime_contract::<MailboxIncidentInterventionPayload>();
+    assert_runtime_contract::<MailboxRetargetTaskDependencyPayload>();
+    assert_runtime_contract::<MailboxSupersedeTaskPayload>();
     assert_runtime_contract::<RecoveryCounters>();
     assert_runtime_contract::<RuntimeSnapshot>();
     assert_runtime_contract::<TokenUsage>();
@@ -278,6 +294,16 @@ fn public_metadata_helpers_expose_the_stage_contract_boundary() {
 
     assert_eq!(SAFE_ID_PATTERN_DESCRIPTION, "^[A-Za-z0-9][A-Za-z0-9._-]*$");
     assert_eq!(WORK_DOCUMENT_SCHEMA_VERSION, "1.0");
+    assert_eq!(MailboxCommand::CancelWorkItem.as_str(), "cancel_work_item");
+    assert_eq!(
+        MailboxCommand::from_value("archive_invalid_incident").unwrap(),
+        MailboxCommand::ArchiveInvalidIncident
+    );
+    assert_eq!(MailboxSupersedeCascade::Retarget.as_str(), "retarget");
+    assert_eq!(
+        MailboxSupersedeCascade::from_value("cancel").unwrap(),
+        MailboxSupersedeCascade::Cancel
+    );
     assert_eq!(STAGE_METADATA_BY_VALUE.len(), StageName::ALL.len());
     assert_eq!(STAGE_NAME_BY_VALUE.len(), StageName::ALL.len());
     assert_eq!(STAGE_TO_PLANE.len(), StageName::ALL.len());

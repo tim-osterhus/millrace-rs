@@ -4,12 +4,11 @@
 governed runtime for long-running agent work.
 
 The production implementation is currently the Python package
-[`millrace-ai`](https://pypi.org/project/millrace-ai/). The Rust `0.3.4`
-release consolidates the Python `v0.18.3..v0.18.4` blocked-recovery,
-retry CLI, auto-recovery config/status, daemon recovery, docs/version,
-package, and web-gap evidence pass on top of the earlier Librarian,
-Integrator, probe/Recon, and graph/trace ports while the crate remains
-experimental.
+[`millrace-ai`](https://pypi.org/project/millrace-ai/). The Rust `0.3.5`
+release consolidates the Python `v0.18.4..v0.18.6` operator intervention,
+durable idea-source, closure recovery, docs/version, package, and web-gap
+evidence pass on top of the earlier blocked-recovery, Librarian, Integrator,
+probe/Recon, and graph/trace ports while the crate remains experimental.
 
 ## Package Names
 
@@ -35,9 +34,19 @@ text-only `status watch`, `runs ls/show/tail/trace`, `modes list/show`, and
 `config show`, plus queue intake
 commands for `queue add-task`, `queue add-probe`, `queue add-spec`, `queue
 add-idea`, and the top-level `add-task`/`add-probe`/`add-spec`/`add-idea`
-aliases, plus `queue retry-blocked <TASK_ID>` manual blocked-task retry and
+aliases, plus `queue retry-blocked <TASK_ID>` manual blocked-task retry,
+v0.18.6 queue intervention commands for `queue cancel`,
+`queue archive-blocked`, `queue supersede`, and `queue retarget-dependency`,
+`incident resolve`/`incident cancel`/`incident archive-invalid`, and
 `queue repair-lineage` preview/apply wiring over the workspace repair boundary.
-It also implements
+The intervention commands route through `RuntimeControl` for direct no-daemon
+application or active-daemon mailbox envelopes and render the shared
+control-result output. Read-only queue inspection now reports intervention
+archive counts, `queue show` can inspect cancelled, superseded, and
+operator-resolved records, `status` text/JSON includes
+`latest_operator_intervention` when matching runtime event evidence exists, and
+the basic monitor renders direct, mailbox-applied, and deferred intervention
+events. It also implements
 control commands for `pause`, `resume`, `stop`, `retry-active`,
 `clear-stale-state`, and `reload-config`, the `planning retry-active` alias,
 `config validate`, and `config reload`, routing mutating commands through the
@@ -107,11 +116,13 @@ ticks, supports max-tick/no-work idle/stop/process-stopped/blocked exits, uses
 test-controllable idle waits, drains completed workers after cycles and during
 shutdown, clears stopped daemon state, and releases the matching runtime
 ownership lock; and a daemon mailbox/reload handling boundary that drains
-control, intake, retry, clear-stale-state, and reload commands in deterministic
-order, archives processed or failed commands with source/error evidence, defers
-reload while active planes exist, applies reload after planes drain with
-watcher-session, config-version, and compiled-plan snapshot updates, and
-preserves the previous plan on recoverable reload diagnostics. The deterministic
+control, intake, operator-intervention, retry, clear-stale-state, and reload
+commands in deterministic order, applies v0.18.6 operator interventions through
+the shared queue-store archive/audit boundary when idle, defers them while
+planes are active, archives processed or failed commands with source/error
+evidence, defers reload while active planes exist, applies reload after planes
+drain with watcher-session, config-version, and compiled-plan snapshot updates,
+and preserves the previous plan on recoverable reload diagnostics. The deterministic
 tick activation path drains applicable mailbox commands, refreshes queue depths,
 returns typed
 no-work/paused/stopped/blocked outcomes, claims at most one
@@ -164,13 +175,18 @@ without promotion records, and source-packaged skills remain mutable only
 through explicit `millrace skills promote` operator commands with audit fields.
 Closure-lineage runtime parity now creates or backfills closure targets from
 root-spec claims or drained root specs, refreshes closure-target readiness
-before Arbiter dispatch, blocks on queued/active/blocked same-root lineage work
-and lineage drift diagnostics with concrete blocking ids, treats only unblocked
-open targets as actionable so blocked same-root closure targets do not globally
-defer unrelated root specs, emits completion backfill and drift events, and
-preserves Arbiter close, remediation incident, repeated-remediation, and
-`queue repair-lineage` behavior. Status output prefers actionable closure
-targets while still reporting blocked targets and deferred root counts.
+before Arbiter dispatch, prefers durable root idea-source artifacts before
+legacy references and transient inbox paths, blocks Planning with
+`missing_root_idea_source` plus `root_idea_source_missing` evidence when
+backlog-drain recovery cannot find a valid root source, keeps daemon loops
+running after that recoverable block, blocks on queued/active/blocked same-root
+lineage work and lineage drift diagnostics with concrete blocking ids, treats
+only unblocked open targets as actionable so blocked same-root closure targets
+do not globally defer unrelated root specs, emits completion backfill and drift
+events, and preserves Arbiter close, remediation incident,
+repeated-remediation, and `queue repair-lineage` behavior. Status output
+prefers actionable closure targets while still reporting blocked targets and
+deferred root counts.
 Run inspection depth is implemented for the read-only `runs ls`, `runs show`,
 and `runs tail` surfaces. Run listing keeps complete, incomplete, malformed,
 token-bearing, closure-target, governance-linked, skill-evidence-bearing, and
@@ -188,13 +204,17 @@ The watcher poll-intake path consumes deterministic fallback events after
 mailbox drain and before work claims, observes config, task queue, optional spec
 queue, and optional `ideas/inbox` targets, debounces repeated writes, handles
 missing and deleted paths safely, normalizes new idea markdown into headed spec
-documents through `QueueStore`, preserves root lineage and references, skips
-duplicate idea-derived specs, and records watcher event/failure/duplicate-skip
-evidence without corrupting runtime artifacts. Basic monitor rendering emits
+documents through `QueueStore`, writes the original markdown to the
+runtime-owned `millrace-agents/intake/ideas/<root_idea_id>.md` artifact, lists
+that durable source before the transient inbox reference, preserves root
+lineage, emits `source_artifact` evidence, skips duplicate idea-derived specs,
+and records watcher event/failure/duplicate-skip evidence without corrupting
+runtime artifacts. Basic monitor rendering emits
 concise key lines for daemon startup, resumed active runs, stage start and
 completion, run aggregates, router decisions, status changes, six-hour repeated
 no-work idle suppression with activity/reason resets, pause, stop, reload,
-watcher, and governance pause/block/degraded/reconciled or resume events; the
+watcher, direct/mailbox/deferred operator interventions, and governance
+pause/block/degraded/reconciled or resume events; the
 CLI fans those lines out to stdout for `--monitor basic` or appends them to a
 requested `--monitor-log` path, creating missing parent directories, while
 keeping default daemon stdout quiet except final summary lines. The runner
@@ -257,7 +277,14 @@ records, read-only status payloads,
 usage-governance state/blockers, usage-governance token ledger entries,
 subscription quota telemetry status/window readings, Python-compatible
 compiled-stage-graph exports, and Python-compatible `run_trace_graph`
-contracts.
+contracts. The v0.18.6 mailbox intervention contract slice is implemented with
+Python-compatible command values for cancel, archive, supersede, dependency
+retarget, resolve/cancel incident, and invalid-incident archive commands; typed
+payload contracts validate required reasons, safe ids, supersede cascade
+values, optional cancellation fields, dependency retarget fields, and
+single-filename invalid incident artifacts; the read-only status payload also
+includes typed `latest_operator_intervention` evidence for the new intervention
+event family.
 Always-on tests cover the public exports and Python-produced markdown/JSON
 fixtures, including probe documents, add-probe mailbox payloads, and Recon
 packet fixtures, without requiring a live daemon. The compiler parity tests also
@@ -288,8 +315,16 @@ web-package evidence, plus target-facing Python `v0.18.3..v0.18.4` guardrails
 and final Rust `0.3.4` release evidence for blocked-recovery metadata, audited
 `queue retry-blocked` behavior, `auto_recovery` config/status evidence, daemon
 stranded-dependency recovery gates, docs/version, package verification, release
-checks, and `millrace-web` package evidence. The v0.18.4 runner failure
-classifier contract, blocked metadata
+checks, and `millrace-web` package evidence, plus target-facing Python
+`v0.18.4..v0.18.6` guardrails for Rust `0.3.5` operator intervention
+mailbox contracts, archive/audit ledgers, daemon/read-only intervention
+surfaces, durable idea-source behavior, closure recovery evidence, and
+`millrace-web` v0.18.5/v0.18.6 package evidence. The final Rust `0.3.5`
+release fixture now reconciles Cargo metadata, runtime docs, source-package
+mapping, parity fixture docs, package include readiness, required Builder
+checks, package verification, generated-cache exclusions, and Python
+`millrace-web` v0.18.5/v0.18.6 package-version unsupported-gap evidence. The
+v0.18.4 runner failure classifier contract, blocked metadata
 persistence, manual public retry CLI, auto-recovery config/status, and daemon
 stranded-dependency recovery slices are now implemented with typed runtime JSON
 metadata contracts, runner normalization coverage, persisted
@@ -302,7 +337,7 @@ config projection, `config show` output for `auto_recovery.enabled`, daemon
 idle-cycle recovery diagnostics under `millrace-agents/diagnostics/auto-recovery/`,
 `blocked_dependency_auto_requeued` and `blocked_dependency_auto_requeue_skipped`
 event/monitor evidence, and same-cycle dependent dispatch suppression.
-Docs/version and final release evidence are reconciled in the Rust `0.3.4`
+Docs/version and final release evidence are reconciled in the Rust `0.3.5`
 release fixture.
 The runner normalization/artifact-metadata target is now implemented
 with focused runtime JSON, runner normalization, serial runtime, and
@@ -430,7 +465,22 @@ package/version source references; the final Rust `0.3.4` release-parity
 evidence now reconciles Cargo metadata, runtime docs, source-package mapping,
 parity fixture docs, package include readiness, required Builder checks,
 package verification, generated-cache exclusions, and Python `millrace-web`
-v0.18.4 package/version unsupported-gap evidence.
+v0.18.4 package/version unsupported-gap evidence. The v0.18.6 guardrail fixture
+maps all 35 generated Python scout paths to expected Rust implementation, test,
+documentation, fixture, package-evidence, reference-evidence, or unsupported-gap
+targets while keeping Rust `0.3.4` as the previous baseline and Rust `0.3.5` as
+the planned target. It pins the v0.18.5 intermediate release, Python v0.18.6 tag
+object and peeled commit, operator intervention mailbox command and payload
+surfaces, intervention archive/audit/event/status evidence, direct and
+daemon-routed runtime-control behavior, durable watcher idea-source behavior,
+closure source preference and missing-source recovery, required release checks,
+repository-relative Rust target existence guardrails, no-live guarantees, and
+Python `millrace-web` v0.18.5/v0.18.6 package/version unsupported-gap evidence.
+The final Rust `0.3.5` release-parity evidence reconciles Cargo metadata,
+runtime docs, source-package mapping, parity fixture docs, package include
+readiness, required Builder checks, package verification, generated-cache
+exclusions, and Python `millrace-web` v0.18.5/v0.18.6 package/version
+unsupported-gap evidence.
 Focused
 `run once`
 coverage exercises one-stage mocked Codex dispatcher execution, idle/pause/stop
@@ -554,7 +604,19 @@ records the final Rust `0.3.4` release-parity evidence for version metadata,
 generated-scout path mappings, package include readiness, runtime docs,
 source-package mapping, required Builder verification command results, package
 verification, generated-cache exclusion evidence, and the Python `v0.18.4`
-`millrace-web` package/version unsupported gap. The optional
+`millrace-web` package/version unsupported gap; and
+`tests/fixtures/cli_parity/auto_port_v0_18_6_parity_evidence.json` records the
+target-facing Rust `0.3.5` guardrails for Python `v0.18.4..v0.18.6` operator
+intervention mailbox payloads, archive/audit/read-only surfaces, durable
+idea-source and closure recovery behavior, all 35 generated scout paths,
+required checks, `millrace-web` v0.18.5/v0.18.6 package evidence, and no-live
+guarantees; and
+`tests/fixtures/cli_parity/auto_port_v0_18_6_release_parity_evidence.json`
+records the final Rust `0.3.5` release-parity evidence for version metadata,
+generated-scout path mappings, package include readiness, runtime docs,
+source-package mapping, required Builder verification command results, package
+verification, generated-cache exclusion evidence, and the Python `v0.18.5` and
+`v0.18.6` `millrace-web` package/version unsupported gap. The optional
 Python `millrace-web` dashboard
 remains an explicit unsupported Rust parity gap with source references,
 shadow-CLI graph/trace commands, and non-goal wording; native filesystem
@@ -652,6 +714,11 @@ clear-stale-state, reload-config, and task/spec/idea/probe intake directly when
 no active daemon owns the workspace, or to enqueue Python-compatible mailbox
 command envelopes when an active daemon lock owns it; probe intake refreshes
 planning depth and retry/clear-stale flows requeue active probes. The Rust
+runtime-control intervention helpers now validate the v0.18.6
+cancel/archive/supersede/retarget/incident payload family, apply direct offline
+archive/audit mutations through the shared queue-store boundary with snapshot
+queue-depth refresh, and mailbox-route the same commands when an active daemon
+owns the workspace. The Rust
 `millrace init --workspace <path>` command routes through the workspace
 initialization helper, and first workspace doctor checks validate the
 initialized layout, status/state parseability, baseline manifest and managed
@@ -677,11 +744,12 @@ stage is present, refresh queue-depth snapshot fields, and append the
 `closure_lineage_repaired` event. The runtime library now has once-mode
 startup and serial tick activation boundaries for config loading, ownership
 locking, compile-plan authority, snapshot/counter loading, mailbox intake,
-queue-depth refresh including planning probes, no-work/paused/stopped/blocked
-outcomes, compiled-plan claim activation including the planning `probe` entry,
-closure-target request activation, stage/work-item ownership validation before
-stage request construction, running markers, active-run projection, runtime
-events, and stale active-state reconciliation. It also dispatches a ready stage
+durable idea-source intake artifact handling, queue-depth refresh including
+planning probes, no-work/paused/stopped/blocked outcomes, compiled-plan claim
+activation including the planning `probe` entry, closure-target request
+activation, stage/work-item ownership validation before stage request
+construction, running markers, active-run projection, runtime events, and stale
+active-state reconciliation. It also dispatches a ready stage
 through the runner boundary, persists request/raw-result/stage-result/terminal-marker/router
 decision evidence, routes through compiled graph policies, writes recoverable
 runtime-error context/report evidence, applies routed results through typed
@@ -705,11 +773,14 @@ and bounded daemon loop/shutdown control for completed tick counting, idle
 sleep, max-tick/no-work/stop/process-stopped/blocked exits, completion draining,
 stopped-state reset, and matching-session lock release. It also has daemon
 mailbox/reload handling for deterministic command drain, processed/failed
-archives, `add_probe` application, retry-active and clear-stale-state, reload
-deferral/application,
+archives, `add_probe` application, idle v0.18.6 operator-intervention
+application with active-stage deferral, retry-active and clear-stale-state,
+reload deferral/application,
 watcher-session rebuild, retained-plan diagnostics, and reload failure
 evidence, plus deterministic watcher poll intake for config, task queue,
-optional spec queue, and optional `ideas/inbox` changes before work claims.
+optional spec queue, and optional `ideas/inbox` changes before work claims,
+with durable source-copy persistence and durable-first spec references for
+idea inbox intake.
 The daemon monitor and CLI execution path now run against the runtime-configured
 runner dispatcher with real Codex/Pi adapter registration, and the Slice 7
 runner adapter parity evidence is committed and covered by always-on fixture
@@ -746,8 +817,8 @@ Python runtime.
 The historical public proof package for the v0.1.0 autonomous port campaign
 lives in
 [`tim-osterhus/millrace-rs-port-docs`](https://github.com/tim-osterhus/millrace-rs-port-docs).
-The crate-local `0.3.4` release evidence lives in `CHANGELOG.md` and
-`tests/fixtures/cli_parity/auto_port_v0_18_4_release_parity_evidence.json`.
+The crate-local `0.3.5` release evidence lives in `CHANGELOG.md` and
+`tests/fixtures/cli_parity/auto_port_v0_18_6_release_parity_evidence.json`.
 
 ## License
 

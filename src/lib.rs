@@ -114,7 +114,7 @@ pub use workspace::{
     clear_stale_runtime_ownership_lock_with_pid_checker, closure_target_state_path,
     deploy_runtime_assets, detect_execution_stale_state, detect_learning_stale_state,
     detect_planning_stale_state, enqueue_incident, enqueue_learning_request, enqueue_spec,
-    enqueue_task, find_duplicate_task_lifecycle_ids, find_queue_item,
+    enqueue_task, find_duplicate_task_lifecycle_ids, find_queue_item, idea_source_artifact_path,
     increment_troubleshoot_attempt, initialize_workspace, inspect_queue_items,
     inspect_runtime_ownership_lock, inspect_runtime_ownership_lock_with_pid_checker,
     known_root_spec_aliases, load_baseline_manifest, load_closure_target_state,
@@ -131,7 +131,8 @@ pub use workspace::{
     save_recovery_counters, save_snapshot, save_usage_governance_state, scan_closure_lineage_drift,
     scan_closure_lineage_drift_at, set_execution_status, set_learning_status, set_planning_status,
     workspace_paths, write_baseline_manifest, write_closure_lineage_repaired_event,
-    write_lineage_drift_diagnostic, write_lineage_repair_report, write_mailbox_command,
+    write_idea_source_artifact, write_lineage_drift_diagnostic, write_lineage_repair_report,
+    write_mailbox_command,
 };
 
 /// Basic metadata for the Rust implementation of Millrace.
