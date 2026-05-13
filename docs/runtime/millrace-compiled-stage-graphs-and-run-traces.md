@@ -71,9 +71,9 @@ Python `packages/millrace-web` `v0.18.0` uses the same graph and trace reader
 contracts for compiled-plan graph APIs, compact run-trace summaries, recent
 trace Flow overlays, trace outcome labels, package version/dependency sync, and
 read-only/no-lock dashboard guarantees.
-Python `v0.18.1`, `v0.18.2`, and `v0.18.3` sync the optional web package version,
-`millrace-ai` dependency floor, and FastAPI app version without changing Rust's
-accepted package boundary.
+Python `v0.18.1`, `v0.18.2`, `v0.18.3`, and `v0.18.4` sync the optional web
+package version, `millrace-ai` dependency floor, and FastAPI app version without
+changing Rust's accepted package boundary.
 
 Rust records that as unsupported-gap and shadow-CLI evidence. The accepted Rust
 surface is the CLI plus local `millrace-agents/` artifacts, so `millrace compile

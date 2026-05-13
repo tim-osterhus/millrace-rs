@@ -1,14 +1,16 @@
+mod support;
+
 use std::{
-    collections::VecDeque,
+    collections::{BTreeSet, VecDeque},
     fs,
     path::Path,
     sync::{Arc, Mutex},
 };
 
-use serde_json::json;
+use serde_json::{Value, json};
 use tempfile::TempDir;
 
-use millrace_ai::contracts::{Plane, StageName, Timestamp, WorkItemKind};
+use millrace_ai::contracts::{Plane, ResultClass, StageName, Timestamp, WorkItemKind};
 use millrace_ai::{
     CodexCliConfig, CodexCliRunnerAdapter, CodexProcessError, CodexProcessExecutor,
     CodexProcessRequest, FakeRunner, FakeRunnerResult, PiRpcClientCreateRequest, PiRpcClientError,
@@ -16,6 +18,7 @@ use millrace_ai::{
     ProcessExecutionResult, ProcessExitKind, RequestKind, RunnerExitKind, RunnerRawResult,
     StageRunRequest, StageRunnerAdapter, normalize_stage_result,
 };
+use support::parity::read_json_fixture;
 
 const RUN_ID: &str = "run-normalization";
 const STARTED_AT: &str = "2026-05-12T00:00:00Z";
@@ -190,6 +193,381 @@ fn assert_active_work_item_metadata(
         envelope.metadata["active_work_item_path"],
         json!(request.active_work_item_path.as_deref())
     );
+}
+
+fn raw_result_for_failure(
+    request: &StageRunRequest,
+    exit_kind: RunnerExitKind,
+    exit_code: Option<i32>,
+    stdout_path: Option<&Path>,
+    stderr_path: Option<&Path>,
+) -> RunnerRawResult {
+    RunnerRawResult {
+        request_id: request.request_id.clone(),
+        run_id: request.run_id.clone(),
+        stage: request.stage,
+        runner_name: request
+            .runner_name
+            .clone()
+            .unwrap_or_else(|| "raw".to_owned()),
+        model_name: None,
+        thinking_level: None,
+        model_reasoning_effort: None,
+        exit_kind,
+        exit_code,
+        observed_exit_kind: None,
+        observed_exit_code: None,
+        stdout_path: stdout_path.map(|path| path.display().to_string()),
+        stderr_path: stderr_path.map(|path| path.display().to_string()),
+        terminal_result_path: None,
+        event_log_path: None,
+        token_usage: None,
+        started_at: timestamp(STARTED_AT),
+        ended_at: timestamp(ENDED_AT),
+    }
+}
+
+fn assert_failure_metadata(
+    envelope: &millrace_ai::contracts::StageResultEnvelope,
+    failure_class: &str,
+    blocked_origin: &str,
+    failure_scope: &str,
+    auto_requeue_candidate: bool,
+    failure_classifier_code: &str,
+) {
+    assert_eq!(envelope.terminal_result.marker(), "### BLOCKED");
+    assert_eq!(envelope.result_class, ResultClass::RecoverableFailure);
+    assert!(!envelope.success);
+    assert_eq!(envelope.metadata["failure_class"], json!(failure_class));
+    assert_eq!(envelope.metadata["blocked_origin"], json!(blocked_origin));
+    assert_eq!(envelope.metadata["failure_scope"], json!(failure_scope));
+    assert_eq!(
+        envelope.metadata["auto_requeue_candidate"],
+        json!(auto_requeue_candidate)
+    );
+    assert_eq!(
+        envelope.metadata["failure_classifier_code"],
+        json!(failure_classifier_code)
+    );
+    assert_eq!(envelope.metadata["valid_terminal_result"], json!(false));
+}
+
+#[test]
+fn runner_normalization_v0_18_4_guardrail_fixture_requires_failure_classifier_metadata() {
+    let fixture = read_json_fixture("runtime_json/auto_port_v0_18_4_runtime_contract_scout.json");
+    assert_eq!(fixture["kind"], "auto_port_v0_18_4_runtime_contract_scout");
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.18.4");
+    assert_eq!(fixture["rust_reference"]["planned_crate_version"], "0.3.4");
+
+    let classifier = &fixture["failure_classifier_metadata"];
+    let retryable: BTreeSet<_> = classifier["retryable_failure_classes"]
+        .as_array()
+        .expect("retryable failure classes are present")
+        .iter()
+        .map(|value| value.as_str().expect("retryable class"))
+        .collect();
+    assert_eq!(
+        retryable,
+        BTreeSet::from([
+            "network_unavailable",
+            "provider_unavailable",
+            "provider_rate_limited",
+            "runner_timeout",
+        ])
+    );
+
+    let non_auto: BTreeSet<_> = classifier["non_auto_requeue_failure_classes"]
+        .as_array()
+        .expect("non-auto failure classes are present")
+        .iter()
+        .map(|value| value.as_str().expect("non-auto class"))
+        .collect();
+    for failure_class in [
+        "runner_binary_missing",
+        "auth_missing_or_invalid",
+        "missing_terminal_result",
+        "illegal_terminal_result",
+        "conflicting_terminal_results",
+        "missing_required_artifact",
+        "runner_transport_failure",
+    ] {
+        assert!(
+            non_auto.contains(failure_class),
+            "missing v0.18.4 non-auto runner failure class {failure_class}"
+        );
+    }
+
+    let metadata_keys: BTreeSet<_> = classifier["metadata_keys"]
+        .as_array()
+        .expect("metadata keys are present")
+        .iter()
+        .map(|value| value.as_str().expect("metadata key"))
+        .collect();
+    for key in [
+        "failure_class",
+        "blocked_origin",
+        "failure_scope",
+        "auto_requeue_candidate",
+        "failure_classifier_code",
+        "valid_terminal_result",
+        "raw_exit_kind",
+        "raw_exit_code",
+        "timeout_reconciled",
+        "active_work_item_kind",
+        "active_work_item_id",
+        "active_work_item_path",
+    ] {
+        assert!(
+            metadata_keys.contains(key),
+            "missing v0.18.4 runner metadata key {key}"
+        );
+    }
+
+    let classifier_codes: BTreeSet<_> = classifier["classifier_codes"]
+        .as_array()
+        .expect("classifier codes are present")
+        .iter()
+        .map(|value| value.as_str().expect("classifier code"))
+        .collect();
+    for code in [
+        "exit_timeout",
+        "runner_binary_missing",
+        "auth_missing_or_invalid",
+        "provider_rate_limited",
+        "network_unavailable",
+        "provider_unavailable",
+        "provider_default_unavailable",
+        "runner_timeout",
+        "unclassified_failure",
+    ] {
+        assert!(
+            classifier_codes.contains(code),
+            "missing v0.18.4 classifier code {code}"
+        );
+    }
+}
+
+#[test]
+fn runner_failure_metadata_classifies_retryable_transient_failures() {
+    let temp = TempDir::new().unwrap();
+    let request = sample_request(temp.path(), "request-transient", "raw");
+    let run_dir = Path::new(&request.run_dir);
+
+    let timeout_stdout = run_dir.join("timeout_stdout.txt");
+    fs::write(&timeout_stdout, "### BUILDER_COMPLETE\n").unwrap();
+    let timeout = normalize_stage_result(
+        &request,
+        &raw_result_for_failure(
+            &request,
+            RunnerExitKind::Timeout,
+            Some(124),
+            Some(&timeout_stdout),
+            None,
+        ),
+    )
+    .unwrap();
+    assert_failure_metadata(
+        &timeout,
+        "runner_timeout",
+        "runner_failure",
+        "environment",
+        true,
+        "exit_timeout",
+    );
+    assert_eq!(timeout.metadata["raw_exit_kind"], json!("timeout"));
+    assert_eq!(timeout.metadata["raw_exit_code"], json!(124));
+
+    let provider_default = normalize_stage_result(
+        &request,
+        &raw_result_for_failure(&request, RunnerExitKind::ProviderError, Some(1), None, None),
+    )
+    .unwrap();
+    assert_failure_metadata(
+        &provider_default,
+        "provider_unavailable",
+        "runner_failure",
+        "provider",
+        true,
+        "provider_default_unavailable",
+    );
+
+    let rate_limit_stderr = run_dir.join("rate_limit_stderr.txt");
+    fs::write(
+        &rate_limit_stderr,
+        "provider returned 429 too many requests\n",
+    )
+    .unwrap();
+    let rate_limited = normalize_stage_result(
+        &request,
+        &raw_result_for_failure(
+            &request,
+            RunnerExitKind::ProviderError,
+            Some(1),
+            None,
+            Some(&rate_limit_stderr),
+        ),
+    )
+    .unwrap();
+    assert_failure_metadata(
+        &rate_limited,
+        "provider_rate_limited",
+        "runner_failure",
+        "provider",
+        true,
+        "provider_rate_limited",
+    );
+
+    let network_stderr = run_dir.join("network_stderr.txt");
+    fs::write(
+        &network_stderr,
+        "failed to reach provider: could not resolve host api.openai.com\n",
+    )
+    .unwrap();
+    let network = normalize_stage_result(
+        &request,
+        &raw_result_for_failure(
+            &request,
+            RunnerExitKind::RunnerError,
+            Some(1),
+            None,
+            Some(&network_stderr),
+        ),
+    )
+    .unwrap();
+    assert_failure_metadata(
+        &network,
+        "network_unavailable",
+        "runner_failure",
+        "environment",
+        true,
+        "network_unavailable",
+    );
+}
+
+#[test]
+fn runner_failure_metadata_classifies_non_auto_retryable_failures() {
+    let temp = TempDir::new().unwrap();
+    let request = sample_request(temp.path(), "request-non-auto", "raw");
+    let run_dir = Path::new(&request.run_dir);
+
+    let binary_stderr = run_dir.join("binary_stderr.txt");
+    fs::write(&binary_stderr, "runner binary not found: codex\n").unwrap();
+    let binary = normalize_stage_result(
+        &request,
+        &raw_result_for_failure(
+            &request,
+            RunnerExitKind::RunnerError,
+            Some(127),
+            None,
+            Some(&binary_stderr),
+        ),
+    )
+    .unwrap();
+    assert_failure_metadata(
+        &binary,
+        "runner_binary_missing",
+        "runner_failure",
+        "local_configuration",
+        false,
+        "runner_binary_missing",
+    );
+
+    let auth_stderr = run_dir.join("auth_stderr.txt");
+    fs::write(&auth_stderr, "401 unauthorized: invalid api key\n").unwrap();
+    let auth = normalize_stage_result(
+        &request,
+        &raw_result_for_failure(
+            &request,
+            RunnerExitKind::RunnerError,
+            Some(1),
+            None,
+            Some(&auth_stderr),
+        ),
+    )
+    .unwrap();
+    assert_failure_metadata(
+        &auth,
+        "auth_missing_or_invalid",
+        "runner_failure",
+        "local_configuration",
+        false,
+        "auth_missing_or_invalid",
+    );
+
+    let illegal_stdout = run_dir.join("illegal_stdout.txt");
+    fs::write(&illegal_stdout, "### CHECKER_PASS\n").unwrap();
+    let illegal_terminal = normalize_stage_result(
+        &request,
+        &raw_result_for_failure(
+            &request,
+            RunnerExitKind::Completed,
+            Some(0),
+            Some(&illegal_stdout),
+            None,
+        ),
+    )
+    .unwrap();
+    assert_failure_metadata(
+        &illegal_terminal,
+        "illegal_terminal_result",
+        "stage_terminal",
+        "contract",
+        false,
+        "illegal_terminal_result",
+    );
+    assert_eq!(
+        illegal_terminal.metadata["raw_detected_marker"],
+        json!("### CHECKER_PASS")
+    );
+
+    let unknown_stderr = run_dir.join("unknown_stderr.txt");
+    fs::write(&unknown_stderr, "unexpected runner transport failure\n").unwrap();
+    let unknown = normalize_stage_result(
+        &request,
+        &raw_result_for_failure(
+            &request,
+            RunnerExitKind::RunnerError,
+            Some(1),
+            None,
+            Some(&unknown_stderr),
+        ),
+    )
+    .unwrap();
+    assert_failure_metadata(
+        &unknown,
+        "runner_transport_failure",
+        "runner_failure",
+        "unknown",
+        false,
+        "unclassified_failure",
+    );
+}
+
+#[test]
+fn stage_authored_blocked_terminal_remains_valid_and_not_auto_requeued() {
+    let temp = TempDir::new().unwrap();
+    let request = sample_request(temp.path(), "request-semantic-blocked", "raw");
+    let stdout_path = Path::new(&request.run_dir).join("blocked_stdout.txt");
+    fs::write(&stdout_path, "### BLOCKED\n").unwrap();
+
+    let envelope = normalize_stage_result(
+        &request,
+        &raw_result_for_failure(
+            &request,
+            RunnerExitKind::Completed,
+            Some(0),
+            Some(&stdout_path),
+            None,
+        ),
+    )
+    .unwrap();
+
+    assert_eq!(envelope.terminal_result.marker(), "### BLOCKED");
+    assert_eq!(envelope.result_class, ResultClass::Blocked);
+    assert!(!envelope.retryable);
+    assert_eq!(envelope.metadata["failure_class"], Value::Null);
+    assert_eq!(envelope.metadata["valid_terminal_result"], json!(true));
+    assert!(envelope.metadata.get("auto_requeue_candidate").is_none());
 }
 
 #[test]

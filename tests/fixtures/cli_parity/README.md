@@ -40,7 +40,7 @@ records the Python v0.17.3 optional `packages/millrace-web` surface as an
 intentional unsupported Rust parity gap, records the Python v0.17.4 package
 version/dependency sync, records the Python v0.18.0 graph/trace dashboard
 evidence for that same gap, and records the Python v0.18.1, v0.18.2, and
-v0.18.3 package/runtime app version sync without authorizing a Rust web
+v0.18.3 and v0.18.4 package/runtime app version sync without authorizing a Rust web
 implementation. It names
 the workspace registry, summary DTO, queue/run/snapshot/baseline/compiled-plan/
 Arbiter/usage-governance/event readers, static shell, CLI/server boundary, and
@@ -162,6 +162,41 @@ package verification, generated-cache package exclusion evidence, and the
 Python v0.18.3 `millrace-web` package/version unsupported-gap evidence. It also
 confirms Builder release evidence does not
 require publish, upload, push, tag, or deployment commands.
+
+`auto_port_v0_18_4_parity_evidence.json` records target-facing guardrails for
+the Python `v0.18.3..v0.18.4` to Rust `0.3.4` auto-port. It maps every
+generated scout path to an expected Rust implementation, test, documentation,
+fixture, package evidence, or unsupported-gap evidence target; pins the
+annotated tag/release commit evidence, runner failure classifier metadata,
+blocked metadata diagnostics, audited `queue retry-blocked` behavior,
+`auto_recovery` config/status defaults and change boundaries, daemon
+stranded-dependency recovery gates, required checks, and the Python v0.18.4
+`millrace-web` package/version unsupported-gap evidence.
+The runner failure classifier metadata and blocked metadata persistence targets
+are now backed by typed runtime JSON contracts, runner normalization tests,
+serial runtime metadata persistence tests, and queue-store requeue primitive
+coverage. The retry-blocked CLI target is now backed by parity tests for
+success, audit/event/snapshot evidence, non-retryable and missing metadata
+refusals, root mismatch, exhausted budget, force override, and live runtime lock
+refusal. The auto-recovery config/status target is now backed by runtime daemon
+tests for defaults, explicit values, invalid values, daemon-session projection,
+and next-tick boundary classification, plus parity CLI tests for invalid config
+validation and `config show` output. The daemon recovery target is now backed by
+runtime daemon tests for successful auto-requeue, review-required skips,
+diagnostics, runtime/monitor events, and same-cycle dependent dispatch
+suppression. Docs/version and final release evidence are reconciled in the
+final release fixture.
+
+`auto_port_v0_18_4_release_parity_evidence.json` records the Rust `0.3.4`
+final release-parity evidence for Python `v0.18.3..v0.18.4`, including
+version-visible CLI metadata, generated-scout path mapping evidence, package
+include rules, README/changelog/roadmap/runtime docs, blocked recovery,
+retry-blocked CLI, auto-recovery config/status, daemon recovery
+package-readiness evidence, required Builder verification command results,
+source-package mapping, dirty-worktree package verification, generated-cache
+package exclusion evidence, and the Python v0.18.4 `millrace-web`
+package/version unsupported-gap evidence. It also confirms Builder release
+evidence does not require publish, upload, push, tag, or deployment commands.
 
 The evidence is intentionally not a byte-for-byte transcript. Paths, generated
 ids, timestamps, package versions, command ids, run ids, compact run handles,

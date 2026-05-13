@@ -171,6 +171,366 @@ runtime_string_enum! {
     }
 }
 
+runtime_string_enum! {
+    /// Origin category for blocked work derived from runner failure metadata.
+    pub enum BlockedOrigin {
+        StageTerminal => "stage_terminal",
+        RunnerFailure => "runner_failure",
+        RuntimeException => "runtime_exception",
+        Operator => "operator",
+        Unknown => "unknown",
+    }
+}
+
+runtime_string_enum! {
+    /// Scope category for blocked work derived from runner failure metadata.
+    pub enum FailureScope {
+        Environment => "environment",
+        Provider => "provider",
+        LocalConfiguration => "local_configuration",
+        Contract => "contract",
+        Semantic => "semantic",
+        Unknown => "unknown",
+    }
+}
+
+runtime_string_enum! {
+    /// Python-compatible runner failure classes used in stage-result metadata.
+    pub enum RunnerFailureClass {
+        RunnerTimeout => "runner_timeout",
+        ProviderUnavailable => "provider_unavailable",
+        ProviderRateLimited => "provider_rate_limited",
+        NetworkUnavailable => "network_unavailable",
+        RunnerBinaryMissing => "runner_binary_missing",
+        AuthMissingOrInvalid => "auth_missing_or_invalid",
+        MissingTerminalResult => "missing_terminal_result",
+        IllegalTerminalResult => "illegal_terminal_result",
+        ConflictingTerminalResults => "conflicting_terminal_results",
+        MissingRequiredArtifact => "missing_required_artifact",
+        RunnerTransportFailure => "runner_transport_failure",
+    }
+}
+
+impl RunnerFailureClass {
+    /// Failure classes eligible for automatic requeue in Python v0.18.4.
+    pub const AUTO_REQUEUE_CANDIDATES: &'static [Self] = &[
+        Self::NetworkUnavailable,
+        Self::ProviderUnavailable,
+        Self::ProviderRateLimited,
+        Self::RunnerTimeout,
+    ];
+
+    /// Returns true when the class is transient and eligible for automatic requeue.
+    #[must_use]
+    pub fn is_auto_requeue_candidate(self) -> bool {
+        Self::AUTO_REQUEUE_CANDIDATES.contains(&self)
+    }
+}
+
+runtime_string_enum! {
+    /// Fine-grained classifier code persisted alongside runner failure classes.
+    pub enum FailureClassifierCode {
+        ExitTimeout => "exit_timeout",
+        RunnerBinaryMissing => "runner_binary_missing",
+        AuthMissingOrInvalid => "auth_missing_or_invalid",
+        ProviderRateLimited => "provider_rate_limited",
+        NetworkUnavailable => "network_unavailable",
+        ProviderUnavailable => "provider_unavailable",
+        ProviderDefaultUnavailable => "provider_default_unavailable",
+        RunnerTimeout => "runner_timeout",
+        MissingTerminalResult => "missing_terminal_result",
+        IllegalTerminalResult => "illegal_terminal_result",
+        ConflictingTerminalResults => "conflicting_terminal_results",
+        MissingRequiredArtifact => "missing_required_artifact",
+        UnclassifiedFailure => "unclassified_failure",
+    }
+}
+
+/// Typed runner failure metadata embedded in failed stage-result envelopes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RunnerFailureMetadata {
+    pub failure_class: RunnerFailureClass,
+    pub blocked_origin: BlockedOrigin,
+    pub failure_scope: FailureScope,
+    pub auto_requeue_candidate: bool,
+    pub failure_classifier_code: FailureClassifierCode,
+}
+
+impl RunnerFailureMetadata {
+    /// Builds a runner failure metadata contract.
+    #[must_use]
+    pub const fn new(
+        failure_class: RunnerFailureClass,
+        blocked_origin: BlockedOrigin,
+        failure_scope: FailureScope,
+        auto_requeue_candidate: bool,
+        failure_classifier_code: FailureClassifierCode,
+    ) -> Self {
+        Self {
+            failure_class,
+            blocked_origin,
+            failure_scope,
+            auto_requeue_candidate,
+            failure_classifier_code,
+        }
+    }
+
+    /// Writes this metadata using the exact stage-result metadata keys.
+    pub fn insert_into_map(self, metadata: &mut Map<String, Value>) {
+        metadata.insert(
+            "failure_class".to_owned(),
+            Value::String(self.failure_class.as_str().to_owned()),
+        );
+        metadata.insert(
+            "blocked_origin".to_owned(),
+            Value::String(self.blocked_origin.as_str().to_owned()),
+        );
+        metadata.insert(
+            "failure_scope".to_owned(),
+            Value::String(self.failure_scope.as_str().to_owned()),
+        );
+        metadata.insert(
+            "auto_requeue_candidate".to_owned(),
+            Value::Bool(self.auto_requeue_candidate),
+        );
+        metadata.insert(
+            "failure_classifier_code".to_owned(),
+            Value::String(self.failure_classifier_code.as_str().to_owned()),
+        );
+    }
+}
+
+/// Python-compatible metadata persisted for blocked work-item recovery.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BlockedItemMetadata {
+    pub work_item_kind: WorkItemKind,
+    pub work_item_id: String,
+    pub root_spec_id: Option<String>,
+    pub root_idea_id: Option<String>,
+    pub blocked_at: Timestamp,
+    pub blocked_origin: BlockedOrigin,
+    pub failure_class: String,
+    pub failure_scope: FailureScope,
+    pub auto_requeue_candidate: bool,
+    #[serde(default)]
+    pub failure_classifier_code: Option<FailureClassifierCode>,
+    pub source_run_id: Option<String>,
+    pub source_plane: Option<String>,
+    pub source_stage: Option<String>,
+    pub terminal_result: Option<String>,
+    pub stage_result_path: Option<String>,
+    pub stdout_path: Option<String>,
+    pub stderr_path: Option<String>,
+}
+
+impl BlockedItemMetadata {
+    /// Returns true only for metadata marked auto-requeueable with an eligible failure class.
+    #[must_use]
+    pub fn allows_auto_requeue(&self) -> bool {
+        self.auto_requeue_candidate && failure_class_allows_auto_requeue(&self.failure_class)
+    }
+}
+
+impl RuntimeJsonContract for BlockedItemMetadata {
+    const ARTIFACT: &'static str = "blocked_item_metadata";
+
+    fn validate_contract(&mut self) -> Result<(), RuntimeJsonError> {
+        validate_safe_identifier(&self.work_item_id, "work_item_id")?;
+        require_non_blank("failure_class", &self.failure_class)?;
+        parse_time("blocked_at", &self.blocked_at)?;
+        require_optional_non_blank("root_spec_id", &self.root_spec_id)?;
+        require_optional_non_blank("root_idea_id", &self.root_idea_id)?;
+        require_optional_non_blank("source_run_id", &self.source_run_id)?;
+        require_optional_non_blank("source_plane", &self.source_plane)?;
+        require_optional_non_blank("source_stage", &self.source_stage)?;
+        require_optional_non_blank("terminal_result", &self.terminal_result)?;
+        require_optional_non_blank("stage_result_path", &self.stage_result_path)?;
+        require_optional_non_blank("stdout_path", &self.stdout_path)?;
+        require_optional_non_blank("stderr_path", &self.stderr_path)?;
+        Ok(())
+    }
+}
+
+/// Result payload for moving one blocked task back to the execution queue.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BlockedTaskRequeueResult {
+    pub task_id: String,
+    pub source_path: String,
+    pub destination_path: String,
+    pub source_state: String,
+    pub destination_state: String,
+    pub actor: String,
+    pub auto: bool,
+    pub reason: String,
+    pub failure_class: Option<String>,
+    pub attempt_number: u64,
+    pub diagnostics_path: Option<String>,
+}
+
+impl RuntimeJsonContract for BlockedTaskRequeueResult {
+    const ARTIFACT: &'static str = "blocked_task_requeue_result";
+
+    fn validate_contract(&mut self) -> Result<(), RuntimeJsonError> {
+        validate_safe_identifier(&self.task_id, "task_id")?;
+        require_non_blank("source_path", &self.source_path)?;
+        require_non_blank("destination_path", &self.destination_path)?;
+        validate_literal("source_state", &self.source_state, "blocked")?;
+        validate_literal("destination_state", &self.destination_state, "queue")?;
+        require_non_blank("actor", &self.actor)?;
+        require_non_blank("reason", &self.reason)?;
+        require_optional_non_blank("failure_class", &self.failure_class)?;
+        require_optional_non_blank("diagnostics_path", &self.diagnostics_path)?;
+        if self.attempt_number == 0 {
+            return Err(RuntimeJsonError::InvalidField {
+                field_name: "attempt_number",
+                message: "must be >= 1".to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
+/// Read-only boundary describing a blocked task that strands queued dependents.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StrandedBlockedDependency {
+    pub blocked_task_id: String,
+    #[serde(default)]
+    pub queued_dependent_ids: Vec<String>,
+    pub root_spec_id: Option<String>,
+    pub metadata: Option<BlockedItemMetadata>,
+}
+
+impl RuntimeJsonContract for StrandedBlockedDependency {
+    const ARTIFACT: &'static str = "stranded_blocked_dependency";
+
+    fn validate_contract(&mut self) -> Result<(), RuntimeJsonError> {
+        validate_safe_identifier(&self.blocked_task_id, "blocked_task_id")?;
+        if self.queued_dependent_ids.is_empty() {
+            return Err(RuntimeJsonError::InvalidField {
+                field_name: "queued_dependent_ids",
+                message: "must not be empty".to_owned(),
+            });
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        for dependent_id in &self.queued_dependent_ids {
+            validate_safe_identifier(dependent_id, "queued_dependent_ids")?;
+            if !seen.insert(dependent_id) {
+                return Err(RuntimeJsonError::InvalidField {
+                    field_name: "queued_dependent_ids",
+                    message: format!("duplicate queued dependent id `{dependent_id}`"),
+                });
+            }
+        }
+        require_optional_non_blank("root_spec_id", &self.root_spec_id)?;
+        if let Some(metadata) = &mut self.metadata {
+            metadata.validate_contract()?;
+        }
+        Ok(())
+    }
+}
+
+/// Snapshot evidence captured before an automatic blocked-dependency decision.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AutoRecoveryPreRecoverySnapshot {
+    pub process_running: bool,
+    pub paused: bool,
+    pub stop_requested: bool,
+    #[serde(default)]
+    pub active_runs_by_plane: Vec<String>,
+    pub queue_depth_execution: u64,
+    pub queue_depth_planning: u64,
+    pub queue_depth_learning: u64,
+}
+
+impl RuntimeJsonContract for AutoRecoveryPreRecoverySnapshot {
+    const ARTIFACT: &'static str = "auto_recovery_pre_recovery_snapshot";
+
+    fn validate_contract(&mut self) -> Result<(), RuntimeJsonError> {
+        let mut seen = std::collections::BTreeSet::new();
+        for plane in &self.active_runs_by_plane {
+            require_non_blank("active_runs_by_plane", plane)?;
+            if !seen.insert(plane.clone()) {
+                return Err(RuntimeJsonError::InvalidField {
+                    field_name: "active_runs_by_plane",
+                    message: format!("duplicate active plane `{plane}`"),
+                });
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Diagnostic report for one daemon blocked-dependency auto-recovery decision.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BlockedDependencyAutoRecoveryDiagnostic {
+    pub schema_version: String,
+    pub kind: String,
+    pub decision: String,
+    pub reason: String,
+    pub created_at: Timestamp,
+    pub blocked_task_id: String,
+    #[serde(default)]
+    pub queued_dependent_ids: Vec<String>,
+    pub root_spec_id: Option<String>,
+    pub auto_attempt_number: u64,
+    pub metadata: Option<BlockedItemMetadata>,
+    pub pre_recovery_snapshot: AutoRecoveryPreRecoverySnapshot,
+}
+
+impl RuntimeJsonContract for BlockedDependencyAutoRecoveryDiagnostic {
+    const ARTIFACT: &'static str = "blocked_dependency_auto_recovery_diagnostic";
+
+    fn validate_contract(&mut self) -> Result<(), RuntimeJsonError> {
+        validate_literal("schema_version", &self.schema_version, SCHEMA_VERSION)?;
+        validate_literal("kind", &self.kind, "blocked_dependency_auto_recovery")?;
+        require_non_blank("decision", &self.decision)?;
+        require_non_blank("reason", &self.reason)?;
+        parse_time("created_at", &self.created_at)?;
+        validate_safe_identifier(&self.blocked_task_id, "blocked_task_id")?;
+        if self.queued_dependent_ids.is_empty() {
+            return Err(RuntimeJsonError::InvalidField {
+                field_name: "queued_dependent_ids",
+                message: "must not be empty".to_owned(),
+            });
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        for dependent_id in &self.queued_dependent_ids {
+            validate_safe_identifier(dependent_id, "queued_dependent_ids")?;
+            if !seen.insert(dependent_id.clone()) {
+                return Err(RuntimeJsonError::InvalidField {
+                    field_name: "queued_dependent_ids",
+                    message: format!("duplicate queued dependent id `{dependent_id}`"),
+                });
+            }
+        }
+        require_optional_non_blank("root_spec_id", &self.root_spec_id)?;
+        if self.auto_attempt_number == 0 {
+            return Err(RuntimeJsonError::InvalidField {
+                field_name: "auto_attempt_number",
+                message: "must be >= 1".to_owned(),
+            });
+        }
+        if let Some(metadata) = &mut self.metadata {
+            metadata.validate_contract()?;
+        }
+        self.pre_recovery_snapshot.validate_contract()?;
+        Ok(())
+    }
+}
+
+/// Returns true when a blocked failure class is eligible for automatic requeue.
+#[must_use]
+pub fn failure_class_allows_auto_requeue(failure_class: &str) -> bool {
+    RunnerFailureClass::from_value(failure_class.trim())
+        .is_ok_and(RunnerFailureClass::is_auto_requeue_candidate)
+}
+
 /// Typed failures produced by runtime JSON contract validation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RuntimeJsonError {

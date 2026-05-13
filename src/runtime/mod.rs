@@ -15,6 +15,7 @@ use crate::contracts::{
     stage_allows_work_item_kind, stage_plane, terminal_result_for_plane,
 };
 
+mod blocked_recovery;
 mod monitor;
 mod run_traces;
 mod startup;
@@ -22,6 +23,11 @@ mod supervisor;
 mod tick;
 mod usage_governance;
 
+pub use blocked_recovery::{
+    BlockedItemMetadataRecord, RetryBlockedTaskRequest, blocked_metadata_allows_auto_requeue,
+    blocked_metadata_path, blocked_task_metadata_path, find_stranded_blocked_dependency,
+    load_blocked_item_metadata, load_blocked_task_metadata, retry_blocked_task,
+};
 pub use monitor::{
     BasicMonitorRenderer, BasicTerminalMonitor, NullRuntimeMonitorSink, RuntimeMonitorEvent,
     RuntimeMonitorFanout, RuntimeMonitorSink, runtime_monitor_events_from_jsonl,
@@ -32,14 +38,15 @@ pub use run_traces::{
     trace_path_for_run_dir, upsert_stage_result_trace_node,
 };
 pub use startup::{
-    RuntimeFileFingerprint, RuntimePollWatcherState, RuntimeReconciliationSignal,
-    RuntimeRunnersConfig, RuntimeStageConfig, RuntimeStartupConfig, RuntimeStartupError,
-    RuntimeStartupOptions, RuntimeStartupReconciliation, RuntimeStartupResult,
-    RuntimeStartupSession, RuntimeWatchEvent, RuntimeWatcherSession, RuntimeWatcherTarget,
-    build_runtime_runner_dispatcher, build_runtime_runner_dispatcher_for_paths,
-    build_runtime_watcher_session, compiled_entry_node_for_work_item, load_runtime_startup_config,
-    startup_runtime_daemon, startup_runtime_daemon_for_paths, startup_runtime_once,
-    startup_runtime_once_for_paths,
+    AutoRecoveryConfig, RuntimeConfigApplyBoundary, RuntimeFileFingerprint,
+    RuntimePollWatcherState, RuntimeReconciliationSignal, RuntimeRunnersConfig, RuntimeStageConfig,
+    RuntimeStartupConfig, RuntimeStartupError, RuntimeStartupOptions, RuntimeStartupReconciliation,
+    RuntimeStartupResult, RuntimeStartupSession, RuntimeWatchEvent, RuntimeWatcherSession,
+    RuntimeWatcherTarget, build_runtime_runner_dispatcher,
+    build_runtime_runner_dispatcher_for_paths, build_runtime_watcher_session,
+    compiled_entry_node_for_work_item, load_runtime_startup_config,
+    runtime_config_apply_boundary_for_field, startup_runtime_daemon,
+    startup_runtime_daemon_for_paths, startup_runtime_once, startup_runtime_once_for_paths,
 };
 pub use supervisor::{
     RuntimeDaemonCycleOutcome, RuntimeDaemonLoopExitReason, RuntimeDaemonLoopOptions,

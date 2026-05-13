@@ -498,6 +498,10 @@ pub fn config_show_lines(
             bool_text(config.watchers_watch_specs_queue)
         ),
         format!(
+            "auto_recovery.enabled: {}",
+            bool_text(config.auto_recovery.enabled)
+        ),
+        format!(
             "usage_governance.enabled: {}",
             bool_text(config.usage_governance_enabled)
         ),

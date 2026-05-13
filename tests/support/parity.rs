@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 
 use assert_cmd::cargo::cargo_bin;
+use serde_json::Value;
 use tempfile::TempDir;
 
 #[derive(Debug)]
@@ -95,6 +96,16 @@ pub fn fixture_path(relative_path: impl AsRef<Path>) -> PathBuf {
 
 pub fn read_fixture(relative_path: impl AsRef<Path>) -> std::io::Result<String> {
     fs::read_to_string(fixture_path(relative_path))
+}
+
+pub fn read_json_fixture(relative_path: impl AsRef<Path>) -> Value {
+    let path = relative_path.as_ref().to_owned();
+    let contents = read_fixture(&path).unwrap_or_else(|error| {
+        panic!("read JSON fixture {}: {error}", path.display());
+    });
+    serde_json::from_str(&contents).unwrap_or_else(|error| {
+        panic!("parse JSON fixture {}: {error}", path.display());
+    })
 }
 
 pub fn run_rust_millrace<I, S>(args: I) -> std::io::Result<CommandOutput>

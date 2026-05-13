@@ -7,24 +7,28 @@ Rust crate owns the `millrace` CLI, typed contracts, and local
 
 ## Current Release Target
 
-The current Rust release target is `0.3.3`, aligned to Python `v0.18.3` at
-commit `6556e55c8463ce9256716bc425a49059b4c5981c`.
+The current Rust release target is `0.3.4`, aligned to Python `v0.18.4` at
+commit `516e947e90155b6436dbc9efcf932254f34bc39c`.
 
-The `0.3.3` release closes the Python `v0.18.2..v0.18.3` parity delta:
+The `0.3.4` release closes the Python `v0.18.3..v0.18.4` parity delta:
 
-- Librarian contracts, entrypoint/core-skill assets, stage-kind metadata, and
-  learning graph/loop assets are packaged.
-- Learning-enabled modes include Planner-to-Librarian install trigger rules
-  while default non-learning modes do not dispatch Librarian.
-- Runtime learning requests preserve stage-result, Planner artifact, and source
-  work-item metadata; targeted Librarian requests dispatch, complete, no-op, or
-  block through the learning request lifecycle.
-- Runner normalization preserves active work item kind, id, and active path
-  metadata across raw, fake, Codex CLI, and Pi RPC result paths.
-- Shipped `SKILL.md` assets pass recursive packaged skill lint coverage,
-  including the migrated `marathon-qa-audit` contract shape and guidance
-  handoff updates.
-- optional Python `millrace-web` `v0.18.3` package version, runtime dependency
+- Runner normalization records blocked recovery metadata for retryable provider,
+  network, rate-limit, and timeout failures while preserving non-retryable
+  local, auth, terminal-contract, missing-artifact, and unknown transport
+  classes.
+- Runtime routing persists blocked item metadata diagnostics under
+  `millrace-agents/diagnostics/blocked/` and emits blocked metadata runtime
+  event evidence.
+- `millrace queue retry-blocked <TASK_ID>` exposes an audited manual recovery
+  command with root-spec guards, retry budget checks, live-daemon refusal, and
+  explicit `--force` override support.
+- `[auto_recovery]` config parsing, validation, `config show` status output,
+  and next-tick change boundaries are implemented.
+- Daemon idle-cycle recovery requeues one eligible retryable stranded blocked
+  predecessor through the audited queue transition, writes
+  `diagnostics/auto-recovery/` evidence, and suppresses same-cycle dependent
+  dispatch.
+- optional Python `millrace-web` `v0.18.4` package version, runtime dependency
   floor, and FastAPI app version are recorded as unsupported-gap package
   evidence for the existing Rust boundary.
 
@@ -51,8 +55,8 @@ compatible.
 - `docs/source-package-map.md` records package include rules and ownership.
 - `docs/runtime/` records Rust runtime contract notes for operator and
   maintainer surfaces.
-- `tests/fixtures/cli_parity/auto_port_v0_18_3_release_parity_evidence.json`
-  records the final Rust `0.3.3` release-parity evidence, including required
+- `tests/fixtures/cli_parity/auto_port_v0_18_4_release_parity_evidence.json`
+  records the final Rust `0.3.4` release-parity evidence, including required
   Builder verification command results and dirty-worktree package verification
   for this pass.
 
@@ -62,7 +66,7 @@ Rust still does not ship a `millrace-web` package, HTTP dashboard, static shell,
 SSE stream, or dashboard API route. The accepted Rust inspection surface
 remains local read-only CLI commands over initialized workspaces, including
 `millrace compile graph` and `millrace runs trace <run_id>` as graph/trace
-shadow surfaces; the Python `v0.18.3` web package version sync is recorded as
+shadow surfaces; the Python `v0.18.4` web package version sync is recorded as
 unsupported-gap evidence rather than a Rust web implementation. Native
 filesystem watcher integration, live subscription-quota
 provider polling, and live Codex/Pi smoke runs remain preview-only or opt-in

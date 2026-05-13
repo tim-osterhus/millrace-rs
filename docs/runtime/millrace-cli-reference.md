@@ -11,7 +11,7 @@ millrace --version
 millrace version
 ```
 
-For Rust `0.3.3`, both commands print `millrace 0.3.3`.
+For Rust `0.3.4`, both commands print `millrace 0.3.4`.
 
 ## Probe Intake And Inspection
 
@@ -71,8 +71,8 @@ artifacts.
 ## Web Boundary
 
 Python `millrace-web` exposes graph and trace data through read-only dashboard
-routes, and Python `v0.18.3` syncs that optional package to version `0.18.3`.
-Rust `0.3.3` shadows the accepted local inspection behavior through the CLI
+routes, and Python `v0.18.4` syncs that optional package to version `0.18.4`.
+Rust `0.3.4` shadows the accepted local inspection behavior through the CLI
 commands above and keeps the optional web dashboard as an explicit unsupported
 gap. No Rust web server, dashboard HTTP API, static shell, SSE stream, separate
 dashboard package, or Rust-managed web asset is part of this crate release.
@@ -89,3 +89,32 @@ through the existing local CLI and workspace artifacts:
   persisted Librarian request/result/trace evidence.
 - `millrace status` continues to report learning queue depths and active run
   state without mutating the workspace.
+
+## Blocked Recovery And Auto-Recovery Evidence
+
+Rust `0.3.4` adds the Python `v0.18.4` blocked recovery parity surface.
+Operators can manually requeue a blocked task through the audited retry command:
+
+```bash
+millrace queue retry-blocked <TASK_ID> --workspace <workspace> --reason "retry after provider outage"
+millrace queue retry-blocked <TASK_ID> --workspace <workspace> --reason "operator override" --force
+millrace queue retry-blocked <TASK_ID> --workspace <workspace> --reason "same-root retry" --root-spec-id <ROOT_SPEC_ID>
+```
+
+The command refuses unsafe work item ids, active daemon ownership, non-blocked
+tasks, exhausted retry budgets, root-spec mismatches, and non-retryable blocked
+metadata unless `--force` is explicit. Successful retries write queue audit
+JSONL evidence, refresh queue depths, and emit `blocked_task_requeued`.
+
+`millrace config show` includes the Python-exposed `auto_recovery.enabled`
+status key. The Rust config loader accepts `[auto_recovery]` with
+`enabled`, `blocked_dependency_retry_enabled`,
+`max_auto_requeues_per_work_item`, and `cooldown_seconds`; every
+`auto_recovery.*` field applies at the next daemon tick.
+
+When daemon auto-recovery is enabled and the daemon is otherwise idle, Rust can
+requeue one eligible retryable blocked predecessor for queued same-lineage
+execution work. The daemon writes `millrace-agents/diagnostics/auto-recovery/`
+evidence, emits `blocked_dependency_auto_requeued` or
+`blocked_dependency_auto_requeue_skipped`, renders basic monitor lines, and
+does not dispatch the dependent task in the same recovered cycle.

@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, process::ExitCode};
 
-use crate::contracts::{CompiledStageGraphExport, RunTraceGraph};
+use crate::contracts::{BlockedTaskRequeueResult, CompiledStageGraphExport, RunTraceGraph};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CliOutput {
@@ -157,6 +157,27 @@ pub fn run_trace_lines(trace: &RunTraceGraph) -> Vec<String> {
     lines
 }
 
+pub fn blocked_task_requeue_lines(result: &BlockedTaskRequeueResult) -> Vec<String> {
+    vec![
+        format!("requeued_task: {}", result.task_id),
+        format!("source_state: {}", result.source_state),
+        format!("destination_state: {}", result.destination_state),
+        format!("source_path: {}", result.source_path),
+        format!("destination_path: {}", result.destination_path),
+        format!("actor: {}", result.actor),
+        format!("auto: {}", bool_text(result.auto)),
+        format!("attempt_number: {}", result.attempt_number),
+        format!(
+            "failure_class: {}",
+            option_text(result.failure_class.as_deref())
+        ),
+    ]
+}
+
 fn option_text(value: Option<&str>) -> &str {
     value.unwrap_or("none")
+}
+
+fn bool_text(value: bool) -> &'static str {
+    if value { "true" } else { "false" }
 }

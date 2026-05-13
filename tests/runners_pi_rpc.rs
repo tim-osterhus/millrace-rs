@@ -486,7 +486,7 @@ fn pi_adapter_maps_provider_empty_text_invalid_json_binary_and_timeout_failures(
             .metadata
             .get("failure_class")
             .and_then(Value::as_str),
-        Some("provider_failure")
+        Some("provider_unavailable")
     );
 
     let empty_request = sample_request(temp.path());

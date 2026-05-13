@@ -4,12 +4,12 @@
 governed runtime for long-running agent work.
 
 The production implementation is currently the Python package
-[`millrace-ai`](https://pypi.org/project/millrace-ai/). The Rust `0.3.3`
-release consolidates the Python `v0.18.2..v0.18.3` Librarian,
-Planner-to-Librarian trigger, learning request artifact metadata, runner
-normalization metadata, shipped skill lint/guidance, docs/version, package, and
-web-gap evidence pass on top of the earlier Integrator, probe/Recon, and
-graph/trace ports while the crate remains experimental.
+[`millrace-ai`](https://pypi.org/project/millrace-ai/). The Rust `0.3.4`
+release consolidates the Python `v0.18.3..v0.18.4` blocked-recovery,
+retry CLI, auto-recovery config/status, daemon recovery, docs/version,
+package, and web-gap evidence pass on top of the earlier Librarian,
+Integrator, probe/Recon, and graph/trace ports while the crate remains
+experimental.
 
 ## Package Names
 
@@ -35,8 +35,9 @@ text-only `status watch`, `runs ls/show/tail/trace`, `modes list/show`, and
 `config show`, plus queue intake
 commands for `queue add-task`, `queue add-probe`, `queue add-spec`, `queue
 add-idea`, and the top-level `add-task`/`add-probe`/`add-spec`/`add-idea`
-aliases, plus `queue repair-lineage` preview/apply wiring over the workspace
-repair boundary. It also implements
+aliases, plus `queue retry-blocked <TASK_ID>` manual blocked-task retry and
+`queue repair-lineage` preview/apply wiring over the workspace repair boundary.
+It also implements
 control commands for `pause`, `resume`, `stop`, `retry-active`,
 `clear-stale-state`, and `reload-config`, the `planning retry-active` alias,
 `config validate`, and `config reload`, routing mutating commands through the
@@ -221,14 +222,23 @@ evidence, mocked client/transport coverage, runtime-configured dispatcher
 construction for operator once/daemon paths, and normalization into the existing
 `StageResultEnvelope` contract.
 Runtime startup/config loading exposes `[runners]`, `[runners.codex]`,
-`[runners.pi]`, `[usage_governance]`, and `[stages.<stage>]` settings for
+`[runners.pi]`, `[usage_governance]`, `[auto_recovery]`, and
+`[stages.<stage>]` settings for
 adapter construction and stage overrides, validates malformed runner names,
 permissions, runner-neutral thinking levels, Codex legacy reasoning aliases,
 environment maps, Pi event-log policies and reserved flags, timeouts, stage
-override keys, token-window rules, and subscription-quota percent thresholds,
+override keys, token-window rules, subscription-quota percent thresholds,
+auto-recovery booleans, retry budgets, cooldown arrays, and unknown
+auto-recovery keys,
 keeps adapter-only command, permission, environment, and event-log fields out of
 compile fingerprints, and builds dispatchers with `codex_cli` and `pi_rpc`
-adapters for runtime operator paths.
+adapters for runtime operator paths. The auto-recovery apply-boundary helper
+classifies every Python v0.18.4 `auto_recovery.*` field as `next_tick`.
+Daemon idle-cycle recovery now uses that policy to requeue one eligible
+retryable stranded blocked predecessor through the audited queue transition,
+writes `diagnostics/auto-recovery/` diagnostics and runtime/monitor events,
+and returns a recovered tick so queued dependents are not dispatched in the
+same cycle.
 
 The contract layer currently covers canonical enum values including planning
 `recon` and learning `librarian`, probe work items/status hints, root-intake
@@ -274,8 +284,28 @@ evidence slices, plus target-facing Python `v0.18.2..v0.18.3` guardrails and
 final Rust `0.3.3` release evidence for Librarian, Planner-to-Librarian trigger,
 learning request artifact metadata, runner normalization metadata, shipped skill
 lint, guidance handoff, docs/version, package verification, release-check, and
-web-package evidence. The runner normalization/artifact-metadata target is now
-implemented with focused runtime JSON, runner normalization, serial runtime, and
+web-package evidence, plus target-facing Python `v0.18.3..v0.18.4` guardrails
+and final Rust `0.3.4` release evidence for blocked-recovery metadata, audited
+`queue retry-blocked` behavior, `auto_recovery` config/status evidence, daemon
+stranded-dependency recovery gates, docs/version, package verification, release
+checks, and `millrace-web` package evidence. The v0.18.4 runner failure
+classifier contract, blocked metadata
+persistence, manual public retry CLI, auto-recovery config/status, and daemon
+stranded-dependency recovery slices are now implemented with typed runtime JSON
+metadata contracts, runner normalization coverage, persisted
+`millrace-agents/diagnostics/blocked/task-<TASK_ID>.json` diagnostics,
+`blocked_item_metadata_written` runtime event evidence, and queue-store
+requeue primitive coverage, plus parity coverage for manual retry
+audit/event/snapshot behavior and refusal guards, typed `AutoRecoveryConfig`
+defaults/validation, next-tick change-boundary classification, daemon-session
+config projection, `config show` output for `auto_recovery.enabled`, daemon
+idle-cycle recovery diagnostics under `millrace-agents/diagnostics/auto-recovery/`,
+`blocked_dependency_auto_requeued` and `blocked_dependency_auto_requeue_skipped`
+event/monitor evidence, and same-cycle dependent dispatch suppression.
+Docs/version and final release evidence are reconciled in the Rust `0.3.4`
+release fixture.
+The runner normalization/artifact-metadata target is now implemented
+with focused runtime JSON, runner normalization, serial runtime, and
 daemon runtime coverage, and the shipped skill lint/guidance target is now
 implemented with recursive packaged skill lint coverage plus live/baseline
 guidance asset synchronization.
@@ -385,10 +415,22 @@ complete/no-op done transitions, blocked evidence, and daemon run-trace
 coverage; the shipped skill lint/guidance slice has landed with recursive
 packaged `SKILL.md` lint coverage, `marathon-qa-audit` section-contract
 migration, Curator/Recon/Planner guidance updates, and live/baseline asset sync
-coverage; the final Rust `0.3.3` release-parity evidence now reconciles Cargo
+coverage; the final Rust `0.3.3` release-parity evidence reconciles Cargo
 metadata, runtime docs, source-package mapping, parity fixture docs, package
 include readiness, required Builder checks, package verification, and Python
-`millrace-web` v0.18.3 package/version unsupported-gap evidence.
+`millrace-web` v0.18.3 package/version unsupported-gap evidence. The v0.18.4
+guardrail fixture maps all 28 generated Python scout paths to expected Rust
+implementation, test, documentation, fixture, package-evidence, or
+unsupported-gap targets while keeping Rust `0.3.3` as the previous baseline and
+Rust `0.3.4` as the target. It pins runner failure classifier metadata, blocked
+metadata diagnostics, audited blocked-task retry behavior, `auto_recovery`
+config/status defaults and change boundaries, daemon idle-cycle recovery
+evidence, release-check commands, package evidence, and `millrace-web`
+package/version source references; the final Rust `0.3.4` release-parity
+evidence now reconciles Cargo metadata, runtime docs, source-package mapping,
+parity fixture docs, package include readiness, required Builder checks,
+package verification, generated-cache exclusions, and Python `millrace-web`
+v0.18.4 package/version unsupported-gap evidence.
 Focused
 `run once`
 coverage exercises one-stage mocked Codex dispatcher execution, idle/pause/stop
@@ -499,7 +541,20 @@ records the final Rust `0.3.3` release-parity evidence for version metadata,
 generated-scout path mappings, package include readiness, runtime docs,
 source-package mapping, required Builder verification command results, package
 verification, and the Python `v0.18.3` `millrace-web` package/version
-unsupported gap. The optional
+unsupported gap; and
+`tests/fixtures/cli_parity/auto_port_v0_18_4_parity_evidence.json` records the
+target-facing Rust `0.3.4` guardrails for Python `v0.18.3..v0.18.4` runner
+failure classifier metadata, blocked metadata diagnostics, audited
+`queue retry-blocked` behavior, `auto_recovery` config/status defaults and
+change boundaries, daemon idle-cycle recovery evidence, all 28 generated scout
+paths, required checks, `millrace-web` package/version unsupported-gap evidence,
+and no-live guarantees; and
+`tests/fixtures/cli_parity/auto_port_v0_18_4_release_parity_evidence.json`
+records the final Rust `0.3.4` release-parity evidence for version metadata,
+generated-scout path mappings, package include readiness, runtime docs,
+source-package mapping, required Builder verification command results, package
+verification, generated-cache exclusion evidence, and the Python `v0.18.4`
+`millrace-web` package/version unsupported gap. The optional
 Python `millrace-web` dashboard
 remains an explicit unsupported Rust parity gap with source references,
 shadow-CLI graph/trace commands, and non-goal wording; native filesystem
@@ -638,9 +693,10 @@ router, closure, handoff, and recovery events. Recon handoff application
 validates generated task/spec ids before import and converts invalid handoff
 artifacts into `recon_handoff_invalid` error context/report evidence while
 blocking the active probe, setting planning status to `### BLOCKED`, clearing
-active runtime state, and avoiding ordinary Mechanic/Manager recovery. It also has daemon-named startup
-entrypoints, daemon-aware config loading for run-style, watcher, runner, stage,
-and governance token/quota rule inputs, `RuntimeMode::Daemon` snapshot projection,
+active runtime state, and avoiding ordinary Mechanic/Manager recovery. It also
+has daemon-named startup entrypoints, daemon-aware config loading for run-style,
+watcher, runner, stage, governance token/quota rule inputs, and the typed
+`auto_recovery` policy, `RuntimeMode::Daemon` snapshot projection,
 deterministic poll watcher-session preparation/rebuild hooks,
 matching-session daemon lock release on startup failure or close, a daemon
 supervisor/completion boundary for compiled-plan plane-concurrency, runner
@@ -690,8 +746,8 @@ Python runtime.
 The historical public proof package for the v0.1.0 autonomous port campaign
 lives in
 [`tim-osterhus/millrace-rs-port-docs`](https://github.com/tim-osterhus/millrace-rs-port-docs).
-The crate-local `0.3.3` release evidence lives in `CHANGELOG.md` and
-`tests/fixtures/cli_parity/auto_port_v0_18_3_release_parity_evidence.json`.
+The crate-local `0.3.4` release evidence lives in `CHANGELOG.md` and
+`tests/fixtures/cli_parity/auto_port_v0_18_4_release_parity_evidence.json`.
 
 ## License
 

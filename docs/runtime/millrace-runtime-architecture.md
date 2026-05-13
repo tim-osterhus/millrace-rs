@@ -54,8 +54,25 @@ metadata. Targeted Librarian dispatch uses learning-request active paths,
 `LIBRARIAN_COMPLETE` and `LIBRARIAN_NOOP` move requests to done, and Librarian
 `BLOCKED` preserves recoverable-failure blocked evidence.
 
+For Python `v0.18.4` parity, runner normalization can classify retryable
+blocked failures as `network_unavailable`, `provider_unavailable`,
+`provider_rate_limited`, or `runner_timeout`, with blocked-origin,
+failure-scope, auto-requeue candidacy, and classifier-code metadata. Runtime
+routing persists blocked item diagnostics under
+`millrace-agents/diagnostics/blocked/task-<TASK_ID>.json`, emits
+`blocked_item_metadata_written`, and exposes the shared audited blocked-task
+requeue transition used by both manual retry and daemon auto-recovery.
+`millrace queue retry-blocked <TASK_ID>` applies safe-id, root-spec,
+retryability, retry-budget, force, and live-lock guards before moving a blocked
+task back to queue. Daemon idle cycles use the typed `[auto_recovery]` policy
+to requeue at most one eligible stranded predecessor, write
+`diagnostics/auto-recovery/` evidence, emit
+`blocked_dependency_auto_requeued` or `blocked_dependency_auto_requeue_skipped`,
+and return a recovered tick without dispatching queued dependents in that same
+cycle.
+
 The optional Python `millrace-web` package remains outside the accepted Rust
-runtime boundary, including the Python `v0.18.3` package/runtime version sync.
+runtime boundary, including the Python `v0.18.4` package/runtime version sync.
 Rust inspection stays local and read-only through CLI commands
 such as `queue ls/show`, `status show`, `runs ls/show/tail`, `modes show`,
 `config show`, `compile show`, `compile graph`, and `runs trace <run_id>`.

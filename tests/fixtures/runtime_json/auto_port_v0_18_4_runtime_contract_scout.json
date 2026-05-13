@@ -1,0 +1,261 @@
+{
+  "auto_recovery_contract": {
+    "config_fields": [
+      "auto_recovery.enabled",
+      "auto_recovery.blocked_dependency_retry_enabled",
+      "auto_recovery.max_auto_requeues_per_work_item",
+      "auto_recovery.cooldown_seconds"
+    ],
+    "default_policy": {
+      "blocked_dependency_retry_enabled": true,
+      "cooldown_seconds": [300, 900, 3600],
+      "enabled": true,
+      "max_auto_requeues_per_work_item": 3
+    },
+    "diagnostics_kind": "blocked_dependency_auto_recovery",
+    "diagnostics_path": "millrace-agents/diagnostics/auto-recovery/<TIMESTAMP>-<TASK_ID>.json",
+    "eligible_failure_classes": [
+      "network_unavailable",
+      "provider_unavailable",
+      "provider_rate_limited",
+      "runner_timeout"
+    ],
+    "event_types": [
+      "blocked_dependency_auto_requeued",
+      "blocked_dependency_auto_requeue_skipped"
+    ],
+    "monitor_events": [
+      "blocked_dependency_auto_requeued",
+      "blocked_lineage_requires_operator_review"
+    ],
+    "next_tick_fields": [
+      "auto_recovery.enabled",
+      "auto_recovery.blocked_dependency_retry_enabled",
+      "auto_recovery.max_auto_requeues_per_work_item",
+      "auto_recovery.cooldown_seconds"
+    ],
+    "skip_reasons": [
+      "disabled",
+      "blocked_dependency_retry_disabled",
+      "paused",
+      "stop_requested",
+      "active_runs_present",
+      "no_queued_execution_dependents",
+      "blocked_dependency_not_retryable",
+      "retry_budget_exhausted",
+      "cooldown_active",
+      "missing_or_invalid_metadata",
+      "root_spec_mismatch"
+    ],
+    "status_config_output_keys": [
+      "auto_recovery.enabled"
+    ]
+  },
+  "blocked_metadata_contract": {
+    "auto_requeue_failure_classes": [
+      "network_unavailable",
+      "provider_unavailable",
+      "provider_rate_limited",
+      "runner_timeout"
+    ],
+    "diagnostic_path_template": "millrace-agents/diagnostics/blocked/task-<TASK_ID>.json",
+    "event_types": [
+      "blocked_item_metadata_written",
+      "blocked_task_requeued",
+      "blocked_dependency_auto_requeued",
+      "blocked_dependency_auto_requeue_skipped"
+    ],
+    "model_names": [
+      "BlockedItemMetadata",
+      "BlockedTaskRequeueResult",
+      "StrandedBlockedDependency"
+    ],
+    "required_fields": [
+      "work_item_kind",
+      "work_item_id",
+      "root_spec_id",
+      "root_idea_id",
+      "blocked_at",
+      "blocked_origin",
+      "failure_class",
+      "failure_scope",
+      "auto_requeue_candidate",
+      "failure_classifier_code",
+      "source_run_id",
+      "source_plane",
+      "source_stage",
+      "terminal_result",
+      "stage_result_path",
+      "stdout_path",
+      "stderr_path"
+    ],
+    "result_fields": [
+      "task_id",
+      "source_path",
+      "destination_path",
+      "source_state",
+      "destination_state",
+      "actor",
+      "auto",
+      "reason",
+      "failure_class",
+      "attempt_number",
+      "diagnostics_path"
+    ]
+  },
+  "contract_sources": [
+    "../millrace-py/src/millrace_ai/cli/commands/queue.py",
+    "../millrace-py/src/millrace_ai/cli/config_view.py",
+    "../millrace-py/src/millrace_ai/config/__init__.py",
+    "../millrace-py/src/millrace_ai/config/boundaries.py",
+    "../millrace-py/src/millrace_ai/config/models.py",
+    "../millrace-py/src/millrace_ai/runners/normalization.py",
+    "../millrace-py/src/millrace_ai/runtime/blocked_recovery.py",
+    "../millrace-py/src/millrace_ai/runtime/recon_transitions.py",
+    "../millrace-py/src/millrace_ai/runtime/result_application.py",
+    "../millrace-py/src/millrace_ai/runtime/supervisor.py",
+    "../millrace-py/src/millrace_ai/runtime/work_item_transitions.py",
+    "../millrace-py/src/millrace_ai/workspace/queue_store.py",
+    "../millrace-py/src/millrace_ai/workspace/queue_transitions.py",
+    "../millrace-py/tests/cli/test_cli.py",
+    "../millrace-py/tests/config/test_config.py",
+    "../millrace-py/tests/runners/test_runner.py",
+    "../millrace-py/tests/runtime/test_supervisor.py",
+    "../millrace-py/tests/workspace/test_queue_store.py"
+  ],
+  "expected_rust_contract_targets": [
+    "src/contracts/runtime_json.rs",
+    "src/runners/contracts.rs",
+    "src/runners/normalization.rs",
+    "src/runtime/mod.rs",
+    "src/runtime/startup.rs",
+    "src/runtime/supervisor.rs",
+    "src/runtime/tick.rs",
+    "src/runtime/monitor.rs",
+    "src/workspace.rs",
+    "src/workspace/queue_store.rs",
+    "src/cli/mod.rs",
+    "src/cli/parser.rs",
+    "src/cli/read_only.rs",
+    "src/cli/render.rs",
+    "tests/contracts_runtime_json.rs",
+    "tests/runners_normalization.rs",
+    "tests/workspace_queue_state_stores.rs",
+    "tests/runtime_daemon.rs",
+    "tests/parity_cli.rs",
+    "tests/fixtures/cli_parity/auto_port_v0_18_4_parity_evidence.json",
+    "tests/fixtures/runtime_json/auto_port_v0_18_4_runtime_contract_scout.json"
+  ],
+  "failure_classifier_metadata": {
+    "classifier_codes": [
+      "exit_timeout",
+      "runner_binary_missing",
+      "auth_missing_or_invalid",
+      "provider_rate_limited",
+      "network_unavailable",
+      "provider_unavailable",
+      "provider_default_unavailable",
+      "runner_timeout",
+      "unclassified_failure"
+    ],
+    "metadata_keys": [
+      "failure_class",
+      "blocked_origin",
+      "failure_scope",
+      "auto_requeue_candidate",
+      "failure_classifier_code",
+      "valid_terminal_result",
+      "raw_exit_kind",
+      "raw_exit_code",
+      "timeout_reconciled",
+      "active_work_item_kind",
+      "active_work_item_id",
+      "active_work_item_path"
+    ],
+    "non_auto_requeue_failure_classes": [
+      "runner_binary_missing",
+      "auth_missing_or_invalid",
+      "missing_terminal_result",
+      "illegal_terminal_result",
+      "conflicting_terminal_results",
+      "missing_required_artifact",
+      "runner_transport_failure"
+    ],
+    "retryable_failure_classes": [
+      "network_unavailable",
+      "provider_unavailable",
+      "provider_rate_limited",
+      "runner_timeout"
+    ]
+  },
+  "kind": "auto_port_v0_18_4_runtime_contract_scout",
+  "no_live_guarantees": [
+    "no live Python execution beyond checked-out ../millrace-py diff inspection",
+    "no live Codex runner",
+    "no live Pi runner",
+    "no network",
+    "no credentials",
+    "no web server",
+    "no release upload",
+    "no publishing"
+  ],
+  "python_reference": {
+    "diff_range": "v0.18.3..v0.18.4",
+    "previous_release_commit": "6556e55c8463ce9256716bc425a49059b4c5981c",
+    "previous_tag": "v0.18.3",
+    "previous_tag_commit": "6fbb3c7b9d23e4c61b178e0a8d129c3fa540060e",
+    "release_commit": "516e947e90155b6436dbc9efcf932254f34bc39c",
+    "target_peeled_commit": "acf4f637c4e983793011c3bc5977d8a72e79e7cd",
+    "target_tag": "v0.18.4"
+  },
+  "queue_retry_behavior": {
+    "audit_fields": [
+      "at",
+      "actor",
+      "attempt_number",
+      "auto",
+      "destination_state",
+      "failure_class",
+      "kind",
+      "reason",
+      "source_state"
+    ],
+    "command": "millrace queue retry-blocked <TASK_ID>",
+    "options": [
+      "--workspace PATH",
+      "--reason TEXT",
+      "--root-spec-id ROOT_SPEC_ID",
+      "--force"
+    ],
+    "output_keys": [
+      "requeued_task",
+      "source_state",
+      "destination_state",
+      "source_path",
+      "destination_path",
+      "actor",
+      "auto",
+      "attempt_number",
+      "failure_class"
+    ],
+    "queue_log_path_template": "millrace-agents/tasks/queue/<TASK_ID>.requeue.jsonl",
+    "required_guards": [
+      "safe work item id parsing",
+      "live daemon lock refusal",
+      "root spec guard",
+      "retryability check",
+      "retry budget check",
+      "force override",
+      "queue depth snapshot refresh"
+    ]
+  },
+  "rust_reference": {
+    "current_repo_crate_version": "0.3.3",
+    "current_repo_version_role": "previous_baseline_for_python_v0.18.3",
+    "planned_crate_version": "0.3.4",
+    "planned_version_role": "target_release_for_python_v0.18.4",
+    "previous_repo_crate_version": "0.3.3",
+    "previous_repo_version_role": "released_target_for_python_v0.18.3"
+  },
+  "schema_version": "1.0"
+}

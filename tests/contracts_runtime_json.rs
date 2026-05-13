@@ -1,16 +1,19 @@
 #![recursion_limit = "256"]
 
-use std::fmt::Debug;
+use std::{collections::BTreeSet, fmt::Debug};
 
 use serde_json::{Value, json};
 use tempfile::TempDir;
 
 use millrace_ai::contracts::{
-    CompileDiagnostics, ExecutionTerminalResult, LearningTerminalResult, MailboxAddProbePayload,
+    AutoRecoveryPreRecoverySnapshot, BlockedDependencyAutoRecoveryDiagnostic, BlockedItemMetadata,
+    BlockedOrigin, BlockedTaskRequeueResult, CompileDiagnostics, ExecutionTerminalResult,
+    FailureClassifierCode, FailureScope, LearningTerminalResult, MailboxAddProbePayload,
     MailboxCommandEnvelope, Plane, PlanningTerminalResult, ReadOnlyStatusPayload, ReconDecision,
     ReconHandoffTarget, ReconPacketDocument, ReconPacketError, RecoveryCounters, ResultClass,
-    RunTraceGraph, RuntimeErrorContext, RuntimeJsonContract, RuntimeJsonError, RuntimeMode,
-    RuntimeSnapshot, StageName, StageResultEnvelope, TerminalResult, TokenUsage,
+    RunTraceGraph, RunnerFailureClass, RunnerFailureMetadata, RuntimeErrorContext,
+    RuntimeJsonContract, RuntimeJsonError, RuntimeMode, RuntimeSnapshot, StageName,
+    StageResultEnvelope, StrandedBlockedDependency, TerminalResult, TokenUsage,
     UsageGovernanceLedgerEntry, UsageGovernanceState, UsageGovernanceSubscriptionWindow,
 };
 use millrace_ai::recon_packets::{parse_recon_packet, read_recon_packet, render_recon_packet};
@@ -470,6 +473,258 @@ fn read_only_status_payload_serializes_python_compatible_json_fields() {
 }
 
 #[test]
+fn runner_failure_metadata_serializes_python_compatible_classifier_keys() {
+    let metadata = RunnerFailureMetadata::new(
+        RunnerFailureClass::ProviderRateLimited,
+        BlockedOrigin::RunnerFailure,
+        FailureScope::Provider,
+        true,
+        FailureClassifierCode::ProviderRateLimited,
+    );
+
+    let value = serde_json::to_value(metadata).expect("serialize runner failure metadata");
+    assert_eq!(
+        value,
+        json!({
+            "failure_class": "provider_rate_limited",
+            "blocked_origin": "runner_failure",
+            "failure_scope": "provider",
+            "auto_requeue_candidate": true,
+            "failure_classifier_code": "provider_rate_limited"
+        })
+    );
+
+    let decoded: RunnerFailureMetadata =
+        serde_json::from_value(value).expect("decode runner failure metadata");
+    assert_eq!(decoded, metadata);
+    assert!(RunnerFailureClass::RunnerTimeout.is_auto_requeue_candidate());
+    assert!(RunnerFailureClass::NetworkUnavailable.is_auto_requeue_candidate());
+    assert!(!RunnerFailureClass::RunnerBinaryMissing.is_auto_requeue_candidate());
+    assert!(!RunnerFailureClass::IllegalTerminalResult.is_auto_requeue_candidate());
+}
+
+#[test]
+fn blocked_item_metadata_serializes_python_compatible_recovery_keys() {
+    let metadata = round_trip_contract::<BlockedItemMetadata>(json!({
+        "work_item_kind": "task",
+        "work_item_id": "task-retry",
+        "root_spec_id": "spec-root-001",
+        "root_idea_id": "idea-001",
+        "blocked_at": NOW,
+        "blocked_origin": "runner_failure",
+        "failure_class": "network_unavailable",
+        "failure_scope": "environment",
+        "auto_requeue_candidate": true,
+        "failure_classifier_code": "network_unavailable",
+        "source_run_id": "run-001",
+        "source_plane": "execution",
+        "source_stage": "builder",
+        "terminal_result": "BLOCKED",
+        "stage_result_path": "millrace-agents/runs/run-001/stage_results/request-001.json",
+        "stdout_path": "millrace-agents/runs/run-001/runner_stdout.request-001.txt",
+        "stderr_path": "millrace-agents/runs/run-001/runner_stderr.request-001.txt"
+    }));
+
+    assert!(metadata.allows_auto_requeue());
+    assert_eq!(
+        metadata.failure_classifier_code,
+        Some(FailureClassifierCode::NetworkUnavailable)
+    );
+
+    let semantic = round_trip_contract::<BlockedItemMetadata>(json!({
+        "work_item_kind": "task",
+        "work_item_id": "task-semantic",
+        "root_spec_id": null,
+        "root_idea_id": null,
+        "blocked_at": NOW,
+        "blocked_origin": "stage_terminal",
+        "failure_class": "stage_declared_blocked",
+        "failure_scope": "semantic",
+        "auto_requeue_candidate": false,
+        "source_run_id": "run-002",
+        "source_plane": "execution",
+        "source_stage": "consultant",
+        "terminal_result": "NEEDS_PLANNING",
+        "stage_result_path": null,
+        "stdout_path": null,
+        "stderr_path": null
+    }));
+    assert!(!semantic.allows_auto_requeue());
+
+    let malformed = BlockedItemMetadata::from_json_value(json!({
+        "work_item_kind": "task",
+        "work_item_id": "task-bad",
+        "root_spec_id": null,
+        "root_idea_id": null,
+        "blocked_at": NOW,
+        "blocked_origin": "runner_failure",
+        "failure_class": "",
+        "failure_scope": "environment",
+        "auto_requeue_candidate": true,
+        "failure_classifier_code": "not_a_classifier",
+        "source_run_id": "run-003",
+        "source_plane": "execution",
+        "source_stage": "builder",
+        "terminal_result": "BLOCKED",
+        "stage_result_path": null,
+        "stdout_path": null,
+        "stderr_path": null
+    }))
+    .unwrap_err();
+    assert!(malformed.to_string().contains("FailureClassifierCode"));
+}
+
+#[test]
+fn blocked_recovery_boundary_payloads_validate_requeue_and_stranded_dependency_shapes() {
+    let result = round_trip_contract::<BlockedTaskRequeueResult>(json!({
+        "task_id": "task-retry",
+        "source_path": "millrace-agents/tasks/blocked/task-retry.md",
+        "destination_path": "millrace-agents/tasks/queue/task-retry.md",
+        "source_state": "blocked",
+        "destination_state": "queue",
+        "actor": "operator",
+        "auto": false,
+        "reason": "retry after network_unavailable",
+        "failure_class": "network_unavailable",
+        "attempt_number": 1,
+        "diagnostics_path": "millrace-agents/diagnostics/blocked/task-task-retry.json"
+    }));
+    assert_eq!(result.task_id, "task-retry");
+
+    let stranded = round_trip_contract::<StrandedBlockedDependency>(json!({
+        "blocked_task_id": "task-retry",
+        "queued_dependent_ids": ["task-dependent"],
+        "root_spec_id": "spec-root-001",
+        "metadata": {
+            "work_item_kind": "task",
+            "work_item_id": "task-retry",
+            "root_spec_id": "spec-root-001",
+            "root_idea_id": "idea-001",
+            "blocked_at": NOW,
+            "blocked_origin": "runner_failure",
+            "failure_class": "network_unavailable",
+            "failure_scope": "environment",
+            "auto_requeue_candidate": true,
+            "failure_classifier_code": "network_unavailable",
+            "source_run_id": "run-001",
+            "source_plane": "execution",
+            "source_stage": "builder",
+            "terminal_result": "BLOCKED",
+            "stage_result_path": null,
+            "stdout_path": null,
+            "stderr_path": null
+        }
+    }));
+    assert_eq!(stranded.blocked_task_id, "task-retry");
+    assert!(stranded.metadata.as_ref().unwrap().allows_auto_requeue());
+
+    let invalid_attempt = BlockedTaskRequeueResult::from_json_value(json!({
+        "task_id": "task-retry",
+        "source_path": "millrace-agents/tasks/blocked/task-retry.md",
+        "destination_path": "millrace-agents/tasks/queue/task-retry.md",
+        "source_state": "active",
+        "destination_state": "queue",
+        "actor": "operator",
+        "auto": false,
+        "reason": "retry",
+        "failure_class": null,
+        "attempt_number": 0,
+        "diagnostics_path": null
+    }))
+    .unwrap_err();
+    assert!(invalid_attempt.to_string().contains("source_state"));
+}
+
+#[test]
+fn blocked_dependency_auto_recovery_diagnostic_validates_decision_and_snapshot_evidence() {
+    let diagnostic = round_trip_contract::<BlockedDependencyAutoRecoveryDiagnostic>(json!({
+        "schema_version": "1.0",
+        "kind": "blocked_dependency_auto_recovery",
+        "decision": "requeue",
+        "reason": "transient blocked dependency",
+        "created_at": NOW,
+        "blocked_task_id": "task-retry",
+        "queued_dependent_ids": ["task-dependent"],
+        "root_spec_id": "spec-root",
+        "auto_attempt_number": 2,
+        "metadata": {
+            "work_item_kind": "task",
+            "work_item_id": "task-retry",
+            "root_spec_id": "spec-root",
+            "root_idea_id": "idea-root",
+            "blocked_at": NOW,
+            "blocked_origin": "runner_failure",
+            "failure_class": "network_unavailable",
+            "failure_scope": "environment",
+            "auto_requeue_candidate": true,
+            "failure_classifier_code": "network_unavailable",
+            "source_run_id": "run-retry",
+            "source_plane": "execution",
+            "source_stage": "builder",
+            "terminal_result": "BLOCKED",
+            "stage_result_path": "millrace-agents/runs/run-retry/stage_results/request-retry.json",
+            "stdout_path": null,
+            "stderr_path": null
+        },
+        "pre_recovery_snapshot": {
+            "process_running": true,
+            "paused": false,
+            "stop_requested": false,
+            "active_runs_by_plane": [],
+            "queue_depth_execution": 1,
+            "queue_depth_planning": 0,
+            "queue_depth_learning": 0
+        }
+    }));
+
+    assert_eq!(diagnostic.decision, "requeue");
+    assert_eq!(diagnostic.auto_attempt_number, 2);
+    assert_eq!(
+        diagnostic
+            .metadata
+            .as_ref()
+            .map(|metadata| metadata.failure_class.as_str()),
+        Some("network_unavailable")
+    );
+    assert_eq!(
+        diagnostic.pre_recovery_snapshot,
+        AutoRecoveryPreRecoverySnapshot {
+            process_running: true,
+            paused: false,
+            stop_requested: false,
+            active_runs_by_plane: Vec::new(),
+            queue_depth_execution: 1,
+            queue_depth_planning: 0,
+            queue_depth_learning: 0,
+        }
+    );
+
+    let invalid_attempt = BlockedDependencyAutoRecoveryDiagnostic::from_json_value(json!({
+        "schema_version": "1.0",
+        "kind": "blocked_dependency_auto_recovery",
+        "decision": "skip",
+        "reason": "retry_budget_exhausted",
+        "created_at": NOW,
+        "blocked_task_id": "task-retry",
+        "queued_dependent_ids": ["task-dependent"],
+        "root_spec_id": "spec-root",
+        "auto_attempt_number": 0,
+        "metadata": null,
+        "pre_recovery_snapshot": {
+            "process_running": true,
+            "paused": false,
+            "stop_requested": false,
+            "active_runs_by_plane": [],
+            "queue_depth_execution": 1,
+            "queue_depth_planning": 0,
+            "queue_depth_learning": 0
+        }
+    }))
+    .unwrap_err();
+    assert!(invalid_attempt.to_string().contains("auto_attempt_number"));
+}
+
+#[test]
 fn python_v0_17_4_stage_result_no_op_runtime_json_fixture_round_trips_as_non_success() {
     let no_op = assert_python_stage_result_fixture_round_trips(python_model_dump_fixture(
         include_str!("fixtures/runtime_json/stage_result_learning_noop.json"),
@@ -891,6 +1146,260 @@ fn auto_port_v0_18_3_runtime_contract_scout_pins_librarian_trigger_runner_metada
                 .iter()
                 .any(|value| value.as_str() == Some(guarantee)),
             "missing v0.18.3 runtime contract scout guarantee {guarantee}"
+        );
+    }
+}
+
+#[test]
+fn auto_port_v0_18_4_runtime_contract_scout_pins_blocked_recovery_config_and_status_sources() {
+    let fixture: Value = python_model_dump_fixture(include_str!(
+        "fixtures/runtime_json/auto_port_v0_18_4_runtime_contract_scout.json"
+    ));
+    assert_eq!(fixture["schema_version"], "1.0");
+    assert_eq!(fixture["kind"], "auto_port_v0_18_4_runtime_contract_scout");
+    assert_eq!(fixture["python_reference"]["previous_tag"], "v0.18.3");
+    assert_eq!(
+        fixture["python_reference"]["previous_tag_commit"],
+        "6fbb3c7b9d23e4c61b178e0a8d129c3fa540060e"
+    );
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.18.4");
+    assert_eq!(
+        fixture["python_reference"]["target_peeled_commit"],
+        "acf4f637c4e983793011c3bc5977d8a72e79e7cd"
+    );
+    assert_eq!(
+        fixture["python_reference"]["release_commit"],
+        "516e947e90155b6436dbc9efcf932254f34bc39c"
+    );
+    assert_eq!(
+        fixture["python_reference"]["diff_range"],
+        "v0.18.3..v0.18.4"
+    );
+    assert_eq!(
+        fixture["rust_reference"]["current_repo_crate_version"],
+        "0.3.3"
+    );
+    assert_eq!(
+        fixture["rust_reference"]["current_repo_version_role"],
+        "previous_baseline_for_python_v0.18.3"
+    );
+    assert_eq!(fixture["rust_reference"]["planned_crate_version"], "0.3.4");
+    assert_ne!(
+        fixture["rust_reference"]["planned_crate_version"],
+        fixture["rust_reference"]["current_repo_crate_version"],
+        "v0.18.4 runtime scout must not treat Rust 0.3.3 as the target"
+    );
+
+    let sources: BTreeSet<_> = fixture["contract_sources"]
+        .as_array()
+        .expect("contract source references are present")
+        .iter()
+        .map(|value| value.as_str().expect("contract source"))
+        .collect();
+    for source_path in [
+        "../millrace-py/src/millrace_ai/cli/commands/queue.py",
+        "../millrace-py/src/millrace_ai/cli/config_view.py",
+        "../millrace-py/src/millrace_ai/config/__init__.py",
+        "../millrace-py/src/millrace_ai/config/boundaries.py",
+        "../millrace-py/src/millrace_ai/config/models.py",
+        "../millrace-py/src/millrace_ai/runners/normalization.py",
+        "../millrace-py/src/millrace_ai/runtime/blocked_recovery.py",
+        "../millrace-py/src/millrace_ai/runtime/recon_transitions.py",
+        "../millrace-py/src/millrace_ai/runtime/result_application.py",
+        "../millrace-py/src/millrace_ai/runtime/supervisor.py",
+        "../millrace-py/src/millrace_ai/runtime/work_item_transitions.py",
+        "../millrace-py/src/millrace_ai/workspace/queue_store.py",
+        "../millrace-py/src/millrace_ai/workspace/queue_transitions.py",
+        "../millrace-py/tests/cli/test_cli.py",
+        "../millrace-py/tests/config/test_config.py",
+        "../millrace-py/tests/runners/test_runner.py",
+        "../millrace-py/tests/runtime/test_supervisor.py",
+        "../millrace-py/tests/workspace/test_queue_store.py",
+    ] {
+        assert!(
+            sources.contains(source_path),
+            "missing v0.18.4 runtime/blocked-recovery source {source_path}"
+        );
+    }
+
+    let targets: BTreeSet<_> = fixture["expected_rust_contract_targets"]
+        .as_array()
+        .expect("expected Rust contract targets are present")
+        .iter()
+        .map(|value| value.as_str().expect("expected Rust target"))
+        .collect();
+    for target_path in [
+        "src/contracts/runtime_json.rs",
+        "src/runners/contracts.rs",
+        "src/runners/normalization.rs",
+        "src/runtime/mod.rs",
+        "src/runtime/startup.rs",
+        "src/runtime/supervisor.rs",
+        "src/runtime/tick.rs",
+        "src/runtime/monitor.rs",
+        "src/workspace.rs",
+        "src/workspace/queue_store.rs",
+        "src/cli/mod.rs",
+        "src/cli/parser.rs",
+        "src/cli/read_only.rs",
+        "src/cli/render.rs",
+        "tests/contracts_runtime_json.rs",
+        "tests/runners_normalization.rs",
+        "tests/workspace_queue_state_stores.rs",
+        "tests/runtime_daemon.rs",
+        "tests/parity_cli.rs",
+    ] {
+        assert!(
+            targets.contains(target_path),
+            "missing v0.18.4 Rust contract target {target_path}"
+        );
+    }
+
+    let blocked = &fixture["blocked_metadata_contract"];
+    for field in [
+        "work_item_kind",
+        "work_item_id",
+        "root_spec_id",
+        "root_idea_id",
+        "blocked_at",
+        "blocked_origin",
+        "failure_class",
+        "failure_scope",
+        "auto_requeue_candidate",
+        "failure_classifier_code",
+        "source_run_id",
+        "source_plane",
+        "source_stage",
+        "terminal_result",
+        "stage_result_path",
+        "stdout_path",
+        "stderr_path",
+    ] {
+        assert!(
+            blocked["required_fields"]
+                .as_array()
+                .expect("blocked metadata fields are present")
+                .iter()
+                .any(|value| value.as_str() == Some(field)),
+            "missing v0.18.4 blocked metadata field {field}"
+        );
+    }
+    assert_eq!(
+        blocked["diagnostic_path_template"],
+        "millrace-agents/diagnostics/blocked/task-<TASK_ID>.json"
+    );
+
+    let classifier = &fixture["failure_classifier_metadata"];
+    for failure_class in [
+        "network_unavailable",
+        "provider_unavailable",
+        "provider_rate_limited",
+        "runner_timeout",
+    ] {
+        assert!(
+            classifier["retryable_failure_classes"]
+                .as_array()
+                .expect("retryable classes are present")
+                .iter()
+                .any(|value| value.as_str() == Some(failure_class)),
+            "missing v0.18.4 retryable failure class {failure_class}"
+        );
+    }
+    for failure_class in [
+        "runner_binary_missing",
+        "auth_missing_or_invalid",
+        "missing_terminal_result",
+        "illegal_terminal_result",
+        "conflicting_terminal_results",
+        "missing_required_artifact",
+        "runner_transport_failure",
+    ] {
+        assert!(
+            classifier["non_auto_requeue_failure_classes"]
+                .as_array()
+                .expect("non-auto classes are present")
+                .iter()
+                .any(|value| value.as_str() == Some(failure_class)),
+            "missing v0.18.4 non-auto failure class {failure_class}"
+        );
+    }
+
+    let queue_retry = &fixture["queue_retry_behavior"];
+    assert_eq!(
+        queue_retry["command"],
+        "millrace queue retry-blocked <TASK_ID>"
+    );
+    for output_key in [
+        "requeued_task",
+        "source_state",
+        "destination_state",
+        "source_path",
+        "destination_path",
+        "actor",
+        "auto",
+        "attempt_number",
+        "failure_class",
+    ] {
+        assert!(
+            queue_retry["output_keys"]
+                .as_array()
+                .expect("queue retry output keys are present")
+                .iter()
+                .any(|value| value.as_str() == Some(output_key)),
+            "missing v0.18.4 queue retry output key {output_key}"
+        );
+    }
+
+    let auto_recovery = &fixture["auto_recovery_contract"];
+    assert_eq!(
+        auto_recovery["default_policy"]["enabled"],
+        Value::Bool(true)
+    );
+    assert_eq!(
+        auto_recovery["default_policy"]["blocked_dependency_retry_enabled"],
+        Value::Bool(true)
+    );
+    assert_eq!(
+        auto_recovery["default_policy"]["max_auto_requeues_per_work_item"],
+        Value::from(3)
+    );
+    assert_eq!(
+        auto_recovery["default_policy"]["cooldown_seconds"],
+        json!([300, 900, 3600])
+    );
+    for field in [
+        "auto_recovery.enabled",
+        "auto_recovery.blocked_dependency_retry_enabled",
+        "auto_recovery.max_auto_requeues_per_work_item",
+        "auto_recovery.cooldown_seconds",
+    ] {
+        assert!(
+            auto_recovery["next_tick_fields"]
+                .as_array()
+                .expect("next tick fields are present")
+                .iter()
+                .any(|value| value.as_str() == Some(field)),
+            "missing v0.18.4 next-tick auto_recovery field {field}"
+        );
+    }
+
+    let guarantees = fixture["no_live_guarantees"]
+        .as_array()
+        .expect("non-live guarantees are present");
+    for guarantee in [
+        "no live Codex runner",
+        "no live Pi runner",
+        "no network",
+        "no credentials",
+        "no web server",
+        "no release upload",
+        "no publishing",
+    ] {
+        assert!(
+            guarantees
+                .iter()
+                .any(|value| value.as_str() == Some(guarantee)),
+            "missing v0.18.4 runtime contract scout guarantee {guarantee}"
         );
     }
 }

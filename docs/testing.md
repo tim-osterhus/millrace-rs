@@ -21,7 +21,7 @@ Run the published-package verification path on a clean release candidate:
 cargo publish --dry-run
 ```
 
-During active Millrace Builder/Checker worktree validation, the `0.3.3`
+During active Millrace Builder/Checker worktree validation, the `0.3.4`
 release fixture records offline package verification as Builder evidence.
 The non-uploading dirty-worktree substitutes are:
 
@@ -48,8 +48,8 @@ The test suite covers:
   metadata, managed live/baseline assets, `execution.with_integrator`
   materialization/export, workspace baseline synchronization, opt-in integrated
   mode resolution, runtime routing, and run-trace evidence
-- release fixtures through Rust `0.3.3` version metadata, docs, package
-  include rules including generated-cache exclusions, Python `v0.18.3` source
+- release fixtures through Rust `0.3.4` version metadata, docs, package
+  include rules including generated-cache exclusions, Python `v0.18.4` source
   references, required release-readiness command results, package verification
   evidence, and explicit web-gap evidence
 - target-facing Python `v0.18.2..v0.18.3` guardrail fixtures for Rust `0.3.3`
@@ -58,6 +58,20 @@ The test suite covers:
   skill lint guidance, docs/version, final release checks, package dry-run
   evidence, web-package evidence, generated scout mappings, and no-live
   guarantees, with those behavior targets now implemented
+- target-facing Python `v0.18.3..v0.18.4` guardrail fixtures and final Rust
+  `0.3.4` release evidence for blocked metadata diagnostics, audited `queue retry-blocked` behavior,
+  `auto_recovery` config/status defaults and next-tick change boundaries,
+  daemon stranded-dependency recovery gates, release checks, generated scout
+  mappings, web-package evidence, and no-live guarantees, with the runner
+  failure classifier metadata, blocked metadata persistence, manual retry CLI,
+  auto-recovery config/status, and daemon recovery slices now implemented
+  through typed runtime JSON contracts, runner normalization coverage, serial
+  runtime persistence tests, queue-store requeue primitive coverage, focused
+  `AutoRecoveryConfig` daemon startup/config tests, config-boundary tests,
+  `config show` parity coverage in `tests/parity_cli.rs`, daemon
+  auto-requeue diagnostics/event coverage, and same-cycle dependent dispatch
+  suppression; docs/version and final release evidence are reconciled in
+  `tests/fixtures/cli_parity/auto_port_v0_18_4_release_parity_evidence.json`
 - Recon invalid-handoff hardening coverage for handoff-specific emitted-id
   validation, generated task/spec id checks before import, durable
   `recon_handoff_invalid` runtime error evidence, active-probe blocking, and

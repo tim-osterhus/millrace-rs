@@ -16,7 +16,9 @@ use crate::{
 use super::{
     RequestKind, RouterDecision, RuntimeMonitorSink, RuntimeStartupSession,
     RuntimeTickDispatchOutcome, RuntimeTickError, RuntimeTickOptions, RuntimeTickOutcomeKind,
-    RuntimeTickResult, StageRunRequest, runtime_monitor_events_from_jsonl,
+    RuntimeTickResult, StageRunRequest,
+    blocked_recovery::attempt_stranded_dependency_auto_recovery,
+    runtime_monitor_events_from_jsonl,
     tick::{
         self, activate_completion_stage_if_ready, activate_next_claim_for_plane,
         apply_stage_worker_raw_result, build_stage_run_request_for_plane,
@@ -388,6 +390,23 @@ where
             && self.completed_workers.is_empty()
             && session.snapshot.active_runs_by_plane.is_empty()
         {
+            if attempt_stranded_dependency_auto_recovery(
+                &session.paths,
+                &session.config.auto_recovery,
+                &mut session.snapshot,
+                &now,
+            )?
+            .is_some()
+            {
+                return Ok(RuntimeDaemonCycleOutcome {
+                    kind: RuntimeTickOutcomeKind::Recovered,
+                    reason: "blocked_dependency_auto_requeued".to_owned(),
+                    completions,
+                    dispatched_count,
+                    snapshot: session.snapshot.clone(),
+                    event_log_path: Some(session.paths.logs_dir.join("runtime_events.jsonl")),
+                });
+            }
             let event_log_path = record_runtime_idle_cycle(session, &now)?;
             return Ok(RuntimeDaemonCycleOutcome {
                 kind: RuntimeTickOutcomeKind::NoWork,

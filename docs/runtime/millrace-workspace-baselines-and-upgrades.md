@@ -41,3 +41,13 @@ release evidence. It deliberately excludes live runtime workspace artifacts
 such as `millrace-agents/**`, `ideas/**`, and `target/**`, plus generated
 Python cache artifacts under `__pycache__/` and `*.pyc`/`*.pyo` paths, from the
 crate package include rules.
+
+## v0.18.4 Package Evidence
+
+Rust `0.3.4` package evidence covers runner failure classifier metadata,
+blocked-task diagnostics, audited `queue retry-blocked` behavior,
+`[auto_recovery]` config/status handling, daemon blocked-dependency recovery,
+runtime docs, parity fixtures, and release evidence. It preserves the same
+package boundary: live runtime workspace artifacts, the optional Python
+`packages/millrace-web` package, `target/**`, and generated Python cache
+artifacts remain excluded from the crate package include rules.

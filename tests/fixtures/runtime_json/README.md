@@ -43,6 +43,26 @@ The v0.18.3 source-metadata slice is now backed by `stage_result_*` fixtures
 that preserve active work item kind, id, and active path metadata while keeping
 older optional metadata omissions backward-compatible, and the runtime lifecycle
 slice is backed by serial and daemon Planner-to-Librarian tests.
+`auto_port_v0_18_4_runtime_contract_scout.json` pins the Python
+`v0.18.3..v0.18.4` runner failure metadata, blocked item metadata, audited
+blocked-task retry, `auto_recovery` config/status, and daemon blocked-dependency
+auto-recovery source references plus the expected Rust contract/test targets.
+It is target-facing guardrail evidence for the blocked recovery auto-port
+lineage and does not require live Python execution, network, credentials,
+Codex, Pi, a web server, or release upload.
+The runner failure metadata and blocked item metadata portions are now backed by
+typed Rust runtime JSON contracts, runner normalization tests for retryable
+timeout/provider/rate limit/network classes plus non-auto-retryable local, auth,
+terminal-contract, and unknown transport failures, serial runtime persistence
+tests for `millrace-agents/diagnostics/blocked/task-<TASK_ID>.json`, and
+queue-store requeue primitive coverage. The manual retry CLI is now backed by
+the shared `retry_blocked_task` result contract and CLI parity tests. The
+auto-recovery config/status target is now backed by typed Rust startup config
+coverage for defaults, explicit values, invalid values, daemon-session policy
+projection, next-tick boundary classification, and `config show` parity output;
+daemon recovery is backed by typed diagnostic contracts and runtime daemon tests
+for successful auto-requeue, review-required skips, runtime/monitor events, and
+same-cycle dependent dispatch suppression.
 `mailbox_add_probe_payload.json` and `recon_packet_to_execution.json` pin the
 implemented v0.18.1 add-probe mailbox payload and Recon packet contract
 fixtures used by the Rust runtime JSON contract tests.
@@ -58,6 +78,18 @@ uses the v0.18.3 scout and stage-result fixtures as package-readiness proof
 that Librarian trigger metadata, active work item source metadata, and
 Librarian complete/no-op runtime JSON evidence are shipped with the crate test
 evidence.
+The Rust `0.3.4` release evidence in
+`tests/fixtures/cli_parity/auto_port_v0_18_4_release_parity_evidence.json`
+uses the v0.18.4 runtime scout as package-readiness proof that failure
+classification, blocked metadata persistence, manual queue retry behavior,
+auto-recovery config/status, and daemon blocked-dependency auto-recovery
+evidence are shipped with the crate test evidence.
+The Rust `0.3.4` guardrail scout in
+`tests/fixtures/cli_parity/auto_port_v0_18_4_parity_evidence.json` uses the
+v0.18.4 runtime scout as package-readiness proof that failure classification and
+blocked metadata persistence are implemented, that manual queue retry behavior
+is covered, that auto-recovery config/status evidence is covered, and that
+daemon blocked-dependency auto-recovery evidence is covered.
 
 Regenerate them from the repository root with:
 

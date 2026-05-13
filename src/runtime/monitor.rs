@@ -277,6 +277,19 @@ impl BasicMonitorRenderer {
             "usage_governance_reconciled" => {
                 vec![render_usage_governance_reconciled(&event.payload)]
             }
+            "blocked_dependency_auto_requeued" => {
+                vec![render_blocked_dependency_auto_requeued(&event.payload)]
+            }
+            "blocked_dependency_auto_requeue_skipped" => {
+                vec![render_blocked_dependency_auto_requeue_skipped(
+                    &event.payload,
+                )]
+            }
+            "blocked_lineage_requires_operator_review" => {
+                vec![render_blocked_lineage_requires_operator_review(
+                    &event.payload,
+                )]
+            }
             _ => Vec::new(),
         };
 
@@ -559,6 +572,38 @@ fn render_usage_governance_reconciled(payload: &Map<String, Value>) -> String {
         "governance reconciled repaired={} ledger_entries={}",
         number_string(payload.get("repaired_count")),
         number_string(payload.get("ledger_entry_count"))
+    )
+}
+
+fn render_blocked_dependency_auto_requeued(payload: &Map<String, Value>) -> String {
+    format!(
+        "blocked dependency auto-requeued task={} dependents={} failure_class={} attempt={} diagnostics={}",
+        string(payload.get("task_id")),
+        string(payload.get("queued_dependents")),
+        string(payload.get("failure_class")),
+        number_string(payload.get("attempt_number")),
+        string(payload.get("diagnostics_path"))
+    )
+}
+
+fn render_blocked_dependency_auto_requeue_skipped(payload: &Map<String, Value>) -> String {
+    format!(
+        "blocked dependency review task={} dependents={} reason={} failure_class={} diagnostics={}",
+        string(payload.get("task_id")),
+        string(payload.get("queued_dependents")),
+        string(payload.get("reason")),
+        string_or_default(payload.get("failure_class"), "none"),
+        string(payload.get("diagnostics_path"))
+    )
+}
+
+fn render_blocked_lineage_requires_operator_review(payload: &Map<String, Value>) -> String {
+    format!(
+        "blocked lineage review task={} dependents={} reason={} diagnostics={}",
+        string(payload.get("task_id")),
+        string(payload.get("queued_dependents")),
+        string(payload.get("reason")),
+        string(payload.get("diagnostics_path"))
     )
 }
 

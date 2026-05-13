@@ -1,8 +1,8 @@
 mod support;
 
-use std::fs;
 use std::path::Path;
 use std::process;
+use std::{collections::BTreeSet, fs};
 
 use serde_json::Value;
 use tempfile::TempDir;
@@ -23,6 +23,7 @@ use millrace_ai::workspace::{
     find_duplicate_task_lifecycle_ids, initialize_workspace, load_closure_target_state,
     repair_closure_lineage, save_closure_target_state,
 };
+use support::parity::read_json_fixture;
 
 const NOW: &str = "2026-04-15T00:00:00Z";
 
@@ -166,6 +167,139 @@ fn read_json_lines(path: &Path) -> Vec<Value> {
         .filter(|line| !line.trim().is_empty())
         .map(|line| serde_json::from_str(line).unwrap())
         .collect()
+}
+
+#[test]
+fn workspace_queue_v0_18_4_guardrail_fixture_requires_blocked_retry_audit_surface() {
+    let fixture = read_json_fixture("cli_parity/auto_port_v0_18_4_parity_evidence.json");
+    assert_eq!(fixture["kind"], "auto_port_v0_18_4_parity_evidence");
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.18.4");
+
+    let mappings = fixture["changed_path_mappings"]
+        .as_array()
+        .expect("changed path mappings are present");
+    for source in [
+        "src/millrace_ai/workspace/queue_store.py",
+        "src/millrace_ai/workspace/queue_transitions.py",
+        "tests/workspace/test_queue_store.py",
+    ] {
+        assert!(
+            mappings.iter().any(|mapping| {
+                mapping["python_path"].as_str() == Some(source)
+                    && mapping["surface"].as_str() == Some("workspace_queue_blocked_requeue")
+            }),
+            "missing v0.18.4 workspace queue blocked-requeue mapping for {source}"
+        );
+    }
+
+    let queue_retry = &fixture["queue_retry_behavior"];
+    assert_eq!(
+        queue_retry["queue_log_path_template"],
+        "millrace-agents/tasks/queue/<TASK_ID>.requeue.jsonl"
+    );
+    let audit_fields: BTreeSet<_> = queue_retry["audit_fields"]
+        .as_array()
+        .expect("queue retry audit fields are present")
+        .iter()
+        .map(|value| value.as_str().expect("audit field"))
+        .collect();
+    assert_eq!(
+        audit_fields,
+        BTreeSet::from([
+            "at",
+            "actor",
+            "attempt_number",
+            "auto",
+            "destination_state",
+            "failure_class",
+            "kind",
+            "reason",
+            "source_state",
+        ])
+    );
+
+    let required_guards: BTreeSet<_> = queue_retry["required_guards"]
+        .as_array()
+        .expect("queue retry guards are present")
+        .iter()
+        .map(|value| value.as_str().expect("queue retry guard"))
+        .collect();
+    for guard in [
+        "safe work item id parsing",
+        "live daemon lock refusal",
+        "root spec guard",
+        "retryability check",
+        "retry budget check",
+        "force override",
+        "queue depth snapshot refresh",
+    ] {
+        assert!(
+            required_guards.contains(guard),
+            "missing v0.18.4 blocked retry queue guard {guard}"
+        );
+    }
+
+    let blocked = &fixture["blocked_metadata_contract"];
+    for field in [
+        "task_id",
+        "source_path",
+        "destination_path",
+        "source_state",
+        "destination_state",
+        "actor",
+        "auto",
+        "reason",
+        "failure_class",
+        "attempt_number",
+        "diagnostics_path",
+    ] {
+        assert!(
+            blocked["result_fields"]
+                .as_array()
+                .expect("blocked requeue result fields are present")
+                .iter()
+                .any(|value| value.as_str() == Some(field)),
+            "missing v0.18.4 blocked requeue result field {field}"
+        );
+    }
+}
+
+#[test]
+fn requeue_blocked_task_moves_task_to_queue_and_writes_retry_audit_log() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+    let store = QueueStore::from_paths(paths.clone());
+    store
+        .enqueue_task(&task_document("task-retry", NOW))
+        .unwrap();
+    store.claim_next_execution_task(None).unwrap().unwrap();
+    store.mark_task_blocked("task-retry").unwrap();
+
+    let destination = store
+        .requeue_blocked_task(
+            "task-retry",
+            " retry after network_unavailable ",
+            "operator",
+            false,
+            Some("network_unavailable"),
+            Some(1),
+        )
+        .unwrap();
+
+    assert_eq!(destination, paths.tasks_queue_dir.join("task-retry.md"));
+    assert!(destination.is_file());
+    assert!(!paths.tasks_blocked_dir.join("task-retry.md").exists());
+    let audit = read_json_lines(&paths.tasks_queue_dir.join("task-retry.requeue.jsonl"));
+    assert_eq!(audit.len(), 1);
+    assert!(!audit[0]["at"].as_str().unwrap().is_empty());
+    assert_eq!(audit[0]["actor"], "operator");
+    assert_eq!(audit[0]["attempt_number"], 1);
+    assert_eq!(audit[0]["auto"], false);
+    assert_eq!(audit[0]["destination_state"], "queue");
+    assert_eq!(audit[0]["failure_class"], "network_unavailable");
+    assert_eq!(audit[0]["kind"], "task");
+    assert_eq!(audit[0]["reason"], "retry after network_unavailable");
+    assert_eq!(audit[0]["source_state"], "blocked");
 }
 
 fn closure_target_state(root_spec_id: &str, root_idea_id: &str) -> ClosureTargetState {

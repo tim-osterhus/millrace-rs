@@ -6,12 +6,15 @@ use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
 use crate::contracts::{
-    ResultClass, StageResultEnvelope, TerminalResult, WorkItemKind, blocked_terminal_for_plane,
-    terminal_result_for_plane,
+    BlockedOrigin, FailureClassifierCode, FailureScope, ResultClass, RunnerFailureClass,
+    RunnerFailureMetadata, StageResultEnvelope, TerminalResult, WorkItemKind,
+    blocked_terminal_for_plane, terminal_result_for_plane,
 };
 use crate::runtime::{RequestKind, StageRunRequest};
 
 use super::{RunnerError, RunnerExitKind, RunnerRawResult, RunnerResult};
+
+const MAX_CLASSIFIER_TEXT_CHARS: usize = 16_000;
 
 /// Normalizes one raw runner output into a deterministic stage result envelope.
 pub fn normalize_stage_result(
@@ -25,36 +28,44 @@ pub fn normalize_stage_result(
         return failure_envelope(
             request,
             raw_result,
-            "runner_transport_failure",
+            RunnerFailureClass::RunnerTransportFailure,
             identity_notes,
             None,
             Vec::new(),
+            None,
         );
     }
 
-    if let Some(failure_class) = failure_class_for_exit_kind(raw_result.exit_kind) {
+    if raw_result.exit_kind != RunnerExitKind::Completed
+        && let Some(classification) = classify_raw_exit_failure(raw_result)
+    {
         return failure_envelope(
             request,
             raw_result,
-            failure_class,
+            classification.failure_class,
             vec![format!(
                 "runner exited with {}",
                 raw_result.exit_kind.as_str()
             )],
             None,
             Vec::new(),
+            Some(classification),
         );
     }
     if raw_result.exit_kind == RunnerExitKind::Completed
         && raw_result.exit_code.is_some_and(|code| code != 0)
     {
+        let classification = classify_raw_exit_failure(raw_result).unwrap_or_else(|| {
+            classification_for_failure_class(RunnerFailureClass::RunnerTransportFailure)
+        });
         return failure_envelope(
             request,
             raw_result,
-            "runner_transport_failure",
+            classification.failure_class,
             vec!["runner completed with non-zero exit code".to_owned()],
             None,
             Vec::new(),
+            Some(classification),
         );
     }
 
@@ -65,11 +76,11 @@ pub fn normalize_stage_result(
             raw_result,
             extraction
                 .failure_class
-                .as_deref()
-                .unwrap_or("illegal_terminal_result"),
+                .unwrap_or(RunnerFailureClass::IllegalTerminalResult),
             extraction.notes,
             extraction.detected_marker,
             extraction.artifact_paths,
+            None,
         );
     }
 
@@ -141,7 +152,7 @@ struct TerminalExtraction {
     result_class: Option<ResultClass>,
     detected_marker: Option<String>,
     artifact_paths: Vec<String>,
-    failure_class: Option<String>,
+    failure_class: Option<RunnerFailureClass>,
     notes: Vec<String>,
 }
 
@@ -183,7 +194,7 @@ fn extract_from_structured_result_file(
             result_class: None,
             detected_marker: None,
             artifact_paths: Vec::new(),
-            failure_class: Some("missing_terminal_result".to_owned()),
+            failure_class: Some(RunnerFailureClass::MissingTerminalResult),
             notes: vec![format!(
                 "structured terminal result file is missing: {}",
                 terminal_result_path.display()
@@ -199,7 +210,7 @@ fn extract_from_structured_result_file(
                 result_class: None,
                 detected_marker: None,
                 artifact_paths: Vec::new(),
-                failure_class: Some("illegal_terminal_result".to_owned()),
+                failure_class: Some(RunnerFailureClass::IllegalTerminalResult),
                 notes: vec![format!(
                     "failed to parse structured terminal result: {error}"
                 )],
@@ -217,7 +228,7 @@ fn extract_from_structured_result_file(
                 result_class: None,
                 detected_marker: None,
                 artifact_paths: Vec::new(),
-                failure_class: Some("illegal_terminal_result".to_owned()),
+                failure_class: Some(RunnerFailureClass::IllegalTerminalResult),
                 notes: vec![format!(
                     "structured terminal result payload is invalid: {error}"
                 )],
@@ -235,7 +246,7 @@ fn extract_from_structured_result_file(
             result_class: None,
             detected_marker: None,
             artifact_paths: payload.summary_artifact_paths,
-            failure_class: Some("illegal_terminal_result".to_owned()),
+            failure_class: Some(RunnerFailureClass::IllegalTerminalResult),
             notes: vec![
                 "structured terminal result stage does not match run request stage".to_owned(),
             ],
@@ -250,7 +261,7 @@ fn extract_from_structured_result_file(
                 result_class: None,
                 detected_marker: None,
                 artifact_paths: payload.summary_artifact_paths,
-                failure_class: Some("illegal_terminal_result".to_owned()),
+                failure_class: Some(RunnerFailureClass::IllegalTerminalResult),
                 notes: vec![format!(
                     "terminal result {:?} is illegal for request node {}",
                     payload.terminal_result, request.node_id
@@ -268,7 +279,7 @@ fn extract_from_structured_result_file(
                     result_class: None,
                     detected_marker: None,
                     artifact_paths: payload.summary_artifact_paths,
-                    failure_class: Some("illegal_terminal_result".to_owned()),
+                    failure_class: Some(RunnerFailureClass::IllegalTerminalResult),
                     notes: vec![
                         "structured terminal result class is incompatible with terminal_result"
                             .to_owned(),
@@ -289,7 +300,7 @@ fn extract_from_structured_result_file(
             result_class: None,
             detected_marker: None,
             artifact_paths: payload.summary_artifact_paths,
-            failure_class: Some("missing_required_artifact".to_owned()),
+            failure_class: Some(RunnerFailureClass::MissingRequiredArtifact),
             notes: vec![format!(
                 "missing required summary artifacts: {}",
                 missing_artifacts.join(", ")
@@ -317,7 +328,7 @@ fn extract_from_stdout_tokens(
             result_class: None,
             detected_marker: None,
             artifact_paths: Vec::new(),
-            failure_class: Some("missing_terminal_result".to_owned()),
+            failure_class: Some(RunnerFailureClass::MissingTerminalResult),
             notes: vec![
                 "stdout path is missing and no structured terminal result was provided".to_owned(),
             ],
@@ -331,7 +342,7 @@ fn extract_from_stdout_tokens(
             result_class: None,
             detected_marker: None,
             artifact_paths: Vec::new(),
-            failure_class: Some("missing_terminal_result".to_owned()),
+            failure_class: Some(RunnerFailureClass::MissingTerminalResult),
             notes: vec![format!("stdout file is missing: {stdout_path}")],
         };
     }
@@ -344,7 +355,7 @@ fn extract_from_stdout_tokens(
                 result_class: None,
                 detected_marker: None,
                 artifact_paths: Vec::new(),
-                failure_class: Some("runner_transport_failure".to_owned()),
+                failure_class: Some(RunnerFailureClass::RunnerTransportFailure),
                 notes: vec![format!("failed reading stdout file: {error}")],
             };
         }
@@ -362,7 +373,7 @@ fn extract_from_stdout_tokens(
             result_class: None,
             detected_marker: None,
             artifact_paths: Vec::new(),
-            failure_class: Some("missing_terminal_result".to_owned()),
+            failure_class: Some(RunnerFailureClass::MissingTerminalResult),
             notes: vec!["no terminal token found in stdout".to_owned()],
         };
     }
@@ -374,7 +385,7 @@ fn extract_from_stdout_tokens(
             result_class: None,
             detected_marker: tokens.last().map(|token| format!("### {token}")),
             artifact_paths: Vec::new(),
-            failure_class: Some("conflicting_terminal_results".to_owned()),
+            failure_class: Some(RunnerFailureClass::ConflictingTerminalResults),
             notes: vec!["stdout contains conflicting terminal tokens".to_owned()],
         };
     }
@@ -388,7 +399,7 @@ fn extract_from_stdout_tokens(
                 result_class: None,
                 detected_marker: Some(format!("### {final_token}")),
                 artifact_paths: Vec::new(),
-                failure_class: Some("illegal_terminal_result".to_owned()),
+                failure_class: Some(RunnerFailureClass::IllegalTerminalResult),
                 notes: vec![format!(
                     "terminal token {:?} is illegal for request node {}",
                     final_token, request.node_id
@@ -425,14 +436,251 @@ fn terminal_token_from_line(line: &str) -> Option<&str> {
     Some(token)
 }
 
-fn failure_class_for_exit_kind(exit_kind: RunnerExitKind) -> Option<&'static str> {
-    match exit_kind {
-        RunnerExitKind::Completed => None,
-        RunnerExitKind::Timeout => Some("runner_timeout"),
-        RunnerExitKind::ProviderError => Some("provider_failure"),
-        RunnerExitKind::RunnerError | RunnerExitKind::Interrupted => {
-            Some("runner_transport_failure")
+fn classify_raw_exit_failure(raw_result: &RunnerRawResult) -> Option<RunnerFailureMetadata> {
+    if raw_result.exit_kind == RunnerExitKind::Completed
+        && raw_result.exit_code.is_none_or(|code| code == 0)
+    {
+        return None;
+    }
+    if raw_result.exit_kind == RunnerExitKind::Timeout {
+        return Some(RunnerFailureMetadata::new(
+            RunnerFailureClass::RunnerTimeout,
+            BlockedOrigin::RunnerFailure,
+            FailureScope::Environment,
+            true,
+            FailureClassifierCode::ExitTimeout,
+        ));
+    }
+
+    let evidence = raw_failure_evidence(raw_result);
+    if let Some(classification) = classify_failure_evidence(&evidence, BlockedOrigin::RunnerFailure)
+    {
+        return Some(classification);
+    }
+    if raw_result.exit_kind == RunnerExitKind::ProviderError {
+        return Some(RunnerFailureMetadata::new(
+            RunnerFailureClass::ProviderUnavailable,
+            BlockedOrigin::RunnerFailure,
+            FailureScope::Provider,
+            true,
+            FailureClassifierCode::ProviderDefaultUnavailable,
+        ));
+    }
+    Some(classification_for_failure_class(
+        RunnerFailureClass::RunnerTransportFailure,
+    ))
+}
+
+fn raw_failure_evidence(raw_result: &RunnerRawResult) -> String {
+    let mut parts = Vec::new();
+    for raw_path in [&raw_result.stderr_path, &raw_result.stdout_path]
+        .into_iter()
+        .flatten()
+    {
+        let path = Path::new(raw_path);
+        if !path.is_file() {
+            continue;
         }
+        if let Ok(bytes) = fs::read(path) {
+            parts.push(String::from_utf8_lossy(&bytes).into_owned());
+        }
+    }
+    let evidence = parts.join("\n").to_lowercase();
+    let char_count = evidence.chars().count();
+    if char_count <= MAX_CLASSIFIER_TEXT_CHARS {
+        evidence
+    } else {
+        evidence
+            .chars()
+            .skip(char_count - MAX_CLASSIFIER_TEXT_CHARS)
+            .collect()
+    }
+}
+
+fn classify_failure_evidence(
+    evidence: &str,
+    blocked_origin: BlockedOrigin,
+) -> Option<RunnerFailureMetadata> {
+    if evidence.trim().is_empty() {
+        return None;
+    }
+
+    if contains_any(
+        evidence,
+        &[
+            "runner binary not found",
+            "executable missing",
+            "no such file or directory",
+            "command not found",
+        ],
+    ) {
+        return Some(RunnerFailureMetadata::new(
+            RunnerFailureClass::RunnerBinaryMissing,
+            blocked_origin,
+            FailureScope::LocalConfiguration,
+            false,
+            FailureClassifierCode::RunnerBinaryMissing,
+        ));
+    }
+    if contains_any(
+        evidence,
+        &[
+            "unauthorized",
+            "authentication",
+            "not authenticated",
+            "login required",
+            "invalid api key",
+            "api key",
+            "401",
+        ],
+    ) {
+        return Some(RunnerFailureMetadata::new(
+            RunnerFailureClass::AuthMissingOrInvalid,
+            blocked_origin,
+            FailureScope::LocalConfiguration,
+            false,
+            FailureClassifierCode::AuthMissingOrInvalid,
+        ));
+    }
+    if contains_any(
+        evidence,
+        &["rate limit", "rate_limit", "too many requests", "429"],
+    ) {
+        return Some(RunnerFailureMetadata::new(
+            RunnerFailureClass::ProviderRateLimited,
+            blocked_origin,
+            FailureScope::Provider,
+            true,
+            FailureClassifierCode::ProviderRateLimited,
+        ));
+    }
+    if contains_any(
+        evidence,
+        &[
+            "could not resolve",
+            "temporary failure in name resolution",
+            "dns",
+            "network is unreachable",
+            "connection refused",
+            "connection reset",
+            "no route to host",
+            "offline",
+            "internet",
+        ],
+    ) {
+        return Some(RunnerFailureMetadata::new(
+            RunnerFailureClass::NetworkUnavailable,
+            blocked_origin,
+            FailureScope::Environment,
+            true,
+            FailureClassifierCode::NetworkUnavailable,
+        ));
+    }
+    if contains_any(
+        evidence,
+        &[
+            "service unavailable",
+            "temporarily unavailable",
+            "provider unavailable",
+            "provider overloaded",
+            "overloaded",
+            "503",
+        ],
+    ) {
+        return Some(RunnerFailureMetadata::new(
+            RunnerFailureClass::ProviderUnavailable,
+            blocked_origin,
+            FailureScope::Provider,
+            true,
+            FailureClassifierCode::ProviderUnavailable,
+        ));
+    }
+    None
+}
+
+fn contains_any(text: &str, needles: &[&str]) -> bool {
+    needles.iter().any(|needle| text.contains(needle))
+}
+
+fn classification_for_failure_class(failure_class: RunnerFailureClass) -> RunnerFailureMetadata {
+    match failure_class {
+        RunnerFailureClass::RunnerTimeout => RunnerFailureMetadata::new(
+            failure_class,
+            BlockedOrigin::RunnerFailure,
+            FailureScope::Environment,
+            true,
+            FailureClassifierCode::RunnerTimeout,
+        ),
+        RunnerFailureClass::NetworkUnavailable => RunnerFailureMetadata::new(
+            failure_class,
+            BlockedOrigin::RunnerFailure,
+            FailureScope::Environment,
+            true,
+            FailureClassifierCode::NetworkUnavailable,
+        ),
+        RunnerFailureClass::ProviderUnavailable => RunnerFailureMetadata::new(
+            failure_class,
+            BlockedOrigin::RunnerFailure,
+            FailureScope::Provider,
+            true,
+            FailureClassifierCode::ProviderUnavailable,
+        ),
+        RunnerFailureClass::ProviderRateLimited => RunnerFailureMetadata::new(
+            failure_class,
+            BlockedOrigin::RunnerFailure,
+            FailureScope::Provider,
+            true,
+            FailureClassifierCode::ProviderRateLimited,
+        ),
+        RunnerFailureClass::RunnerBinaryMissing => RunnerFailureMetadata::new(
+            failure_class,
+            BlockedOrigin::RunnerFailure,
+            FailureScope::LocalConfiguration,
+            false,
+            FailureClassifierCode::RunnerBinaryMissing,
+        ),
+        RunnerFailureClass::AuthMissingOrInvalid => RunnerFailureMetadata::new(
+            failure_class,
+            BlockedOrigin::RunnerFailure,
+            FailureScope::LocalConfiguration,
+            false,
+            FailureClassifierCode::AuthMissingOrInvalid,
+        ),
+        RunnerFailureClass::MissingTerminalResult => RunnerFailureMetadata::new(
+            failure_class,
+            BlockedOrigin::StageTerminal,
+            FailureScope::Contract,
+            false,
+            FailureClassifierCode::MissingTerminalResult,
+        ),
+        RunnerFailureClass::IllegalTerminalResult => RunnerFailureMetadata::new(
+            failure_class,
+            BlockedOrigin::StageTerminal,
+            FailureScope::Contract,
+            false,
+            FailureClassifierCode::IllegalTerminalResult,
+        ),
+        RunnerFailureClass::ConflictingTerminalResults => RunnerFailureMetadata::new(
+            failure_class,
+            BlockedOrigin::StageTerminal,
+            FailureScope::Contract,
+            false,
+            FailureClassifierCode::ConflictingTerminalResults,
+        ),
+        RunnerFailureClass::MissingRequiredArtifact => RunnerFailureMetadata::new(
+            failure_class,
+            BlockedOrigin::StageTerminal,
+            FailureScope::Contract,
+            false,
+            FailureClassifierCode::MissingRequiredArtifact,
+        ),
+        RunnerFailureClass::RunnerTransportFailure => RunnerFailureMetadata::new(
+            failure_class,
+            BlockedOrigin::RunnerFailure,
+            FailureScope::Unknown,
+            false,
+            FailureClassifierCode::UnclassifiedFailure,
+        ),
     }
 }
 
@@ -453,10 +701,11 @@ fn identity_mismatch_notes(request: &StageRunRequest, raw_result: &RunnerRawResu
 fn failure_envelope(
     request: &StageRunRequest,
     raw_result: &RunnerRawResult,
-    failure_class: &str,
+    failure_class: RunnerFailureClass,
     notes: Vec<String>,
     detected_marker: Option<String>,
     artifact_paths: Vec<String>,
+    classification: Option<RunnerFailureMetadata>,
 ) -> RunnerResult<StageResultEnvelope> {
     let blocked_terminal = blocked_terminal_for_plane(request.plane);
     let (detected_marker, raw_detected_marker) =
@@ -464,6 +713,9 @@ fn failure_envelope(
     let report_artifact = resolved_report_artifact(request);
     let (work_item_kind, work_item_id) = request_result_identity(request)?;
     let mut metadata = request_metadata(request, "failure", Some(failure_class), false, raw_result);
+    classification
+        .unwrap_or_else(|| classification_for_failure_class(failure_class))
+        .insert_into_map(&mut metadata);
     if let Some(raw_detected_marker) = raw_detected_marker {
         metadata.insert("raw_detected_marker".to_owned(), json!(raw_detected_marker));
     }
@@ -666,7 +918,7 @@ fn resolved_thinking_level(
 fn request_metadata(
     request: &StageRunRequest,
     normalization_source: &str,
-    failure_class: Option<&str>,
+    failure_class: Option<RunnerFailureClass>,
     valid_terminal_result: bool,
     raw_result: &RunnerRawResult,
 ) -> Map<String, Value> {
@@ -726,7 +978,10 @@ fn request_metadata(
         "normalization_source".to_owned(),
         json!(normalization_source),
     );
-    metadata.insert("failure_class".to_owned(), json!(failure_class));
+    metadata.insert(
+        "failure_class".to_owned(),
+        json!(failure_class.map(|failure_class| failure_class.as_str())),
+    );
     metadata.insert(
         "valid_terminal_result".to_owned(),
         json!(valid_terminal_result),

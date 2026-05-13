@@ -1,14 +1,16 @@
-use std::{cell::RefCell, fs, io, path::Path, process, rc::Rc};
+mod support;
+
+use std::{cell::RefCell, collections::BTreeSet, fs, io, path::Path, process, rc::Rc};
 
 use serde_json::{Map, Value, json};
 use tempfile::TempDir;
 
 use millrace_ai::contracts::{
-    ActiveRunRequestKind, ActiveRunState, LearningRequestAction, LearningRequestDocument,
-    LearningStageName, LearningTerminalResult, MailboxCommand, MailboxCommandEnvelope, Plane,
-    ProbeDocument, ReloadOutcome, ResultClass, RunTraceGraph, RuntimeJsonContract, RuntimeMode,
-    SpecDocument, SpecSourceType, StageName, TaskDocument, TerminalResult, Timestamp, TokenUsage,
-    WatcherMode, WorkItemKind,
+    ActiveRunRequestKind, ActiveRunState, BlockedDependencyAutoRecoveryDiagnostic,
+    LearningRequestAction, LearningRequestDocument, LearningStageName, LearningTerminalResult,
+    MailboxCommand, MailboxCommandEnvelope, Plane, ProbeDocument, ReloadOutcome, ResultClass,
+    RunTraceGraph, RuntimeJsonContract, RuntimeMode, SpecDocument, SpecSourceType, StageName,
+    TaskDocument, TerminalResult, Timestamp, TokenUsage, WatcherMode, WorkItemKind,
 };
 use millrace_ai::work_documents::{
     parse_learning_request_document, parse_spec_document, render_task_document,
@@ -21,15 +23,17 @@ use millrace_ai::workspace::{
 };
 use millrace_ai::{
     BasicTerminalMonitor, CodexCliRunnerAdapter, FakeRunner, FakeRunnerConfig, FakeRunnerOutput,
-    FakeRunnerResult, PiRpcRunnerAdapter, RuntimeDaemonLoopExitReason, RuntimeDaemonLoopOptions,
-    RuntimeDaemonSleeper, RuntimeDaemonSupervisor, RuntimeMonitorEvent, RuntimeMonitorFanout,
-    RuntimeStartupError, RuntimeStartupOptions, RuntimeTickOptions, RuntimeTickResult,
-    apply_stage_worker_outcome, load_runtime_startup_config, run_runtime_daemon_loop,
+    FakeRunnerResult, PiRpcRunnerAdapter, RuntimeConfigApplyBoundary, RuntimeDaemonLoopExitReason,
+    RuntimeDaemonLoopOptions, RuntimeDaemonSleeper, RuntimeDaemonSupervisor, RuntimeMonitorEvent,
+    RuntimeMonitorFanout, RuntimeStartupError, RuntimeStartupOptions, RuntimeTickOptions,
+    RuntimeTickResult, apply_stage_worker_outcome, blocked_task_metadata_path,
+    load_runtime_startup_config, run_runtime_daemon_loop,
     run_runtime_daemon_supervisor_loop_with_sleeper,
     run_runtime_daemon_supervisor_loop_with_sleeper_and_monitor, run_serial_runtime_tick,
-    run_stage_worker, runtime_monitor_events_from_jsonl, startup_runtime_daemon,
-    startup_runtime_daemon_for_paths,
+    run_stage_worker, runtime_config_apply_boundary_for_field, runtime_monitor_events_from_jsonl,
+    startup_runtime_daemon, startup_runtime_daemon_for_paths,
 };
+use support::parity::read_json_fixture;
 
 const STARTUP_NOW: &str = "2026-04-29T02:10:00Z";
 
@@ -75,6 +79,48 @@ fn task_document(task_id: &str) -> TaskDocument {
         created_by: "tests".to_owned(),
         updated_at: None,
     }
+}
+
+fn task_document_with_dependency(task_id: &str, dependency_id: &str) -> TaskDocument {
+    let mut document = task_document(task_id);
+    document.depends_on = vec![dependency_id.to_owned()];
+    document
+}
+
+fn write_blocked_recovery_metadata(
+    paths: &millrace_ai::WorkspacePaths,
+    task_id: &str,
+    blocked_at: &str,
+    failure_class: &str,
+    auto_requeue_candidate: bool,
+) {
+    let path = blocked_task_metadata_path(paths, task_id);
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(
+        path,
+        serde_json::to_string_pretty(&json!({
+            "work_item_kind": "task",
+            "work_item_id": task_id,
+            "root_spec_id": "spec-daemon",
+            "root_idea_id": "idea-daemon",
+            "blocked_at": blocked_at,
+            "blocked_origin": "runner_failure",
+            "failure_class": failure_class,
+            "failure_scope": "environment",
+            "auto_requeue_candidate": auto_requeue_candidate,
+            "failure_classifier_code": null,
+            "source_run_id": "run-blocked",
+            "source_plane": "execution",
+            "source_stage": "builder",
+            "terminal_result": "BLOCKED",
+            "stage_result_path": "millrace-agents/runs/run-blocked/stage_results/request-blocked.json",
+            "stdout_path": null,
+            "stderr_path": null
+        }))
+        .unwrap()
+            + "\n",
+    )
+    .unwrap();
 }
 
 fn probe_document(probe_id: &str) -> ProbeDocument {
@@ -170,6 +216,91 @@ fn fixed_tick_options(run_id: &str, request_id: &str) -> RuntimeTickOptions {
     }
 }
 
+#[test]
+fn runtime_daemon_v0_18_4_guardrail_fixture_requires_auto_recovery_idle_cycle_surface() {
+    let fixture = read_json_fixture("runtime_json/auto_port_v0_18_4_runtime_contract_scout.json");
+    assert_eq!(fixture["kind"], "auto_port_v0_18_4_runtime_contract_scout");
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.18.4");
+    assert_eq!(fixture["rust_reference"]["planned_crate_version"], "0.3.4");
+
+    let auto_recovery = &fixture["auto_recovery_contract"];
+    assert_eq!(
+        auto_recovery["diagnostics_path"],
+        "millrace-agents/diagnostics/auto-recovery/<TIMESTAMP>-<TASK_ID>.json"
+    );
+    assert_eq!(
+        auto_recovery["diagnostics_kind"],
+        "blocked_dependency_auto_recovery"
+    );
+    assert_eq!(
+        auto_recovery["default_policy"]["cooldown_seconds"],
+        json!([300, 900, 3600])
+    );
+    assert_eq!(
+        auto_recovery["default_policy"]["max_auto_requeues_per_work_item"],
+        json!(3)
+    );
+
+    let eligible: BTreeSet<_> = auto_recovery["eligible_failure_classes"]
+        .as_array()
+        .expect("eligible failure classes are present")
+        .iter()
+        .map(|value| value.as_str().expect("eligible failure class"))
+        .collect();
+    assert_eq!(
+        eligible,
+        BTreeSet::from([
+            "network_unavailable",
+            "provider_unavailable",
+            "provider_rate_limited",
+            "runner_timeout",
+        ])
+    );
+
+    let skip_reasons: BTreeSet<_> = auto_recovery["skip_reasons"]
+        .as_array()
+        .expect("skip reasons are present")
+        .iter()
+        .map(|value| value.as_str().expect("skip reason"))
+        .collect();
+    for reason in [
+        "disabled",
+        "blocked_dependency_retry_disabled",
+        "paused",
+        "stop_requested",
+        "active_runs_present",
+        "no_queued_execution_dependents",
+        "blocked_dependency_not_retryable",
+        "retry_budget_exhausted",
+        "cooldown_active",
+        "missing_or_invalid_metadata",
+        "root_spec_mismatch",
+    ] {
+        assert!(
+            skip_reasons.contains(reason),
+            "missing v0.18.4 daemon auto-recovery skip reason {reason}"
+        );
+    }
+
+    let event_types: BTreeSet<_> = auto_recovery["event_types"]
+        .as_array()
+        .expect("auto recovery event types are present")
+        .iter()
+        .map(|value| value.as_str().expect("event type"))
+        .collect();
+    assert!(event_types.contains("blocked_dependency_auto_requeued"));
+    assert!(event_types.contains("blocked_dependency_auto_requeue_skipped"));
+
+    let monitor_events: BTreeSet<_> = auto_recovery["monitor_events"]
+        .as_array()
+        .expect("auto recovery monitor events are present")
+        .iter()
+        .map(|value| value.as_str().expect("monitor event"))
+        .collect();
+    assert!(monitor_events.contains("blocked_dependency_auto_requeued"));
+    assert!(monitor_events.contains("blocked_lineage_requires_operator_review"));
+}
+
 #[derive(Debug, Default)]
 struct RecordingSleeper {
     calls: Vec<f64>,
@@ -226,6 +357,309 @@ fn governance_supervisor_runner() -> FakeRunner {
         FakeRunnerResult::terminal_marker("### UPDATE_COMPLETE").with_token_usage(token_usage),
     );
     FakeRunner::new(config)
+}
+
+#[test]
+fn daemon_idle_cycle_auto_requeues_one_retryable_stranded_blocked_dependency() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    let queue = QueueStore::from_paths(paths.clone());
+    queue.enqueue_task(&task_document("task-06")).unwrap();
+    queue.claim_next_execution_task(None).unwrap().unwrap();
+    queue.mark_task_blocked("task-06").unwrap();
+    write_blocked_recovery_metadata(
+        &paths,
+        "task-06",
+        "2026-04-29T02:00:00Z",
+        "network_unavailable",
+        true,
+    );
+    queue
+        .enqueue_task(&task_document_with_dependency("task-07", "task-06"))
+        .unwrap();
+
+    let mut session =
+        startup_runtime_daemon_for_paths(&paths, daemon_options("supervisor-auto-recovery"))
+            .unwrap();
+    let mut supervisor = RuntimeDaemonSupervisor::new(supervisor_runner());
+
+    let outcome = supervisor
+        .run_cycle(&mut session, runtime_tick_options())
+        .unwrap();
+
+    assert_eq!(outcome.kind, millrace_ai::RuntimeTickOutcomeKind::Recovered);
+    assert_eq!(outcome.reason, "blocked_dependency_auto_requeued");
+    assert_eq!(outcome.dispatched_count, 0);
+    assert!(supervisor.active_worker_planes().is_empty());
+    assert!(session.snapshot.active_runs_by_plane.is_empty());
+    assert!(paths.tasks_queue_dir.join("task-06.md").is_file());
+    assert!(paths.tasks_queue_dir.join("task-07.md").is_file());
+    assert!(!paths.tasks_active_dir.join("task-07.md").exists());
+    assert!(!paths.tasks_blocked_dir.join("task-06.md").exists());
+    assert_eq!(session.snapshot.queue_depth_execution, 2);
+
+    let audit = read_json_lines(&paths.tasks_queue_dir.join("task-06.requeue.jsonl"));
+    assert_eq!(audit.len(), 1);
+    assert_eq!(audit[0]["actor"], "runtime-daemon");
+    assert_eq!(audit[0]["auto"], true);
+    assert_eq!(audit[0]["attempt_number"], 1);
+    assert_eq!(audit[0]["failure_class"], "network_unavailable");
+
+    let diagnostics_dir = paths.runtime_root.join("diagnostics").join("auto-recovery");
+    let diagnostics_path = diagnostics_dir.join("20260429T021500Z-task-06.json");
+    let diagnostic = BlockedDependencyAutoRecoveryDiagnostic::from_json_str(
+        &fs::read_to_string(&diagnostics_path).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(diagnostic.decision, "requeue");
+    assert_eq!(diagnostic.reason, "transient blocked dependency");
+    assert_eq!(diagnostic.blocked_task_id, "task-06");
+    assert_eq!(diagnostic.queued_dependent_ids, vec!["task-07".to_owned()]);
+    assert_eq!(diagnostic.root_spec_id.as_deref(), Some("spec-daemon"));
+    assert_eq!(diagnostic.auto_attempt_number, 1);
+    assert_eq!(diagnostic.pre_recovery_snapshot.queue_depth_execution, 1);
+
+    let events = runtime_events(&paths);
+    assert!(events.iter().any(|event| {
+        event["event_type"] == "blocked_task_requeued"
+            && event["data"]["task_id"] == "task-06"
+            && event["data"]["auto"] == true
+    }));
+    assert!(events.iter().any(|event| {
+        event["event_type"] == "blocked_dependency_auto_requeued"
+            && event["data"]["task_id"] == "task-06"
+            && event["data"]["queued_dependents"] == json!(["task-07"])
+            && event["data"]["diagnostics_path"]
+                == "millrace-agents/diagnostics/auto-recovery/20260429T021500Z-task-06.json"
+    }));
+    assert!(
+        events
+            .iter()
+            .all(|event| event["event_type"] != "runtime_tick_idle")
+    );
+
+    let raw_events = fs::read_to_string(paths.logs_dir.join("runtime_events.jsonl")).unwrap();
+    let monitor_events = runtime_monitor_events_from_jsonl(&raw_events).unwrap();
+    let mut output = Vec::new();
+    {
+        let mut monitor = BasicTerminalMonitor::new(&mut output);
+        for event in &monitor_events {
+            monitor.emit(event).unwrap();
+        }
+    }
+    let rendered = String::from_utf8(output).unwrap();
+    assert!(rendered.contains("blocked dependency auto-requeued task=task-06"));
+
+    let next = supervisor
+        .run_cycle(&mut session, runtime_tick_options())
+        .unwrap();
+    assert_eq!(
+        next.kind,
+        millrace_ai::RuntimeTickOutcomeKind::StageRequestReady
+    );
+    assert!(paths.tasks_active_dir.join("task-06.md").is_file());
+    assert!(paths.tasks_queue_dir.join("task-07.md").is_file());
+
+    session.close().unwrap();
+}
+
+#[test]
+fn daemon_idle_cycle_skips_blocked_dependency_auto_recovery_when_review_is_required() {
+    struct Case {
+        name: &'static str,
+        metadata: Option<(&'static str, &'static str, bool)>,
+        requeue_attempts: u64,
+        blocked_root_spec_id: &'static str,
+        expected_reason: &'static str,
+    }
+
+    let cases = [
+        Case {
+            name: "missing-metadata",
+            metadata: None,
+            requeue_attempts: 0,
+            blocked_root_spec_id: "spec-daemon",
+            expected_reason: "missing_or_invalid_metadata",
+        },
+        Case {
+            name: "non-retryable",
+            metadata: Some(("2026-04-29T02:00:00Z", "stage_declared_blocked", false)),
+            requeue_attempts: 0,
+            blocked_root_spec_id: "spec-daemon",
+            expected_reason: "blocked_dependency_not_retryable",
+        },
+        Case {
+            name: "budget-exhausted",
+            metadata: Some(("2026-04-29T02:00:00Z", "network_unavailable", true)),
+            requeue_attempts: 3,
+            blocked_root_spec_id: "spec-daemon",
+            expected_reason: "retry_budget_exhausted",
+        },
+        Case {
+            name: "cooldown-active",
+            metadata: Some(("2026-04-29T02:14:00Z", "network_unavailable", true)),
+            requeue_attempts: 0,
+            blocked_root_spec_id: "spec-daemon",
+            expected_reason: "cooldown_active",
+        },
+        Case {
+            name: "root-mismatch",
+            metadata: Some(("2026-04-29T02:00:00Z", "network_unavailable", true)),
+            requeue_attempts: 0,
+            blocked_root_spec_id: "spec-other",
+            expected_reason: "root_spec_mismatch",
+        },
+    ];
+
+    for case in cases {
+        let temp = TempDir::new().unwrap();
+        let paths = initialize_workspace(temp.path().join(case.name)).unwrap();
+        let queue = QueueStore::from_paths(paths.clone());
+        let mut blocked = task_document("task-06");
+        blocked.root_spec_id = Some(case.blocked_root_spec_id.to_owned());
+        blocked.spec_id = Some(case.blocked_root_spec_id.to_owned());
+        queue.enqueue_task(&blocked).unwrap();
+        queue.claim_next_execution_task(None).unwrap().unwrap();
+        queue.mark_task_blocked("task-06").unwrap();
+        if let Some((blocked_at, failure_class, auto_requeue_candidate)) = case.metadata {
+            write_blocked_recovery_metadata(
+                &paths,
+                "task-06",
+                blocked_at,
+                failure_class,
+                auto_requeue_candidate,
+            );
+        }
+        let mut dependent = task_document_with_dependency("task-07", "task-06");
+        dependent.root_spec_id = Some("spec-daemon".to_owned());
+        dependent.spec_id = Some("spec-daemon".to_owned());
+        queue.enqueue_task(&dependent).unwrap();
+        if case.requeue_attempts > 0 {
+            let lines = (0..case.requeue_attempts)
+                .map(|attempt| {
+                    json!({
+                        "at": STARTUP_NOW,
+                        "kind": "task",
+                        "source_state": "blocked",
+                        "destination_state": "queue",
+                        "actor": "runtime-daemon",
+                        "auto": true,
+                        "reason": "prior auto retry",
+                        "failure_class": "network_unavailable",
+                        "attempt_number": attempt + 1
+                    })
+                    .to_string()
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+                + "\n";
+            fs::write(paths.tasks_queue_dir.join("task-06.requeue.jsonl"), lines).unwrap();
+        }
+
+        let mut session =
+            startup_runtime_daemon_for_paths(&paths, daemon_options(case.name)).unwrap();
+        let mut supervisor = RuntimeDaemonSupervisor::new(supervisor_runner());
+        let outcome = supervisor
+            .run_cycle(&mut session, runtime_tick_options())
+            .unwrap();
+
+        assert_eq!(outcome.kind, millrace_ai::RuntimeTickOutcomeKind::NoWork);
+        assert!(paths.tasks_blocked_dir.join("task-06.md").is_file());
+        assert!(!paths.tasks_queue_dir.join("task-06.md").exists());
+
+        let events = runtime_events(&paths);
+        assert!(events.iter().any(|event| {
+            event["event_type"] == "blocked_dependency_auto_requeue_skipped"
+                && event["data"]["task_id"] == "task-06"
+                && event["data"]["reason"] == case.expected_reason
+        }));
+        assert!(events.iter().any(|event| {
+            event["event_type"] == "blocked_lineage_requires_operator_review"
+                && event["data"]["task_id"] == "task-06"
+                && event["data"]["reason"] == case.expected_reason
+        }));
+        assert!(
+            events
+                .iter()
+                .all(|event| event["event_type"] != "blocked_dependency_auto_requeued")
+        );
+        let diagnostics =
+            fs::read_dir(paths.runtime_root.join("diagnostics").join("auto-recovery"))
+                .unwrap()
+                .map(|entry| entry.unwrap().path())
+                .collect::<Vec<_>>();
+        assert_eq!(diagnostics.len(), 1);
+        let diagnostic = BlockedDependencyAutoRecoveryDiagnostic::from_json_str(
+            &fs::read_to_string(&diagnostics[0]).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(diagnostic.decision, "skip");
+        assert_eq!(diagnostic.reason, case.expected_reason);
+
+        let raw_events = fs::read_to_string(paths.logs_dir.join("runtime_events.jsonl")).unwrap();
+        let monitor_events = runtime_monitor_events_from_jsonl(&raw_events).unwrap();
+        assert!(monitor_events.iter().any(|event| {
+            event.event_type == "blocked_lineage_requires_operator_review"
+                && event.payload["reason"] == case.expected_reason
+        }));
+
+        session.close().unwrap();
+    }
+}
+
+#[test]
+fn daemon_idle_cycle_does_not_auto_recover_when_config_disables_the_gate() {
+    for (name, config) in [
+        (
+            "auto-recovery-disabled",
+            "[auto_recovery]\nenabled = false\nblocked_dependency_retry_enabled = true\n",
+        ),
+        (
+            "blocked-dependency-retry-disabled",
+            "[auto_recovery]\nenabled = true\nblocked_dependency_retry_enabled = false\n",
+        ),
+    ] {
+        let temp = TempDir::new().unwrap();
+        let paths = initialize_workspace(temp.path().join(name)).unwrap();
+        fs::write(&paths.runtime_config_file, config).unwrap();
+        let queue = QueueStore::from_paths(paths.clone());
+        queue.enqueue_task(&task_document("task-06")).unwrap();
+        queue.claim_next_execution_task(None).unwrap().unwrap();
+        queue.mark_task_blocked("task-06").unwrap();
+        write_blocked_recovery_metadata(
+            &paths,
+            "task-06",
+            "2026-04-29T02:00:00Z",
+            "network_unavailable",
+            true,
+        );
+        queue
+            .enqueue_task(&task_document_with_dependency("task-07", "task-06"))
+            .unwrap();
+
+        let mut session = startup_runtime_daemon_for_paths(&paths, daemon_options(name)).unwrap();
+        let mut supervisor = RuntimeDaemonSupervisor::new(supervisor_runner());
+        let outcome = supervisor
+            .run_cycle(&mut session, runtime_tick_options())
+            .unwrap();
+
+        assert_eq!(outcome.kind, millrace_ai::RuntimeTickOutcomeKind::NoWork);
+        assert!(paths.tasks_blocked_dir.join("task-06.md").is_file());
+        assert!(!paths.tasks_queue_dir.join("task-06.md").exists());
+        assert!(runtime_events(&paths).iter().all(|event| !matches!(
+            event["event_type"].as_str(),
+            Some("blocked_dependency_auto_requeued" | "blocked_dependency_auto_requeue_skipped")
+        )));
+        assert!(
+            !paths
+                .runtime_root
+                .join("diagnostics")
+                .join("auto-recovery")
+                .exists()
+        );
+
+        session.close().unwrap();
+    }
 }
 
 fn write_daemon_session_governance_config(paths: &millrace_ai::WorkspacePaths) {
@@ -419,6 +853,15 @@ fn runtime_events(paths: &millrace_ai::WorkspacePaths) -> Vec<Value> {
         return Vec::new();
     }
     fs::read_to_string(event_log)
+        .unwrap()
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect()
+}
+
+fn read_json_lines(path: &Path) -> Vec<Value> {
+    fs::read_to_string(path)
         .unwrap()
         .lines()
         .filter(|line| !line.trim().is_empty())
@@ -785,6 +1228,12 @@ fn daemon_startup_projects_mode_config_and_deterministic_watcher_state() {
             "watch_ideas_inbox = true",
             "watch_specs_queue = false",
             "",
+            "[auto_recovery]",
+            "enabled = true",
+            "blocked_dependency_retry_enabled = true",
+            "max_auto_requeues_per_work_item = 2",
+            "cooldown_seconds = [300, 900, 3600]",
+            "",
         ]
         .join("\n"),
     )
@@ -802,6 +1251,21 @@ fn daemon_startup_projects_mode_config_and_deterministic_watcher_state() {
     assert_eq!(session.config.watchers_debounce_ms, 750);
     assert!(session.config.watchers_watch_ideas_inbox);
     assert!(!session.config.watchers_watch_specs_queue);
+    assert!(session.config.auto_recovery.enabled);
+    assert!(
+        session
+            .config
+            .auto_recovery
+            .blocked_dependency_retry_enabled
+    );
+    assert_eq!(
+        session.config.auto_recovery.max_auto_requeues_per_work_item,
+        2
+    );
+    assert_eq!(
+        session.config.auto_recovery.cooldown_seconds,
+        vec![300, 900, 3600]
+    );
     assert_eq!(
         watcher_labels(&session.watcher_session),
         vec!["config", "tasks_queue", "ideas_inbox"]
@@ -854,6 +1318,33 @@ fn daemon_config_loading_uses_python_compatible_defaults_and_validation() {
     assert_eq!(defaults.watchers_debounce_ms, 250);
     assert!(defaults.watchers_watch_ideas_inbox);
     assert!(defaults.watchers_watch_specs_queue);
+    assert!(defaults.auto_recovery.enabled);
+    assert!(defaults.auto_recovery.blocked_dependency_retry_enabled);
+    assert_eq!(defaults.auto_recovery.max_auto_requeues_per_work_item, 3);
+    assert_eq!(
+        defaults.auto_recovery.cooldown_seconds,
+        vec![300, 900, 3600]
+    );
+
+    let explicit_auto_recovery = temp.path().join("auto-recovery.toml");
+    fs::write(
+        &explicit_auto_recovery,
+        [
+            "[auto_recovery]",
+            "enabled = false",
+            "blocked_dependency_retry_enabled = false",
+            "max_auto_requeues_per_work_item = 0",
+            "cooldown_seconds = [0, 300, 900]",
+            "",
+        ]
+        .join("\n"),
+    )
+    .unwrap();
+    let config = load_runtime_startup_config(&explicit_auto_recovery).unwrap();
+    assert!(!config.auto_recovery.enabled);
+    assert!(!config.auto_recovery.blocked_dependency_retry_enabled);
+    assert_eq!(config.auto_recovery.max_auto_requeues_per_work_item, 0);
+    assert_eq!(config.auto_recovery.cooldown_seconds, vec![0, 300, 900]);
 
     let invalid_idle = temp.path().join("invalid-idle.toml");
     fs::write(&invalid_idle, "[runtime]\nidle_sleep_seconds = 0\n").unwrap();
@@ -864,6 +1355,53 @@ fn daemon_config_loading_uses_python_compatible_defaults_and_validation() {
     fs::write(&invalid_debounce, "[watchers]\ndebounce_ms = 0\n").unwrap();
     let error = load_runtime_startup_config(&invalid_debounce).unwrap_err();
     assert!(error.to_string().contains("watchers.debounce_ms"));
+
+    for (name, raw, expected) in [
+        (
+            "invalid-auto-recovery-max.toml",
+            "[auto_recovery]\nmax_auto_requeues_per_work_item = -1\n",
+            "auto_recovery.max_auto_requeues_per_work_item",
+        ),
+        (
+            "invalid-auto-recovery-cooldown-empty.toml",
+            "[auto_recovery]\ncooldown_seconds = []\n",
+            "auto_recovery.cooldown_seconds",
+        ),
+        (
+            "invalid-auto-recovery-cooldown-negative.toml",
+            "[auto_recovery]\ncooldown_seconds = [300, -1]\n",
+            "auto_recovery.cooldown_seconds[1]",
+        ),
+        (
+            "invalid-auto-recovery-key.toml",
+            "[auto_recovery]\nblocked_dependency_retries = true\n",
+            "auto_recovery.blocked_dependency_retries",
+        ),
+    ] {
+        let path = temp.path().join(name);
+        fs::write(&path, raw).unwrap();
+        let error = load_runtime_startup_config(&path).unwrap_err();
+        assert!(
+            error.to_string().contains(expected),
+            "missing `{expected}` in error: {error}"
+        );
+    }
+}
+
+#[test]
+fn daemon_config_boundaries_classify_auto_recovery_as_next_tick() {
+    for field in [
+        "auto_recovery.enabled",
+        "auto_recovery.blocked_dependency_retry_enabled",
+        "auto_recovery.max_auto_requeues_per_work_item",
+        "auto_recovery.cooldown_seconds",
+    ] {
+        assert_eq!(
+            runtime_config_apply_boundary_for_field(field).unwrap(),
+            RuntimeConfigApplyBoundary::NextTick,
+            "auto-recovery config field {field} must apply on the next tick"
+        );
+    }
 }
 
 #[test]

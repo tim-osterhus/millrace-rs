@@ -37,11 +37,12 @@ use millrace_ai::{
     RunnerInvocationArtifact, RunnerRawResult, RunnerRegistry, RunnerResult, RuntimeStartupError,
     RuntimeStartupOptions, RuntimeTickOptions, RuntimeTickOutcomeKind, RuntimeTokenRuleConfig,
     RuntimeTokenRulesConfig, StageRunRequest, StageRunnerAdapter, StageRunnerDispatcher,
-    SubscriptionQuotaRulesConfig, UsageGovernanceConfig, build_runtime_runner_dispatcher,
-    build_stage_prompt, completion_artifact_from_raw_result, evaluate_runtime_token_rules,
-    evaluate_subscription_quota_rules, evaluate_usage_governance,
+    SubscriptionQuotaRulesConfig, UsageGovernanceConfig, blocked_metadata_allows_auto_requeue,
+    blocked_task_metadata_path, build_runtime_runner_dispatcher, build_stage_prompt,
+    completion_artifact_from_raw_result, evaluate_runtime_token_rules,
+    evaluate_subscription_quota_rules, evaluate_usage_governance, find_stranded_blocked_dependency,
     healthy_subscription_quota_status, inspect_run_trace, invocation_artifact_from_request,
-    normalize_stage_result, reconcile_usage_ledger_from_stage_results,
+    load_blocked_task_metadata, normalize_stage_result, reconcile_usage_ledger_from_stage_results,
     record_router_decision_trace, record_stage_result_usage, render_stage_request_context_lines,
     run_serial_runtime_tick, run_serial_runtime_tick_with_runner, runner_prompt_path,
     spawned_work_ref_from_path, startup_runtime_once, startup_runtime_once_for_paths,
@@ -5676,10 +5677,202 @@ fn serial_tick_applies_consultant_handoff_through_typed_incident_and_blocked_tas
         incident.related_stage_results,
         vec!["millrace-agents/runs/run-handoff/stage_results/request-handoff.json".to_owned()]
     );
+    let blocked_metadata = load_blocked_task_metadata(&paths, "task-handoff")
+        .unwrap()
+        .expect("blocked handoff metadata");
+    assert_eq!(blocked_metadata.work_item_id, "task-handoff");
+    assert_eq!(
+        blocked_metadata.root_spec_id.as_deref(),
+        Some("spec-root-001")
+    );
+    assert_eq!(blocked_metadata.root_idea_id.as_deref(), Some("idea-001"));
+    assert_eq!(blocked_metadata.blocked_origin.as_str(), "stage_terminal");
+    assert_eq!(blocked_metadata.failure_scope.as_str(), "semantic");
+    assert_eq!(blocked_metadata.failure_class, "stage_declared_blocked");
+    assert!(!blocked_metadata.auto_requeue_candidate);
+    assert_eq!(blocked_metadata.source_stage.as_deref(), Some("consultant"));
+    assert_eq!(
+        blocked_metadata.terminal_result.as_deref(),
+        Some("NEEDS_PLANNING")
+    );
+    assert_eq!(
+        blocked_metadata.stage_result_path.as_deref(),
+        Some("millrace-agents/runs/run-handoff/stage_results/request-handoff.json")
+    );
     let events = runtime_events(&paths);
     assert_eq!(events[3]["event_type"], "runtime_handoff_incident_enqueued");
+    assert!(events.iter().any(
+        |event| event["event_type"] == "blocked_item_metadata_written"
+            && event["data"]["metadata_path"]
+                == "millrace-agents/diagnostics/blocked/task-task-handoff.json"
+    ));
 
     session.finish().unwrap();
+}
+
+#[test]
+fn serial_tick_consultant_runner_failure_blocked_persists_retryable_metadata() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    let queue = QueueStore::from_paths(paths.clone());
+    queue
+        .enqueue_task(&task_document("task-network-blocked"))
+        .unwrap();
+
+    let mut session =
+        startup_runtime_once_for_paths(&paths, startup_options("tick-network-blocked")).unwrap();
+    queue.claim_next_execution_task(None).unwrap().unwrap();
+    let active_since = timestamp("2026-04-28T20:12:00Z");
+    let active_run = ActiveRunState {
+        plane: Plane::Execution,
+        stage: StageName::Consultant,
+        node_id: "consultant".to_owned(),
+        stage_kind_id: "consultant".to_owned(),
+        run_id: "run-network-blocked".to_owned(),
+        request_kind: ActiveRunRequestKind::ActiveWorkItem,
+        work_item_kind: Some(WorkItemKind::Task),
+        work_item_id: Some("task-network-blocked".to_owned()),
+        closure_target_root_spec_id: None,
+        closure_target_root_idea_id: None,
+        active_since: active_since.clone(),
+        running_status_marker: None,
+    };
+    session
+        .snapshot
+        .active_runs_by_plane
+        .insert(Plane::Execution, active_run);
+    session.snapshot.active_plane = Some(Plane::Execution);
+    session.snapshot.active_stage = Some(StageName::Consultant);
+    session.snapshot.active_node_id = Some("consultant".to_owned());
+    session.snapshot.active_stage_kind_id = Some("consultant".to_owned());
+    session.snapshot.active_run_id = Some("run-network-blocked".to_owned());
+    session.snapshot.active_work_item_kind = Some(WorkItemKind::Task);
+    session.snapshot.active_work_item_id = Some("task-network-blocked".to_owned());
+    session.snapshot.active_since = Some(active_since);
+    save_snapshot(&paths, &session.snapshot).unwrap();
+
+    let mut runner_result = FakeRunnerResult::malformed_stdout("provider failed before terminal\n")
+        .with_exit(RunnerExitKind::ProviderError, Some(1));
+    runner_result.stderr = Some("could not resolve host api.openai.com\n".to_owned());
+    let runner = FakeRunner::with_default(runner_result).unwrap();
+    let outcome = run_serial_runtime_tick_with_runner(
+        &mut session,
+        tick_options("ignored-network-run", "request-network-blocked"),
+        &runner,
+    )
+    .unwrap();
+
+    let stage_result = outcome.stage_result.as_ref().unwrap();
+    assert_eq!(stage_result.result_class, ResultClass::RecoverableFailure);
+    assert_eq!(
+        stage_result.metadata["failure_class"],
+        "network_unavailable"
+    );
+    assert_eq!(stage_result.metadata["blocked_origin"], "runner_failure");
+    assert_eq!(stage_result.metadata["failure_scope"], "environment");
+    assert_eq!(stage_result.metadata["auto_requeue_candidate"], true);
+    assert_eq!(
+        stage_result.metadata["failure_classifier_code"],
+        "network_unavailable"
+    );
+    let decision = outcome.router_decision.as_ref().unwrap();
+    assert_eq!(decision.action, RouterAction::Blocked);
+    assert!(
+        paths
+            .tasks_blocked_dir
+            .join("task-network-blocked.md")
+            .is_file()
+    );
+
+    let metadata_path = blocked_task_metadata_path(&paths, "task-network-blocked");
+    assert!(metadata_path.is_file());
+    let blocked_metadata = load_blocked_task_metadata(&paths, "task-network-blocked")
+        .unwrap()
+        .expect("blocked runner failure metadata");
+    assert!(blocked_metadata_allows_auto_requeue(Some(
+        &blocked_metadata
+    )));
+    assert_eq!(blocked_metadata.failure_class, "network_unavailable");
+    assert_eq!(blocked_metadata.blocked_origin.as_str(), "runner_failure");
+    assert_eq!(blocked_metadata.failure_scope.as_str(), "environment");
+    assert_eq!(
+        blocked_metadata
+            .failure_classifier_code
+            .map(|code| code.as_str()),
+        Some("network_unavailable")
+    );
+    assert_eq!(
+        blocked_metadata.stage_result_path.as_deref(),
+        Some("millrace-agents/runs/run-network-blocked/stage_results/request-network-blocked.json")
+    );
+    assert_eq!(
+        blocked_metadata.stdout_path.as_deref(),
+        Some("millrace-agents/runs/run-network-blocked/runner_stdout.request-network-blocked.txt")
+    );
+    assert_eq!(
+        blocked_metadata.stderr_path.as_deref(),
+        Some("millrace-agents/runs/run-network-blocked/runner_stderr.request-network-blocked.txt")
+    );
+
+    let events = runtime_events(&paths);
+    assert!(events.iter().any(|event| {
+        event["event_type"] == "blocked_item_metadata_written"
+            && event["data"]["failure_class"] == "network_unavailable"
+            && event["data"]["auto_requeue_candidate"] == true
+    }));
+
+    session.finish().unwrap();
+}
+
+#[test]
+fn blocked_metadata_load_and_stranded_dependency_boundary_tolerates_missing_or_malformed_metadata()
+{
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    let queue = QueueStore::from_paths(paths.clone());
+    queue.enqueue_task(&task_document("task-blocked")).unwrap();
+    queue.claim_next_execution_task(None).unwrap().unwrap();
+    queue.mark_task_blocked("task-blocked").unwrap();
+    let mut dependent = task_document("task-dependent");
+    dependent.depends_on = vec!["task-blocked".to_owned()];
+    queue.enqueue_task(&dependent).unwrap();
+
+    assert!(
+        load_blocked_task_metadata(&paths, "task-blocked")
+            .unwrap()
+            .is_none()
+    );
+    let missing = find_stranded_blocked_dependency(&paths)
+        .unwrap()
+        .expect("stranded dependency without metadata");
+    assert_eq!(missing.blocked_task_id, "task-blocked");
+    assert_eq!(
+        missing.queued_dependent_ids,
+        vec!["task-dependent".to_owned()]
+    );
+    assert_eq!(missing.root_spec_id.as_deref(), Some("spec-root-001"));
+    assert!(missing.metadata.is_none());
+
+    fs::create_dir_all(
+        blocked_task_metadata_path(&paths, "task-blocked")
+            .parent()
+            .unwrap(),
+    )
+    .unwrap();
+    fs::write(
+        blocked_task_metadata_path(&paths, "task-blocked"),
+        "{ not valid json\n",
+    )
+    .unwrap();
+    assert!(
+        load_blocked_task_metadata(&paths, "task-blocked")
+            .unwrap()
+            .is_none()
+    );
+    let malformed = find_stranded_blocked_dependency(&paths)
+        .unwrap()
+        .expect("stranded dependency with malformed metadata");
+    assert!(malformed.metadata.is_none());
 }
 
 #[test]

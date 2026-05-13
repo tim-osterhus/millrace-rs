@@ -51,8 +51,8 @@ pub use queue_store::{
     enqueue_spec, enqueue_task, find_queue_item, inspect_queue_items, list_deferred_root_spec_ids,
     mark_incident_blocked, mark_incident_resolved, mark_learning_request_blocked,
     mark_learning_request_done, mark_probe_blocked, mark_probe_done, mark_spec_blocked,
-    mark_spec_done, mark_task_blocked, mark_task_done, requeue_incident, requeue_learning_request,
-    requeue_probe, requeue_spec, requeue_task,
+    mark_spec_done, mark_task_blocked, mark_task_done, requeue_blocked_task, requeue_incident,
+    requeue_learning_request, requeue_probe, requeue_spec, requeue_task,
 };
 pub use runtime_control::{
     RuntimeControl, RuntimeControlActionResult, RuntimeControlError, RuntimeControlMode,

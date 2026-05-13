@@ -57,6 +57,7 @@ use crate::{
 use super::{
     AllowedResultClassPolicy, AllowedResultClassesByOutcome, RequestKind, RuntimeStartupError,
     RuntimeStartupSession, RuntimeWatchEvent, StageRunRequest, StageRunRequestError,
+    blocked_recovery::persist_blocked_item_metadata,
     build_runtime_watcher_session, evaluate_usage_governance, load_runtime_startup_config,
     run_traces::{
         record_router_decision_trace, spawned_work_ref_from_path, upsert_stage_result_trace_node,
@@ -90,6 +91,8 @@ pub enum RuntimeTickOutcomeKind {
     StageRequestReady,
     /// One stage request was dispatched and routed after runner completion.
     StageDispatched,
+    /// Runtime-owned recovery work advanced without dispatching a stage.
+    Recovered,
     /// No eligible work or completion target was available.
     NoWork,
     /// The runtime was paused before stage dispatch.
@@ -107,6 +110,7 @@ impl RuntimeTickOutcomeKind {
         match self {
             Self::StageRequestReady => "stage_request_ready",
             Self::StageDispatched => "stage_dispatched",
+            Self::Recovered => "recovered",
             Self::NoWork => "no_work",
             Self::Paused => "paused",
             Self::Stopped => "stopped",
@@ -2661,7 +2665,8 @@ fn apply_router_decision(
             apply_handoff_decision(session, decision, stage_result, stage_result_path)
         }
         RouterAction::Blocked => {
-            apply_blocked_decision(session, decision, stage_result).map(|()| Vec::new())
+            apply_blocked_decision(session, decision, stage_result, stage_result_path)
+                .map(|()| Vec::new())
         }
     }
 }
@@ -3048,6 +3053,7 @@ fn apply_handoff_decision(
         )?);
     }
     mark_active_work_item_blocked(&session.paths, stage_result)?;
+    persist_blocked_metadata_and_event(session, decision, stage_result, stage_result_path)?;
     clear_active_plane(
         &mut session.snapshot,
         stage_result.plane,
@@ -3070,8 +3076,10 @@ fn apply_blocked_decision(
     session: &mut RuntimeStartupSession,
     decision: &RouterDecision,
     stage_result: &StageResultEnvelope,
+    stage_result_path: &Path,
 ) -> RuntimeTickResult<()> {
     mark_active_work_item_blocked(&session.paths, stage_result)?;
+    persist_blocked_metadata_and_event(session, decision, stage_result, stage_result_path)?;
     clear_active_plane(
         &mut session.snapshot,
         stage_result.plane,
@@ -3090,6 +3098,48 @@ fn apply_blocked_decision(
     Ok(())
 }
 
+fn persist_blocked_metadata_and_event(
+    session: &RuntimeStartupSession,
+    decision: &RouterDecision,
+    stage_result: &StageResultEnvelope,
+    stage_result_path: &Path,
+) -> RuntimeTickResult<PathBuf> {
+    let record =
+        persist_blocked_item_metadata(&session.paths, stage_result, decision, stage_result_path)?;
+    write_runtime_event(
+        &session.paths,
+        "blocked_item_metadata_written",
+        json_object([
+            (
+                "work_item_kind",
+                Value::String(record.metadata.work_item_kind.as_str().to_owned()),
+            ),
+            (
+                "work_item_id",
+                Value::String(record.metadata.work_item_id.clone()),
+            ),
+            (
+                "failure_class",
+                Value::String(record.metadata.failure_class.clone()),
+            ),
+            (
+                "failure_scope",
+                Value::String(record.metadata.failure_scope.as_str().to_owned()),
+            ),
+            (
+                "auto_requeue_candidate",
+                Value::Bool(record.metadata.auto_requeue_candidate),
+            ),
+            (
+                "metadata_path",
+                Value::String(path_relative_to_root(&session.paths, &record.path)),
+            ),
+        ]),
+        &stage_result.completed_at,
+    )?;
+    Ok(record.path)
+}
+
 fn is_recon_stage_result(stage_result: &StageResultEnvelope) -> bool {
     stage_result.stage_kind_id == "recon" && stage_result.work_item_kind == WorkItemKind::Probe
 }
@@ -3100,7 +3150,7 @@ fn apply_recon_router_decision(
     stage_result: &StageResultEnvelope,
     stage_result_path: &Path,
 ) -> RuntimeTickResult<Vec<PathBuf>> {
-    match apply_recon_router_decision_inner(session, decision, stage_result) {
+    match apply_recon_router_decision_inner(session, decision, stage_result, stage_result_path) {
         Ok(paths) => Ok(paths),
         Err(error) => {
             block_invalid_recon_handoff(session, decision, stage_result, stage_result_path, error)
@@ -3112,6 +3162,7 @@ fn apply_recon_router_decision_inner(
     session: &mut RuntimeStartupSession,
     decision: &RouterDecision,
     stage_result: &StageResultEnvelope,
+    stage_result_path: &Path,
 ) -> RuntimeTickResult<Vec<PathBuf>> {
     let terminal_result = match stage_result.terminal_result {
         TerminalResult::Planning(result) => result,
@@ -3173,7 +3224,7 @@ fn apply_recon_router_decision_inner(
         }
         PlanningTerminalResult::ReconBlocked | PlanningTerminalResult::Blocked => {
             persist_recon_packet(session, &packet)?;
-            apply_blocked_decision(session, decision, stage_result)?;
+            apply_blocked_decision(session, decision, stage_result, stage_result_path)?;
             Ok(Vec::new())
         }
         _ => unreachable!("unsupported recon terminal result was rejected"),
@@ -3229,7 +3280,7 @@ fn block_invalid_recon_handoff(
         counter_key: None,
         create_incident: false,
     };
-    apply_blocked_decision(session, &blocked_decision, stage_result)?;
+    apply_blocked_decision(session, &blocked_decision, stage_result, stage_result_path)?;
     Ok(Vec::new())
 }
 

@@ -272,6 +272,27 @@ impl QueueStore {
         requeue_task(&self.paths, task_id, reason)
     }
 
+    /// Move a blocked task back to the execution queue and record retry audit fields.
+    pub fn requeue_blocked_task(
+        &self,
+        task_id: &str,
+        reason: &str,
+        actor: &str,
+        auto: bool,
+        failure_class: Option<&str>,
+        attempt_number: Option<u64>,
+    ) -> QueueStoreResult<PathBuf> {
+        requeue_blocked_task(
+            &self.paths,
+            task_id,
+            reason,
+            actor,
+            auto,
+            failure_class,
+            attempt_number,
+        )
+    }
+
     /// Requeue an active spec and record the reason.
     pub fn requeue_spec(&self, spec_id: &str, reason: &str) -> QueueStoreResult<PathBuf> {
         requeue_spec(&self.paths, spec_id, reason)
@@ -834,6 +855,36 @@ pub fn requeue_task(
         WorkItemKind::Task,
     )?;
     append_requeue_reason(&paths.tasks_queue_dir, task_id, WorkItemKind::Task, reason)?;
+    Ok(destination)
+}
+
+/// Move a blocked task back to the execution queue and record retry audit fields.
+pub fn requeue_blocked_task(
+    paths: &WorkspacePaths,
+    task_id: &str,
+    reason: &str,
+    actor: &str,
+    auto: bool,
+    failure_class: Option<&str>,
+    attempt_number: Option<u64>,
+) -> QueueStoreResult<PathBuf> {
+    validate_blocked_requeue_audit(reason, actor, attempt_number)?;
+    let destination = move_item_from_state(
+        &paths.tasks_blocked_dir,
+        &paths.tasks_queue_dir,
+        task_id,
+        WorkItemKind::Task,
+        "blocked",
+    )?;
+    append_blocked_requeue_audit(
+        &paths.tasks_queue_dir,
+        task_id,
+        reason,
+        actor,
+        auto,
+        failure_class,
+        attempt_number,
+    )?;
     Ok(destination)
 }
 
@@ -1421,10 +1472,20 @@ fn move_item(
     item_id: &str,
     kind: WorkItemKind,
 ) -> QueueStoreResult<PathBuf> {
+    move_item_from_state(source_dir, destination_dir, item_id, kind, "active")
+}
+
+fn move_item_from_state(
+    source_dir: &Path,
+    destination_dir: &Path,
+    item_id: &str,
+    kind: WorkItemKind,
+    source_state: &str,
+) -> QueueStoreResult<PathBuf> {
     let source = source_dir.join(format!("{item_id}.md"));
     if !source.exists() {
         return Err(QueueStoreError::invalid_state(format!(
-            "{} {item_id} is not active",
+            "{} {item_id} is not {source_state}",
             kind.as_str()
         )));
     }
@@ -1497,6 +1558,77 @@ fn append_requeue_reason(
         .map_err(|error| QueueStoreError::io(&log_path, error))?;
     file.write_all(line.as_bytes())
         .map_err(|error| QueueStoreError::io(&log_path, error))
+}
+
+fn append_blocked_requeue_audit(
+    destination_dir: &Path,
+    task_id: &str,
+    reason: &str,
+    actor: &str,
+    auto: bool,
+    failure_class: Option<&str>,
+    attempt_number: Option<u64>,
+) -> QueueStoreResult<()> {
+    validate_blocked_requeue_audit(reason, actor, attempt_number)?;
+    let cleaned_reason = reason.trim();
+    let actor = actor.trim();
+    fs::create_dir_all(destination_dir)
+        .map_err(|error| QueueStoreError::io(destination_dir, error))?;
+    let log_path = destination_dir.join(format!("{task_id}.requeue.jsonl"));
+    let mut payload = serde_json::json!({
+        "at": current_timestamp(),
+        "actor": actor,
+        "auto": auto,
+        "destination_state": "queue",
+        "kind": WorkItemKind::Task.as_str(),
+        "reason": cleaned_reason,
+        "source_state": "blocked",
+    });
+    let object = payload
+        .as_object_mut()
+        .ok_or_else(|| QueueStoreError::invalid_state("requeue audit payload must be an object"))?;
+    if let Some(failure_class) = failure_class.filter(|value| !value.trim().is_empty()) {
+        object.insert(
+            "failure_class".to_owned(),
+            serde_json::Value::String(failure_class.trim().to_owned()),
+        );
+    }
+    if let Some(attempt_number) = attempt_number {
+        object.insert(
+            "attempt_number".to_owned(),
+            serde_json::Value::Number(attempt_number.into()),
+        );
+    }
+    let line = serde_json::to_string(&payload).map_err(|error| QueueStoreError::InvalidState {
+        message: error.to_string(),
+    })? + "\n";
+    use std::io::Write;
+    let mut file = fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(&log_path)
+        .map_err(|error| QueueStoreError::io(&log_path, error))?;
+    file.write_all(line.as_bytes())
+        .map_err(|error| QueueStoreError::io(&log_path, error))
+}
+
+fn validate_blocked_requeue_audit(
+    reason: &str,
+    actor: &str,
+    attempt_number: Option<u64>,
+) -> QueueStoreResult<()> {
+    if reason.trim().is_empty() {
+        return Err(QueueStoreError::invalid_state("requeue reason is required"));
+    }
+    if actor.trim().is_empty() {
+        return Err(QueueStoreError::invalid_state("requeue actor is required"));
+    }
+    if attempt_number == Some(0) {
+        return Err(QueueStoreError::invalid_state(
+            "requeue attempt_number must be >= 1",
+        ));
+    }
+    Ok(())
 }
 
 fn quarantine_invalid_artifact(

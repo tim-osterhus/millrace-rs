@@ -100,3 +100,6 @@ installed `SKILL.md` files as the source of availability truth.
 Learning-enabled modes can run Librarian after Planner completes so relevant
 remote optional skills are prepared as workspace-local skills without adding
 those optional payloads to the base runtime package.
+- durable-workflow-orchestration: durable-workflow-orchestration/SKILL.md
+- optimize-agentic-cli: optimize-agentic-cli/SKILL.md
+- rust-best-practices: rust-best-practices/SKILL.md

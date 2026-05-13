@@ -2,7 +2,7 @@
 
 These notes document the Rust-owned runtime contract surfaces for the
 experimental `millrace-ai` crate. They are concise Rust equivalents of the
-Python runtime docs changed through `v0.18.3`; they do not claim production status or
+Python runtime docs changed through `v0.18.4`; they do not claim production status or
 introduce a Rust web dashboard.
 
 Start with:
@@ -28,8 +28,8 @@ Start with:
 - `millrace-runtime-lifecycle-diagram.md`: compact lifecycle chart including
   Planner-to-Librarian request flow
 - `millrace-workspace-baselines-and-upgrades.md`: managed baseline and upgrade
-  behavior with v0.18.3 package evidence notes
+  behavior with v0.18.3 and v0.18.4 package evidence notes
 
 The stable contract remains the `millrace` CLI plus the local
-`millrace-agents/` workspace artifact format. Python `v0.18.3` remains the
-reference for the release delta represented by Rust `0.3.3`.
+`millrace-agents/` workspace artifact format. Python `v0.18.4` remains the
+reference for the release delta represented by Rust `0.3.4`.

@@ -7,16 +7,18 @@ use crate::{
         CompileOutcome, CompileWorkspaceOptions, CompiledRunPlan, FrozenGraphPlanePlan,
         MaterializedGraphNodePlan,
     },
-    contracts::{Plane, ResultClass, RuntimeMode},
+    contracts::{Plane, ResultClass, RuntimeMode, validate_safe_identifier},
     runtime::{
-        BasicTerminalMonitor, RuntimeDaemonLoopExitReason, RuntimeDaemonLoopOptions,
-        RuntimeMonitorEvent, RuntimeMonitorFanout, RuntimeMonitorSink, RuntimeStartupOptions,
-        RuntimeTickDispatchOutcome, RuntimeTickOptions, RuntimeTickOutcomeKind,
-        build_runtime_runner_dispatcher, load_runtime_startup_config,
+        BasicTerminalMonitor, RetryBlockedTaskRequest, RuntimeDaemonLoopExitReason,
+        RuntimeDaemonLoopOptions, RuntimeMonitorEvent, RuntimeMonitorFanout, RuntimeMonitorSink,
+        RuntimeStartupOptions, RuntimeTickDispatchOutcome, RuntimeTickOptions,
+        RuntimeTickOutcomeKind, build_runtime_runner_dispatcher, load_runtime_startup_config,
+        retry_blocked_task,
     },
     workspace::{
         BaselineUpgradePreview, ClosureLineageRepairOutcome, LineageRepairError, RuntimeControl,
-        RuntimeControlActionResult, WorkspacePaths, apply_baseline_upgrade, load_baseline_manifest,
+        RuntimeControlActionResult, RuntimeOwnershipLockState, WorkspacePaths,
+        apply_baseline_upgrade, inspect_runtime_ownership_lock, load_baseline_manifest,
         preview_baseline_upgrade, repair_closure_lineage,
     },
 };
@@ -1028,7 +1030,7 @@ fn run_runs_trace(paths: &WorkspacePaths, parsed: &ParsedArgs) -> CliOutput {
 fn run_queue_group(mut args: Vec<String>) -> CliOutput {
     if args.is_empty() {
         return CliOutput::parse_error(
-            "missing queue command `ls`, `show`, `add-task`, `add-probe`, `add-spec`, `add-idea`, or `repair-lineage`",
+            "missing queue command `ls`, `show`, `add-task`, `add-probe`, `add-spec`, `add-idea`, `retry-blocked`, or `repair-lineage`",
         );
     }
     let command = args.remove(0);
@@ -1038,18 +1040,29 @@ fn run_queue_group(mut args: Vec<String>) -> CliOutput {
 fn run_queue_alias(alias_context: &str, command: &str, args: Vec<String>) -> CliOutput {
     if !matches!(
         command,
-        "ls" | "show" | "add-task" | "add-probe" | "add-spec" | "add-idea" | "repair-lineage"
+        "ls" | "show"
+            | "add-task"
+            | "add-probe"
+            | "add-spec"
+            | "add-idea"
+            | "retry-blocked"
+            | "repair-lineage"
     ) {
         return CliOutput::parse_error(format!("unknown queue command `{command}`"));
     }
-    let specs = if command == "repair-lineage" {
-        vec![
+    let specs = match command {
+        "repair-lineage" => vec![
             workspace_spec(),
             value_spec("--root-spec-id", EmptyValue::NonBlank),
             flag_spec("--apply"),
-        ]
-    } else {
-        vec![workspace_spec()]
+        ],
+        "retry-blocked" => vec![
+            workspace_spec(),
+            value_spec("--reason", EmptyValue::NonBlank),
+            value_spec("--root-spec-id", EmptyValue::NonBlank),
+            flag_spec("--force"),
+        ],
+        _ => vec![workspace_spec()],
     };
     let parsed = match parse_or_output(args, &specs) {
         Ok(parsed) => parsed,
@@ -1084,6 +1097,11 @@ fn run_queue_alias(alias_context: &str, command: &str, args: Vec<String>) -> Cli
         }
         "add-idea" => {
             if let Err(output) = require_one_positional(&parsed, "IDEA_PATH") {
+                return output;
+            }
+        }
+        "retry-blocked" => {
+            if let Err(output) = require_one_positional(&parsed, "TASK_ID") {
                 return output;
             }
         }
@@ -1158,6 +1176,16 @@ fn run_queue_alias(alias_context: &str, command: &str, args: Vec<String>) -> Cli
         )
         .map(CliOutput::success)
         .unwrap_or_else(CliOutput::stdout_failure),
+        "retry-blocked" if alias_context == "queue" => run_queue_retry_blocked(
+            &paths,
+            parsed
+                .positionals
+                .first()
+                .expect("queue retry-blocked has one positional"),
+            parsed.value("--reason").unwrap_or(""),
+            parsed.value("--root-spec-id"),
+            parsed.has("--force"),
+        ),
         "repair-lineage" if alias_context == "queue" => run_queue_repair_lineage(
             &paths,
             parsed
@@ -1166,6 +1194,52 @@ fn run_queue_alias(alias_context: &str, command: &str, args: Vec<String>) -> Cli
             parsed.has("--apply"),
         ),
         _ => unreachable!("queue command validated above"),
+    }
+}
+
+fn run_queue_retry_blocked(
+    paths: &WorkspacePaths,
+    task_id: &str,
+    reason: &str,
+    root_spec_id: Option<&str>,
+    force: bool,
+) -> CliOutput {
+    let task_id = match validate_safe_identifier(task_id, "task_id") {
+        Ok(task_id) => task_id,
+        Err(error) => {
+            return CliOutput::stdout_failure(format!("failed to retry blocked task: {error}"));
+        }
+    };
+    let root_spec_id = match root_spec_id {
+        Some(root_spec_id) => match validate_safe_identifier(root_spec_id, "root_spec_id") {
+            Ok(root_spec_id) => Some(root_spec_id),
+            Err(error) => {
+                return CliOutput::stdout_failure(format!("failed to retry blocked task: {error}"));
+            }
+        },
+        None => None,
+    };
+    if inspect_runtime_ownership_lock(paths).state == RuntimeOwnershipLockState::Active {
+        return CliOutput::stdout_failure(
+            "failed to retry blocked task: active runtime ownership lock prevents blocked retry",
+        );
+    }
+
+    match retry_blocked_task(
+        paths,
+        RetryBlockedTaskRequest {
+            task_id,
+            reason,
+            actor: "operator",
+            auto: false,
+            force,
+            root_spec_id,
+            diagnostics_path: None,
+            max_auto_requeues_per_work_item: None,
+        },
+    ) {
+        Ok(result) => CliOutput::success(render::blocked_task_requeue_lines(&result)),
+        Err(error) => CliOutput::stdout_failure(format!("failed to retry blocked task: {error}")),
     }
 }
 

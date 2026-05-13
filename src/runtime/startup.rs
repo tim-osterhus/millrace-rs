@@ -125,12 +125,123 @@ pub struct RuntimeStartupConfig {
     pub watchers_watch_ideas_inbox: bool,
     /// Whether the daemon watcher should observe queued specs.
     pub watchers_watch_specs_queue: bool,
+    /// Runtime auto-recovery policy.
+    pub auto_recovery: AutoRecoveryConfig,
     /// Whether usage governance is enabled in config.
     pub usage_governance_enabled: bool,
     /// Full usage-governance runtime config.
     pub usage_governance: UsageGovernanceConfig,
     /// Stable config content fingerprint projected into the snapshot.
     pub config_version: String,
+}
+
+/// Runtime-configured auto-recovery policy.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AutoRecoveryConfig {
+    /// Whether automatic recovery behavior is enabled.
+    pub enabled: bool,
+    /// Whether blocked dependencies may be automatically retried.
+    pub blocked_dependency_retry_enabled: bool,
+    /// Maximum automatic requeues per work item before requiring operator action.
+    pub max_auto_requeues_per_work_item: u64,
+    /// Backoff windows used by blocked-dependency auto-recovery.
+    pub cooldown_seconds: Vec<u64>,
+}
+
+impl Default for AutoRecoveryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            blocked_dependency_retry_enabled: true,
+            max_auto_requeues_per_work_item: 3,
+            cooldown_seconds: vec![300, 900, 3600],
+        }
+    }
+}
+
+/// Reload/apply boundary for runtime config fields.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeConfigApplyBoundary {
+    /// The field can apply synchronously.
+    Immediate,
+    /// The field applies on the next runtime tick.
+    NextTick,
+    /// The field requires recompiling runtime graph assets.
+    Recompile,
+    /// The field requires restarting the owning runtime.
+    Restart,
+}
+
+impl RuntimeConfigApplyBoundary {
+    /// Stable snake-case boundary token.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Immediate => "immediate",
+            Self::NextTick => "next_tick",
+            Self::Recompile => "recompile",
+            Self::Restart => "restart",
+        }
+    }
+}
+
+/// Returns the reload/apply boundary for one dotted runtime config field.
+pub fn runtime_config_apply_boundary_for_field(
+    field_path: &str,
+) -> Result<RuntimeConfigApplyBoundary, String> {
+    let boundary = match field_path {
+        "runtime.default_mode" => RuntimeConfigApplyBoundary::Recompile,
+        "runtime.run_style" | "runtime.idle_sleep_seconds" => RuntimeConfigApplyBoundary::NextTick,
+        "runners.default_runner" | "runners.codex" | "runners.pi" => {
+            RuntimeConfigApplyBoundary::NextTick
+        }
+        "recovery.max_fix_cycles"
+        | "recovery.max_troubleshoot_attempts_before_consult"
+        | "recovery.max_mechanic_attempts"
+        | "recovery.stale_state_recovery_enabled"
+        | "watchers.enabled"
+        | "watchers.debounce_ms"
+        | "watchers.watch_ideas_inbox"
+        | "watchers.watch_specs_queue"
+        | "usage_governance.enabled"
+        | "usage_governance.auto_resume"
+        | "usage_governance.evaluation_boundary"
+        | "usage_governance.calendar_timezone"
+        | "usage_governance.runtime_token_rules"
+        | "usage_governance.subscription_quota_rules"
+        | "auto_recovery.enabled"
+        | "auto_recovery.blocked_dependency_retry_enabled"
+        | "auto_recovery.max_auto_requeues_per_work_item"
+        | "auto_recovery.cooldown_seconds" => RuntimeConfigApplyBoundary::NextTick,
+        _ if field_path.starts_with("stages.") => {
+            let parts = field_path.split('.').collect::<Vec<_>>();
+            if parts.len() != 3 {
+                return Err(format!(
+                    "No apply boundary declared for config field: {field_path}"
+                ));
+            }
+            StageName::from_value(parts[1])
+                .map_err(|_| format!("Unknown stage name in config field: {}", parts[1]))?;
+            match parts[2] {
+                "runner"
+                | "model"
+                | "thinking_level"
+                | "model_reasoning_effort"
+                | "timeout_seconds" => RuntimeConfigApplyBoundary::Recompile,
+                _ => {
+                    return Err(format!(
+                        "No apply boundary declared for config field: {field_path}"
+                    ));
+                }
+            }
+        }
+        _ => {
+            return Err(format!(
+                "No apply boundary declared for config field: {field_path}"
+            ));
+        }
+    };
+    Ok(boundary)
 }
 
 /// Runtime runner adapter settings loaded from `[runners]`.
@@ -650,6 +761,7 @@ pub fn load_runtime_startup_config(path: &Path) -> RuntimeStartupResult<RuntimeS
     let mut watchers_debounce_ms = 250;
     let mut watchers_watch_ideas_inbox = true;
     let mut watchers_watch_specs_queue = true;
+    let mut auto_recovery = AutoRecoveryConfig::default();
     let mut usage_governance = UsageGovernanceConfig::default();
 
     let raw = match fs::read_to_string(path) {
@@ -725,6 +837,11 @@ pub fn load_runtime_startup_config(path: &Path) -> RuntimeStartupResult<RuntimeS
                 watchers_watch_specs_queue = value;
             }
         }
+        if let Some(auto_recovery_table) =
+            child_table_at(root, "auto_recovery", "auto_recovery", path)?
+        {
+            load_auto_recovery_config(auto_recovery_table, &mut auto_recovery, path)?;
+        }
         if let Some(usage_governance_table) =
             child_table_at(root, "usage_governance", "usage_governance", path)?
         {
@@ -747,6 +864,7 @@ pub fn load_runtime_startup_config(path: &Path) -> RuntimeStartupResult<RuntimeS
         watchers_debounce_ms,
         watchers_watch_ideas_inbox,
         watchers_watch_specs_queue,
+        auto_recovery,
         usage_governance_enabled: usage_governance.enabled,
         usage_governance,
         config_version,
@@ -1592,6 +1710,123 @@ fn optional_positive_u64(
         return Err(config_error(path, field, "must be greater than 0"));
     }
     Ok(Some(parsed as u64))
+}
+
+fn optional_non_negative_u64(
+    table: &toml::map::Map<String, toml::Value>,
+    key: &str,
+    field: &str,
+    path: &Path,
+) -> RuntimeStartupResult<Option<u64>> {
+    let Some(value) = table.get(key) else {
+        return Ok(None);
+    };
+    let Some(parsed) = value.as_integer() else {
+        return Err(config_error(path, field, "must be an integer when present"));
+    };
+    if parsed < 0 {
+        return Err(config_error(
+            path,
+            field,
+            "must be greater than or equal to 0",
+        ));
+    }
+    Ok(Some(parsed as u64))
+}
+
+fn optional_non_negative_u64_vec(
+    table: &toml::map::Map<String, toml::Value>,
+    key: &str,
+    field: &str,
+    path: &Path,
+) -> RuntimeStartupResult<Option<Vec<u64>>> {
+    let Some(value) = table.get(key) else {
+        return Ok(None);
+    };
+    let Some(values) = value.as_array() else {
+        return Err(config_error(
+            path,
+            field,
+            "must be an array of integers when present",
+        ));
+    };
+    if values.is_empty() {
+        return Err(config_error(path, field, "must not be empty"));
+    }
+    let mut parsed = Vec::with_capacity(values.len());
+    for (index, value) in values.iter().enumerate() {
+        let item_field = format!("{field}[{index}]");
+        let Some(seconds) = value.as_integer() else {
+            return Err(config_error(path, item_field, "must be an integer"));
+        };
+        if seconds < 0 {
+            return Err(config_error(
+                path,
+                item_field,
+                "must be greater than or equal to 0",
+            ));
+        }
+        parsed.push(seconds as u64);
+    }
+    Ok(Some(parsed))
+}
+
+fn load_auto_recovery_config(
+    table: &toml::map::Map<String, toml::Value>,
+    config: &mut AutoRecoveryConfig,
+    path: &Path,
+) -> RuntimeStartupResult<()> {
+    reject_unknown_auto_recovery_config_keys(table, path)?;
+    if let Some(enabled) = optional_bool_at(table, "enabled", "auto_recovery.enabled", path)? {
+        config.enabled = enabled;
+    }
+    if let Some(enabled) = optional_bool_at(
+        table,
+        "blocked_dependency_retry_enabled",
+        "auto_recovery.blocked_dependency_retry_enabled",
+        path,
+    )? {
+        config.blocked_dependency_retry_enabled = enabled;
+    }
+    if let Some(max_auto_requeues) = optional_non_negative_u64(
+        table,
+        "max_auto_requeues_per_work_item",
+        "auto_recovery.max_auto_requeues_per_work_item",
+        path,
+    )? {
+        config.max_auto_requeues_per_work_item = max_auto_requeues;
+    }
+    if let Some(cooldown_seconds) = optional_non_negative_u64_vec(
+        table,
+        "cooldown_seconds",
+        "auto_recovery.cooldown_seconds",
+        path,
+    )? {
+        config.cooldown_seconds = cooldown_seconds;
+    }
+    Ok(())
+}
+
+fn reject_unknown_auto_recovery_config_keys(
+    table: &toml::map::Map<String, toml::Value>,
+    path: &Path,
+) -> RuntimeStartupResult<()> {
+    for key in table.keys() {
+        if !matches!(
+            key.as_str(),
+            "enabled"
+                | "blocked_dependency_retry_enabled"
+                | "max_auto_requeues_per_work_item"
+                | "cooldown_seconds"
+        ) {
+            return Err(config_error(
+                path,
+                format!("auto_recovery.{key}"),
+                "unknown auto_recovery config key",
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn load_usage_governance_config(
