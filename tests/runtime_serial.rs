@@ -9,14 +9,14 @@ use tempfile::TempDir;
 use millrace_ai::contracts::{
     ActiveRunRequestKind, ActiveRunState, ClosureTargetState, ExecutionTerminalResult,
     IncidentDecision, IncidentDocument, IncidentSeverity, LearningRequestAction,
-    LearningRequestDocument, LearningTerminalResult, Plane, PlanningTerminalResult, ProbeDocument,
-    ReconConfidence, ReconDecision, ReconPacketDocument, ReconPathFinding, ReconRiskLevel,
-    ReconVerificationPlan, RecoveryCounterEntry, RecoveryCounters, ResultClass, RootIntakeKind,
-    RunTraceGraph, RuntimeErrorContext, RuntimeJsonContract, RuntimeMode, SpecDocument,
-    SpecSourceType, StageName, StageResultEnvelope, SubscriptionQuotaWindowReading, TaskDocument,
-    TerminalResult, Timestamp, TokenUsage, UsageGovernanceDegradedPolicy,
-    UsageGovernanceRuntimeTokenMetric, UsageGovernanceRuntimeTokenWindow,
-    UsageGovernanceSubscriptionWindow, WorkItemKind,
+    LearningRequestDocument, LearningStageName, LearningTerminalResult, Plane,
+    PlanningTerminalResult, ProbeDocument, ReconConfidence, ReconDecision, ReconPacketDocument,
+    ReconPathFinding, ReconRiskLevel, ReconVerificationPlan, RecoveryCounterEntry,
+    RecoveryCounters, ResultClass, RootIntakeKind, RunTraceGraph, RuntimeErrorContext,
+    RuntimeJsonContract, RuntimeMode, SpecDocument, SpecSourceType, StageName, StageResultEnvelope,
+    SubscriptionQuotaWindowReading, TaskDocument, TerminalResult, Timestamp, TokenUsage,
+    UsageGovernanceDegradedPolicy, UsageGovernanceRuntimeTokenMetric,
+    UsageGovernanceRuntimeTokenWindow, UsageGovernanceSubscriptionWindow, WorkItemKind,
 };
 use millrace_ai::recon_packets::render_recon_packet;
 use millrace_ai::work_documents::{
@@ -4367,6 +4367,350 @@ fn serial_tick_learning_trigger_enqueues_analyst_first_request() {
             .iter()
             .any(|event| event["event_type"] == "learning_request_enqueued")
     );
+
+    session.finish().unwrap();
+}
+
+#[test]
+fn serial_tick_planner_complete_triggers_librarian_request_with_planner_artifacts() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    QueueStore::from_paths(paths.clone())
+        .enqueue_spec(&spec_document("spec-planner-trigger"))
+        .unwrap();
+
+    let run_id = "run-planner-trigger";
+    let request_id = "request-planner-trigger";
+    let run_dir = paths.runs_dir.join(run_id);
+    fs::create_dir_all(&run_dir).unwrap();
+    fs::write(
+        run_dir.join("planner_summary.md"),
+        "# Planner Summary\n\nGenerated or refined spec paths:\n- millrace-agents/specs/active/spec-planner-trigger.md\n",
+    )
+    .unwrap();
+
+    let mut options = startup_options("tick-planner-librarian-trigger");
+    options.requested_mode_id = Some("learning_codex".to_owned());
+    let mut session = startup_runtime_once_for_paths(&paths, options).unwrap();
+    let runner = FakeRunner::new(
+        FakeRunnerConfig::new(FakeRunnerResult {
+            output: FakeRunnerOutput::StructuredTerminalResult {
+                terminal_result: "PLANNER_COMPLETE".to_owned(),
+                result_class: Some(ResultClass::Success),
+                summary_artifact_paths: vec!["planner_summary.md".to_owned()],
+            },
+            exit_kind: RunnerExitKind::Completed,
+            exit_code: Some(0),
+            observed_exit_kind: None,
+            observed_exit_code: None,
+            stderr: None,
+            event_log: None,
+            token_usage: None,
+        })
+        .unwrap(),
+    );
+
+    let outcome = run_serial_runtime_tick_with_runner(
+        &mut session,
+        tick_options(run_id, request_id),
+        &runner,
+    )
+    .unwrap();
+
+    assert_eq!(
+        outcome.stage_result.as_ref().unwrap().stage,
+        StageName::Planner
+    );
+    assert!(
+        outcome
+            .stage_result
+            .as_ref()
+            .unwrap()
+            .artifact_paths
+            .iter()
+            .any(|path| path == "planner_summary.md")
+    );
+
+    let queued_learning = fs::read_dir(&paths.learning_requests_queue_dir)
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(queued_learning.len(), 1);
+    let raw = fs::read_to_string(queued_learning[0].path()).unwrap();
+    let document = parse_learning_request_document(&raw).unwrap();
+
+    assert_eq!(document.requested_action, LearningRequestAction::Install);
+    assert_eq!(
+        document.target_stage.map(StageName::from),
+        Some(StageName::Librarian)
+    );
+    assert_eq!(
+        document.trigger_metadata["rule_id"],
+        "planning.planner.complete-to-librarian"
+    );
+    assert_eq!(document.trigger_metadata["source_stage"], "planner");
+    assert_eq!(document.trigger_metadata["source_work_item_kind"], "spec");
+    assert_eq!(
+        document.trigger_metadata["source_work_item_id"],
+        "spec-planner-trigger"
+    );
+    assert!(
+        document.trigger_metadata["source_active_work_item_path"]
+            .as_str()
+            .unwrap()
+            .ends_with("millrace-agents/specs/active/spec-planner-trigger.md")
+    );
+    assert!(document.artifact_paths.iter().any(
+        |path| path.contains("stage_results") && path.ends_with("request-planner-trigger.json")
+    ));
+    assert!(
+        document
+            .artifact_paths
+            .iter()
+            .any(|path| path.ends_with("planner_summary.md"))
+    );
+    assert!(
+        document.trigger_metadata["stage_result_path"]
+            .as_str()
+            .unwrap()
+            .ends_with("stage_results/request-planner-trigger.json")
+    );
+    assert!(
+        document.trigger_metadata["artifact_paths"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|path| path
+                .as_str()
+                .is_some_and(|path| path.ends_with("planner_summary.md")))
+    );
+
+    session.finish().unwrap();
+}
+
+#[test]
+fn serial_tick_default_mode_planner_complete_does_not_trigger_librarian_request() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    QueueStore::from_paths(paths.clone())
+        .enqueue_spec(&spec_document("spec-default-planner"))
+        .unwrap();
+
+    let mut session =
+        startup_runtime_once_for_paths(&paths, startup_options("tick-default-planner")).unwrap();
+    assert!(session.compiled_plan.learning_graph.is_none());
+    let runner =
+        FakeRunner::with_default(FakeRunnerResult::terminal_marker("### PLANNER_COMPLETE"))
+            .unwrap();
+
+    let outcome = run_serial_runtime_tick_with_runner(
+        &mut session,
+        tick_options("run-default-planner", "request-default-planner"),
+        &runner,
+    )
+    .unwrap();
+
+    assert_eq!(
+        outcome.stage_result.as_ref().unwrap().stage,
+        StageName::Planner
+    );
+    assert_eq!(
+        outcome.stage_result.as_ref().unwrap().terminal_result,
+        TerminalResult::Planning(PlanningTerminalResult::PlannerComplete)
+    );
+    assert_eq!(
+        fs::read_dir(&paths.learning_requests_queue_dir)
+            .unwrap()
+            .count(),
+        0
+    );
+    assert!(
+        !runtime_events(&paths)
+            .iter()
+            .any(|event| event["event_type"] == "learning_request_enqueued")
+    );
+
+    session.finish().unwrap();
+}
+
+#[test]
+fn serial_tick_targeted_librarian_learning_request_uses_librarian_metadata_and_marks_done() {
+    for (learning_request_id, terminal, expected_terminal, expected_class, expected_success) in [
+        (
+            "learn-librarian-complete",
+            "LIBRARIAN_COMPLETE",
+            TerminalResult::Learning(LearningTerminalResult::LibrarianComplete),
+            ResultClass::Success,
+            true,
+        ),
+        (
+            "learn-librarian-noop",
+            "LIBRARIAN_NOOP",
+            TerminalResult::Learning(LearningTerminalResult::LibrarianNoop),
+            ResultClass::NoOp,
+            false,
+        ),
+    ] {
+        let temp = TempDir::new().unwrap();
+        let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+        let mut document = learning_request_document(learning_request_id);
+        document.requested_action = LearningRequestAction::Install;
+        document.target_stage = Some(LearningStageName::Librarian);
+        QueueStore::from_paths(paths.clone())
+            .enqueue_learning_request(&document)
+            .unwrap();
+
+        let mut options = startup_options(&format!("tick-{learning_request_id}"));
+        options.requested_mode_id = Some("learning_codex".to_owned());
+        let mut session = startup_runtime_once_for_paths(&paths, options).unwrap();
+        let runner = FakeRunner::with_default(FakeRunnerResult::structured_terminal_result(
+            terminal,
+            Some(expected_class),
+        ))
+        .unwrap();
+
+        let outcome = run_serial_runtime_tick_with_runner(
+            &mut session,
+            tick_options(
+                &format!("run-{learning_request_id}"),
+                &format!("request-{learning_request_id}"),
+            ),
+            &runner,
+        )
+        .unwrap();
+
+        let request = outcome.stage_request.as_ref().unwrap();
+        assert_eq!(request.stage, StageName::Librarian);
+        assert_eq!(request.request_kind, RequestKind::LearningRequest);
+        assert_eq!(request.node_id, "librarian");
+        assert_eq!(request.stage_kind_id, "librarian");
+        assert_eq!(request.running_status_marker, "LIBRARIAN_RUNNING");
+        assert_eq!(
+            request.legal_terminal_markers,
+            vec![
+                "### LIBRARIAN_COMPLETE".to_owned(),
+                "### LIBRARIAN_NOOP".to_owned(),
+                "### BLOCKED".to_owned()
+            ]
+        );
+        assert!(
+            request
+                .entrypoint_path
+                .ends_with("millrace-agents/entrypoints/learning/librarian.md")
+        );
+        assert_eq!(
+            request.entrypoint_contract_id.as_deref(),
+            Some("librarian.contract.v1")
+        );
+        assert_eq!(request.required_skill_paths.len(), 1);
+        assert!(
+            request.required_skill_paths[0]
+                .ends_with("millrace-agents/skills/stage/learning/librarian-core/SKILL.md")
+        );
+        assert_eq!(request.runner_name.as_deref(), Some("codex_cli"));
+        assert_eq!(
+            request.active_work_item_kind,
+            Some(WorkItemKind::LearningRequest)
+        );
+        assert_eq!(
+            request.active_work_item_id.as_deref(),
+            Some(learning_request_id)
+        );
+        assert!(
+            request
+                .active_work_item_path
+                .as_deref()
+                .unwrap()
+                .ends_with(&format!(
+                    "millrace-agents/learning/requests/active/{learning_request_id}.md"
+                ))
+        );
+
+        let stage_result = outcome.stage_result.as_ref().unwrap();
+        assert_eq!(stage_result.stage, StageName::Librarian);
+        assert_eq!(stage_result.terminal_result, expected_terminal);
+        assert_eq!(stage_result.result_class, expected_class);
+        assert_eq!(stage_result.success, expected_success);
+        assert_eq!(
+            outcome.router_decision.as_ref().unwrap().action,
+            RouterAction::Idle
+        );
+        assert!(
+            paths
+                .learning_requests_done_dir
+                .join(format!("{learning_request_id}.md"))
+                .is_file()
+        );
+        assert!(
+            !paths
+                .learning_requests_active_dir
+                .join(format!("{learning_request_id}.md"))
+                .exists()
+        );
+        assert_eq!(load_learning_status(&paths).unwrap(), "### IDLE");
+
+        session.finish().unwrap();
+    }
+}
+
+#[test]
+fn serial_tick_librarian_blocked_preserves_recoverable_failure_evidence() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    let mut document = learning_request_document("learn-librarian-blocked");
+    document.requested_action = LearningRequestAction::Install;
+    document.target_stage = Some(LearningStageName::Librarian);
+    QueueStore::from_paths(paths.clone())
+        .enqueue_learning_request(&document)
+        .unwrap();
+
+    let mut options = startup_options("tick-librarian-blocked");
+    options.requested_mode_id = Some("learning_codex".to_owned());
+    let mut session = startup_runtime_once_for_paths(&paths, options).unwrap();
+    let runner = FakeRunner::with_default(FakeRunnerResult::structured_terminal_result(
+        "BLOCKED",
+        Some(ResultClass::RecoverableFailure),
+    ))
+    .unwrap();
+
+    let outcome = run_serial_runtime_tick_with_runner(
+        &mut session,
+        tick_options("run-librarian-blocked", "request-librarian-blocked"),
+        &runner,
+    )
+    .unwrap();
+
+    let stage_result = outcome.stage_result.as_ref().unwrap();
+    assert_eq!(stage_result.stage, StageName::Librarian);
+    assert_eq!(
+        stage_result.terminal_result,
+        TerminalResult::Learning(LearningTerminalResult::Blocked)
+    );
+    assert_eq!(stage_result.result_class, ResultClass::RecoverableFailure);
+    assert_eq!(
+        outcome.router_decision.as_ref().unwrap().action,
+        RouterAction::Blocked
+    );
+    assert_eq!(
+        outcome.router_decision.as_ref().unwrap().reason,
+        "librarian_blocked"
+    );
+    assert!(outcome.stage_result_path.as_ref().unwrap().is_file());
+    assert!(outcome.terminal_marker_path.as_ref().unwrap().is_file());
+    assert!(outcome.router_decision_path.as_ref().unwrap().is_file());
+    assert!(
+        paths
+            .learning_requests_blocked_dir
+            .join("learn-librarian-blocked.md")
+            .is_file()
+    );
+    assert!(
+        !paths
+            .learning_requests_active_dir
+            .join("learn-librarian-blocked.md")
+            .exists()
+    );
+    assert_eq!(load_learning_status(&paths).unwrap(), "### BLOCKED");
 
     session.finish().unwrap();
 }

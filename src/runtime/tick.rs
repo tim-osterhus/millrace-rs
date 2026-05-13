@@ -2688,6 +2688,8 @@ fn enqueue_learning_requests_for_stage_result(
             continue;
         }
 
+        let artifact_paths = learning_request_artifact_paths(stage_result, stage_result_path);
+        let stage_result_artifact_path = stage_result_path.display().to_string();
         let document = LearningRequestDocument {
             learning_request_id: new_request_id("learn"),
             title: format!(
@@ -2725,12 +2727,17 @@ fn enqueue_learning_requests_for_stage_result(
                 "target_stage": rule.target_stage.as_str(),
                 "target_skill_id": rule.target_skill_id,
                 "preferred_output_paths": rule.preferred_output_paths,
+                "stage_result_path": stage_result_artifact_path,
+                "artifact_paths": artifact_paths.clone(),
                 "run_id": stage_result.run_id,
                 "work_item_kind": stage_result.work_item_kind.as_str(),
                 "work_item_id": stage_result.work_item_id,
+                "source_work_item_kind": stage_result.work_item_kind.as_str(),
+                "source_work_item_id": stage_result.work_item_id,
+                "source_active_work_item_path": metadata_string(stage_result, "active_work_item_path"),
             }),
             originating_run_ids: vec![stage_result.run_id.clone()],
-            artifact_paths: vec![stage_result_path.display().to_string()],
+            artifact_paths,
             references: Vec::new(),
             created_at: stage_result.completed_at.clone(),
             created_by: "millrace runtime".to_owned(),
@@ -2785,6 +2792,19 @@ fn enqueue_learning_requests_for_stage_result(
         queued_paths.push(queued_path);
     }
     Ok(queued_paths)
+}
+
+fn learning_request_artifact_paths(
+    stage_result: &StageResultEnvelope,
+    stage_result_path: &Path,
+) -> Vec<String> {
+    let mut paths = vec![stage_result_path.display().to_string()];
+    for artifact_path in &stage_result.artifact_paths {
+        if !paths.contains(artifact_path) {
+            paths.push(artifact_path.clone());
+        }
+    }
+    paths
 }
 
 fn handle_learning_curator_promotion_boundary(

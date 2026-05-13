@@ -3,6 +3,38 @@
 All notable user-facing changes to the experimental Rust `millrace-ai` crate
 are documented in this file.
 
+## [0.3.3] - 2026-05-12
+
+### Added
+
+- Added Rust release evidence for the Python `v0.18.2..v0.18.3` parity pass,
+  covering Librarian contracts/assets, learning graph and mode bindings,
+  Planner-to-Librarian trigger metadata, learning request artifact metadata,
+  runner normalization metadata, shipped skill lint guidance, docs, package
+  include readiness, and the optional `millrace-web` `v0.18.3`
+  package/version unsupported-gap surface.
+- Added release fixture coverage for v0.18.3 parity fixtures, runtime docs,
+  source package mapping, required Builder verification command results,
+  package verification, and forbidden release actions.
+
+### Changed
+
+- Bumped the Rust crate, lockfile package metadata, and version-visible CLI
+  output from `0.3.2` to `0.3.3`.
+- Updated README, roadmap, source-package map, runtime docs, outline, fixture
+  docs, and release evidence to target Python `v0.18.3` at
+  `6556e55c8463ce9256716bc425a49059b4c5981c`.
+
+### Known Gaps
+
+- The optional Python `packages/millrace-web` `v0.18.3` package version,
+  `millrace-ai>=0.18.3` dependency floor, and FastAPI app version are recorded
+  as explicit package/version evidence for the existing unsupported Rust web
+  gap. Rust still does not ship a web server, static dashboard shell, SSE
+  stream, dashboard HTTP API, or separate `millrace-web` package.
+- Native filesystem watcher integration, live subscription-quota provider
+  polling, and live Codex/Pi smoke runs remain opt-in or preview-only.
+
 ## [0.3.2] - 2026-05-10
 
 ### Added

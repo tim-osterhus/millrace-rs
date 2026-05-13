@@ -132,7 +132,7 @@ fn baseline_mode_graph_and_stage_kind_assets_parse_through_contracts() {
         "../src/assets/baseline/modes/learning_codex.json"
     ));
     assert!(learning_mode.concurrency_policy.is_some());
-    assert_eq!(learning_mode.learning_trigger_rules.len(), 3);
+    assert_eq!(learning_mode.learning_trigger_rules.len(), 4);
     assert_eq!(
         learning_mode.learning_trigger_rules[0].requested_action,
         LearningRequestAction::Improve
@@ -154,6 +154,31 @@ fn baseline_mode_graph_and_stage_kind_assets_parse_through_contracts() {
         learning_mode.learning_trigger_rules[0]
             .preferred_output_paths
             .is_empty()
+    );
+    assert_eq!(
+        learning_mode
+            .stage_runner_bindings
+            .get(&millrace_ai::contracts::StageName::Librarian)
+            .map(String::as_str),
+        Some("codex_cli")
+    );
+    let librarian_trigger = learning_mode
+        .learning_trigger_rules
+        .iter()
+        .find(|rule| rule.rule_id == "planning.planner.complete-to-librarian")
+        .expect("learning_codex includes Planner-to-Librarian trigger");
+    assert_eq!(
+        librarian_trigger.source_stage,
+        millrace_ai::contracts::StageName::Planner
+    );
+    assert_eq!(librarian_trigger.target_stage, LearningStageName::Librarian);
+    assert_eq!(
+        librarian_trigger.requested_action,
+        LearningRequestAction::Install
+    );
+    assert_eq!(
+        librarian_trigger.on_terminal_results,
+        ["PLANNER_COMPLETE".to_owned()]
     );
 
     let integrated_mode: ModeDefinition = parse_contract(include_str!(
@@ -183,6 +208,11 @@ fn baseline_mode_graph_and_stage_kind_assets_parse_through_contracts() {
     );
     assert!(integrated_mode.concurrency_policy.is_none());
     assert!(integrated_mode.learning_trigger_rules.is_empty());
+    assert!(
+        !integrated_mode
+            .stage_runner_bindings
+            .contains_key(&millrace_ai::contracts::StageName::Librarian)
+    );
 
     let learning_integrated_mode: ModeDefinition = parse_contract(include_str!(
         "../src/assets/baseline/modes/learning_codex_integrated.json"
@@ -206,11 +236,18 @@ fn baseline_mode_graph_and_stage_kind_assets_parse_through_contracts() {
         Some("learning.standard")
     );
     assert!(learning_integrated_mode.concurrency_policy.is_some());
-    assert_eq!(learning_integrated_mode.learning_trigger_rules.len(), 3);
+    assert_eq!(learning_integrated_mode.learning_trigger_rules.len(), 4);
     assert_eq!(
         learning_integrated_mode
             .stage_runner_bindings
             .get(&millrace_ai::contracts::StageName::Integrator)
+            .map(String::as_str),
+        Some("codex_cli")
+    );
+    assert_eq!(
+        learning_integrated_mode
+            .stage_runner_bindings
+            .get(&millrace_ai::contracts::StageName::Librarian)
             .map(String::as_str),
         Some("codex_cli")
     );
@@ -277,10 +314,24 @@ fn baseline_mode_graph_and_stage_kind_assets_parse_through_contracts() {
     ));
     assert!(
         learning_graph
+            .nodes
+            .iter()
+            .any(|node| node.node_id == "librarian" && node.stage_kind_id == "librarian")
+    );
+    assert!(
+        learning_graph
             .terminal_states
             .iter()
             .any(|state| state.terminal_class == GraphLoopTerminalClass::NoOp
                 && state.writes_status == "ANALYST_NOOP")
+    );
+    assert!(
+        learning_graph
+            .terminal_states
+            .iter()
+            .any(|state| state.terminal_state_id == "librarian_noop"
+                && state.terminal_class == GraphLoopTerminalClass::NoOp
+                && state.writes_status == "LIBRARIAN_NOOP")
     );
 
     let builder_kind: RegisteredStageKindDefinition = parse_contract(include_str!(
@@ -340,6 +391,25 @@ fn baseline_mode_graph_and_stage_kind_assets_parse_through_contracts() {
     assert_eq!(
         recon_kind.allowed_result_classes_by_outcome["RECON_NOOP"],
         [ResultClass::NoOp]
+    );
+
+    let librarian_kind: RegisteredStageKindDefinition = parse_contract(include_str!(
+        "../src/assets/baseline/registry/stage_kinds/learning/librarian.json"
+    ));
+    assert_eq!(librarian_kind.stage_kind_id, "librarian");
+    assert_eq!(librarian_kind.plane, Plane::Learning);
+    assert_eq!(librarian_kind.running_status_marker, "LIBRARIAN_RUNNING");
+    assert_eq!(
+        librarian_kind.required_skill_paths,
+        ["skills/stage/learning/librarian-core/SKILL.md".to_owned()]
+    );
+    assert_eq!(
+        librarian_kind.allowed_result_classes_by_outcome["LIBRARIAN_NOOP"],
+        [ResultClass::NoOp]
+    );
+    assert_eq!(
+        librarian_kind.declared_output_artifacts,
+        ["stage_result".to_owned(), "skill_install_report".to_owned()]
     );
 }
 
@@ -417,6 +487,33 @@ fn learning_trigger_destination_metadata_normalizes_and_serializes() {
     assert_eq!(
         single_path_mode.learning_trigger_rules[0].preferred_output_paths,
         ["skills/stage/execution/doublechecker-core/SKILL.md".to_owned()]
+    );
+
+    let librarian_mode = ModeDefinition::from_json_value(json!({
+        "schema_version": "1.0",
+        "kind": "mode",
+        "mode_id": "targeted_librarian_learning",
+        "loop_ids_by_plane": {
+            "execution": "execution.standard",
+            "planning": "planning.standard",
+            "learning": "learning.standard"
+        },
+        "learning_trigger_rules": [
+            {
+                "rule_id": "execution.checker.pass-to-librarian",
+                "source_plane": "execution",
+                "source_stage": "checker",
+                "on_terminal_results": ["CHECKER_PASS"],
+                "target_stage": "librarian",
+                "requested_action": "install",
+                "target_skill_id": "checker-core"
+            }
+        ]
+    }))
+    .unwrap();
+    assert_eq!(
+        librarian_mode.learning_trigger_rules[0].target_stage,
+        LearningStageName::Librarian
     );
 }
 

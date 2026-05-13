@@ -13,9 +13,9 @@ https://github.com/tim-osterhus/millrace-rs-port-docs
 
 ## Current Parity Target
 
-The Rust `0.3.2` release target is Python `v0.18.2` at commit
-`5444cb9485ea90b67b2ed6ba7e0723ae9fe7b79f`, ported from the previous Rust
-parity baseline of Python `v0.18.1`.
+The Rust `0.3.3` release target is Python `v0.18.3` at commit
+`6556e55c8463ce9256716bc425a49059b4c5981c`, ported from the previous Rust
+parity baseline of Python `v0.18.2`.
 
 The stable surface for parity is operator-visible behavior:
 
@@ -47,7 +47,7 @@ is the CLI plus the on-disk workspace format.
 
 ## Release Evidence
 
-- `CHANGELOG.md` records the Rust `0.3.2` release-facing summary.
+- `CHANGELOG.md` records the Rust `0.3.3` release-facing summary.
 - `ROADMAP.md` records the crate-level current release target and explicit
   gaps.
 - `docs/runtime/` records Rust runtime docs for graph exports, run traces,
@@ -78,6 +78,14 @@ is the CLI plus the on-disk workspace format.
   package readiness, required release-readiness command results, the
   dirty-worktree publish dry-run limitation, allow-dirty dry-run/package
   substitutes, and explicit web package unsupported-gap evidence.
+- `tests/fixtures/cli_parity/auto_port_v0_18_3_parity_evidence.json` ties the
+  Python `v0.18.2..v0.18.3` Librarian/learning-trigger/runner-metadata
+  behavior delta to Rust tests and fixtures.
+- `tests/fixtures/cli_parity/auto_port_v0_18_3_release_parity_evidence.json`
+  ties the Python `v0.18.2..v0.18.3` source/test/docs/package changes to Rust
+  tests, docs, package metadata, Librarian/learning-trigger/runner-metadata and
+  shipped skill lint evidence, package readiness, required Builder verification
+  command results, and explicit web package unsupported-gap evidence.
 - `tests/parity_cli.rs` rejects missing, malformed, unknown, stale, or omitted
   Rust test references in the final auto-port fixtures.
 
@@ -89,8 +97,9 @@ is the CLI plus the on-disk workspace format.
   exports, run-trace summaries, recent-trace Flow overlays, trace outcome
   labels, and version/dependency sync for that package, Python v0.18.1 syncs
   the package version, `millrace-ai>=0.18.1` dependency floor, and FastAPI
-  application version, and Python v0.18.2 repeats that package/runtime version
-  sync at `0.18.2`. The Rust crate does not currently implement a web
+  application version, and Python v0.18.2 and v0.18.3 repeat that
+  package/runtime version sync through `0.18.3`. The Rust crate does not
+  currently implement a web
   server, static dashboard shell, SSE event stream, dashboard HTTP API, or
   separate dashboard package. Its deferred reader
   evidence names the workspace registry, summary DTO, queue, run, snapshot,
@@ -111,5 +120,5 @@ is the CLI plus the on-disk workspace format.
   Pi RPC CLI.
 
 For proof of the historical v0.1.0 autonomous port campaign, see
-`tim-osterhus/millrace-rs-port-docs`. For the crate-local `0.3.2` release
+`tim-osterhus/millrace-rs-port-docs`. For the crate-local `0.3.3` release
 evidence pass, use the fixture and changelog paths listed above.

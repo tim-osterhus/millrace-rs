@@ -8528,6 +8528,26 @@
                 "terminal_state_id": "curator_noop"
               },
               {
+                "edge_id": "librarian-complete-to-terminal-librarian-complete",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "LIBRARIAN_COMPLETE",
+                "priority": 100,
+                "source_node_id": "librarian",
+                "target_node_id": null,
+                "terminal_state_id": "librarian_complete"
+              },
+              {
+                "edge_id": "librarian-noop-to-terminal-librarian-noop",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "LIBRARIAN_NOOP",
+                "priority": 100,
+                "source_node_id": "librarian",
+                "target_node_id": null,
+                "terminal_state_id": "librarian_noop"
+              },
+              {
                 "edge_id": "analyst-blocked-to-terminal-blocked",
                 "kind": "terminal",
                 "max_attempts": null,
@@ -8554,6 +8574,16 @@
                 "outcome": "BLOCKED",
                 "priority": 100,
                 "source_node_id": "curator",
+                "target_node_id": null,
+                "terminal_state_id": "blocked"
+              },
+              {
+                "edge_id": "librarian-blocked-to-terminal-blocked",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "BLOCKED",
+                "priority": 100,
+                "source_node_id": "librarian",
                 "target_node_id": null,
                 "terminal_state_id": "blocked"
               }
@@ -8665,6 +8695,39 @@
                 "stage_kind_id": "curator",
                 "thinking_level": null,
                 "timeout_seconds": 3600
+              },
+              {
+                "allowed_result_classes_by_outcome": {
+                  "BLOCKED": [
+                    "blocked",
+                    "recoverable_failure"
+                  ],
+                  "LIBRARIAN_COMPLETE": [
+                    "success"
+                  ],
+                  "LIBRARIAN_NOOP": [
+                    "no_op"
+                  ]
+                },
+                "attached_skill_additions": [],
+                "declared_output_artifacts": [
+                  "stage_result",
+                  "skill_install_report"
+                ],
+                "entrypoint_contract_id": "librarian.contract.v1",
+                "entrypoint_path": "entrypoints/learning/librarian.md",
+                "model_name": null,
+                "model_reasoning_effort": null,
+                "node_id": "librarian",
+                "plane": "learning",
+                "required_skill_paths": [
+                  "skills/stage/learning/librarian-core/SKILL.md"
+                ],
+                "runner_name": "codex_cli",
+                "running_status_marker": "LIBRARIAN_RUNNING",
+                "stage_kind_id": "librarian",
+                "thinking_level": null,
+                "timeout_seconds": 3600
               }
             ],
             "plane": "learning",
@@ -8708,6 +8771,26 @@
                 "terminal_class": "no_op",
                 "terminal_state_id": "curator_noop",
                 "writes_status": "CURATOR_NOOP"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
+                  "skill_install_report"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "success",
+                "terminal_state_id": "librarian_complete",
+                "writes_status": "LIBRARIAN_COMPLETE"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
+                  "skill_install_report"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "no_op",
+                "terminal_state_id": "librarian_noop",
+                "writes_status": "LIBRARIAN_NOOP"
               },
               {
                 "emits_artifacts": [
@@ -8801,6 +8884,32 @@
               },
               {
                 "description": null,
+                "edge_id": "librarian-complete-to-terminal-librarian-complete",
+                "from_node_id": "librarian",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "LIBRARIAN_COMPLETE"
+                ],
+                "priority": 100,
+                "terminal_state_id": "librarian_complete",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "librarian-noop-to-terminal-librarian-noop",
+                "from_node_id": "librarian",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "LIBRARIAN_NOOP"
+                ],
+                "priority": 100,
+                "terminal_state_id": "librarian_noop",
+                "to_node_id": null
+              },
+              {
+                "description": null,
                 "edge_id": "analyst-blocked-to-terminal-blocked",
                 "from_node_id": "analyst",
                 "kind": "terminal",
@@ -8829,6 +8938,19 @@
                 "description": null,
                 "edge_id": "curator-blocked-to-terminal-blocked",
                 "from_node_id": "curator",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "BLOCKED"
+                ],
+                "priority": 100,
+                "terminal_state_id": "blocked",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "librarian-blocked-to-terminal-blocked",
+                "from_node_id": "librarian",
                 "kind": "terminal",
                 "max_attempts": null,
                 "on_outcomes": [
@@ -9672,6 +9794,26 @@
               "terminal_state_id": "curator_noop"
             },
             {
+              "edge_id": "librarian-complete-to-terminal-librarian-complete",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "LIBRARIAN_COMPLETE",
+              "priority": 100,
+              "source_node_id": "librarian",
+              "target_node_id": null,
+              "terminal_state_id": "librarian_complete"
+            },
+            {
+              "edge_id": "librarian-noop-to-terminal-librarian-noop",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "LIBRARIAN_NOOP",
+              "priority": 100,
+              "source_node_id": "librarian",
+              "target_node_id": null,
+              "terminal_state_id": "librarian_noop"
+            },
+            {
               "edge_id": "analyst-blocked-to-terminal-blocked",
               "kind": "terminal",
               "max_attempts": null,
@@ -9698,6 +9840,16 @@
               "outcome": "BLOCKED",
               "priority": 100,
               "source_node_id": "curator",
+              "target_node_id": null,
+              "terminal_state_id": "blocked"
+            },
+            {
+              "edge_id": "librarian-blocked-to-terminal-blocked",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "BLOCKED",
+              "priority": 100,
+              "source_node_id": "librarian",
               "target_node_id": null,
               "terminal_state_id": "blocked"
             }
@@ -9809,6 +9961,39 @@
               "stage_kind_id": "curator",
               "thinking_level": null,
               "timeout_seconds": 3600
+            },
+            {
+              "allowed_result_classes_by_outcome": {
+                "BLOCKED": [
+                  "blocked",
+                  "recoverable_failure"
+                ],
+                "LIBRARIAN_COMPLETE": [
+                  "success"
+                ],
+                "LIBRARIAN_NOOP": [
+                  "no_op"
+                ]
+              },
+              "attached_skill_additions": [],
+              "declared_output_artifacts": [
+                "stage_result",
+                "skill_install_report"
+              ],
+              "entrypoint_contract_id": "librarian.contract.v1",
+              "entrypoint_path": "entrypoints/learning/librarian.md",
+              "model_name": null,
+              "model_reasoning_effort": null,
+              "node_id": "librarian",
+              "plane": "learning",
+              "required_skill_paths": [
+                "skills/stage/learning/librarian-core/SKILL.md"
+              ],
+              "runner_name": "codex_cli",
+              "running_status_marker": "LIBRARIAN_RUNNING",
+              "stage_kind_id": "librarian",
+              "thinking_level": null,
+              "timeout_seconds": 3600
             }
           ],
           "plane": "learning",
@@ -9852,6 +10037,26 @@
               "terminal_class": "no_op",
               "terminal_state_id": "curator_noop",
               "writes_status": "CURATOR_NOOP"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
+                "skill_install_report"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "success",
+              "terminal_state_id": "librarian_complete",
+              "writes_status": "LIBRARIAN_COMPLETE"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
+                "skill_install_report"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "no_op",
+              "terminal_state_id": "librarian_noop",
+              "writes_status": "LIBRARIAN_NOOP"
             },
             {
               "emits_artifacts": [
@@ -9945,6 +10150,32 @@
             },
             {
               "description": null,
+              "edge_id": "librarian-complete-to-terminal-librarian-complete",
+              "from_node_id": "librarian",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "LIBRARIAN_COMPLETE"
+              ],
+              "priority": 100,
+              "terminal_state_id": "librarian_complete",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "librarian-noop-to-terminal-librarian-noop",
+              "from_node_id": "librarian",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "LIBRARIAN_NOOP"
+              ],
+              "priority": 100,
+              "terminal_state_id": "librarian_noop",
+              "to_node_id": null
+            },
+            {
+              "description": null,
               "edge_id": "analyst-blocked-to-terminal-blocked",
               "from_node_id": "analyst",
               "kind": "terminal",
@@ -9973,6 +10204,19 @@
               "description": null,
               "edge_id": "curator-blocked-to-terminal-blocked",
               "from_node_id": "curator",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "BLOCKED"
+              ],
+              "priority": 100,
+              "terminal_state_id": "blocked",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "librarian-blocked-to-terminal-blocked",
+              "from_node_id": "librarian",
               "kind": "terminal",
               "max_attempts": null,
               "on_outcomes": [
@@ -10024,6 +10268,18 @@
             "source_stage": "consultant",
             "target_skill_id": null,
             "target_stage": "analyst"
+          },
+          {
+            "on_terminal_results": [
+              "PLANNER_COMPLETE"
+            ],
+            "preferred_output_paths": [],
+            "requested_action": "install",
+            "rule_id": "planning.planner.complete-to-librarian",
+            "source_plane": "planning",
+            "source_stage": "planner",
+            "target_skill_id": null,
+            "target_stage": "librarian"
           }
         ],
         "loop_ids_by_plane": {
@@ -10846,6 +11102,12 @@
           },
           {
             "asset_family": "entrypoint",
+            "compile_time_path": "entrypoints/learning/librarian.md",
+            "content_sha256": "<content-sha256>",
+            "logical_id": "entrypoint:entrypoints/learning/librarian.md"
+          },
+          {
+            "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/learning/professor.md",
             "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/learning/professor.md"
@@ -10966,6 +11228,12 @@
           },
           {
             "asset_family": "skill",
+            "compile_time_path": "skills/stage/learning/librarian-core/SKILL.md",
+            "content_sha256": "<content-sha256>",
+            "logical_id": "skill:skills/stage/learning/librarian-core/SKILL.md"
+          },
+          {
+            "asset_family": "skill",
             "compile_time_path": "skills/stage/learning/professor-core/SKILL.md",
             "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/learning/professor-core/SKILL.md"
@@ -11059,6 +11327,12 @@
             "compile_time_path": "registry/stage_kinds/execution/fixer.json",
             "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:fixer"
+          },
+          {
+            "asset_family": "stage_kind",
+            "compile_time_path": "registry/stage_kinds/learning/librarian.json",
+            "content_sha256": "<content-sha256>",
+            "logical_id": "stage_kind:librarian"
           },
           {
             "asset_family": "stage_kind",
@@ -11279,6 +11553,20 @@
               "running_status_marker": "CURATOR_RUNNING",
               "stage": "learning.curator",
               "stage_kind_id": "curator",
+              "thinking_level": "none",
+              "timeout_seconds": "3600"
+            },
+            {
+              "attached_skills": "none",
+              "entrypoint_contract_id": "librarian.contract.v1",
+              "entrypoint_path": "entrypoints/learning/librarian.md",
+              "model_name": "none",
+              "model_reasoning_effort": "none",
+              "required_skills": "skills/stage/learning/librarian-core/SKILL.md",
+              "runner_name": "codex_cli",
+              "running_status_marker": "LIBRARIAN_RUNNING",
+              "stage": "learning.librarian",
+              "stage_kind_id": "librarian",
               "thinking_level": "none",
               "timeout_seconds": "3600"
             },
@@ -12949,6 +13237,26 @@
                 "terminal_state_id": "curator_noop"
               },
               {
+                "edge_id": "librarian-complete-to-terminal-librarian-complete",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "LIBRARIAN_COMPLETE",
+                "priority": 100,
+                "source_node_id": "librarian",
+                "target_node_id": null,
+                "terminal_state_id": "librarian_complete"
+              },
+              {
+                "edge_id": "librarian-noop-to-terminal-librarian-noop",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "LIBRARIAN_NOOP",
+                "priority": 100,
+                "source_node_id": "librarian",
+                "target_node_id": null,
+                "terminal_state_id": "librarian_noop"
+              },
+              {
                 "edge_id": "analyst-blocked-to-terminal-blocked",
                 "kind": "terminal",
                 "max_attempts": null,
@@ -12975,6 +13283,16 @@
                 "outcome": "BLOCKED",
                 "priority": 100,
                 "source_node_id": "curator",
+                "target_node_id": null,
+                "terminal_state_id": "blocked"
+              },
+              {
+                "edge_id": "librarian-blocked-to-terminal-blocked",
+                "kind": "terminal",
+                "max_attempts": null,
+                "outcome": "BLOCKED",
+                "priority": 100,
+                "source_node_id": "librarian",
                 "target_node_id": null,
                 "terminal_state_id": "blocked"
               }
@@ -13086,6 +13404,39 @@
                 "stage_kind_id": "curator",
                 "thinking_level": null,
                 "timeout_seconds": 3600
+              },
+              {
+                "allowed_result_classes_by_outcome": {
+                  "BLOCKED": [
+                    "blocked",
+                    "recoverable_failure"
+                  ],
+                  "LIBRARIAN_COMPLETE": [
+                    "success"
+                  ],
+                  "LIBRARIAN_NOOP": [
+                    "no_op"
+                  ]
+                },
+                "attached_skill_additions": [],
+                "declared_output_artifacts": [
+                  "stage_result",
+                  "skill_install_report"
+                ],
+                "entrypoint_contract_id": "librarian.contract.v1",
+                "entrypoint_path": "entrypoints/learning/librarian.md",
+                "model_name": null,
+                "model_reasoning_effort": null,
+                "node_id": "librarian",
+                "plane": "learning",
+                "required_skill_paths": [
+                  "skills/stage/learning/librarian-core/SKILL.md"
+                ],
+                "runner_name": "pi_rpc",
+                "running_status_marker": "LIBRARIAN_RUNNING",
+                "stage_kind_id": "librarian",
+                "thinking_level": null,
+                "timeout_seconds": 3600
               }
             ],
             "plane": "learning",
@@ -13129,6 +13480,26 @@
                 "terminal_class": "no_op",
                 "terminal_state_id": "curator_noop",
                 "writes_status": "CURATOR_NOOP"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
+                  "skill_install_report"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "success",
+                "terminal_state_id": "librarian_complete",
+                "writes_status": "LIBRARIAN_COMPLETE"
+              },
+              {
+                "emits_artifacts": [
+                  "stage_result",
+                  "skill_install_report"
+                ],
+                "ends_plane_run": true,
+                "terminal_class": "no_op",
+                "terminal_state_id": "librarian_noop",
+                "writes_status": "LIBRARIAN_NOOP"
               },
               {
                 "emits_artifacts": [
@@ -13222,6 +13593,32 @@
               },
               {
                 "description": null,
+                "edge_id": "librarian-complete-to-terminal-librarian-complete",
+                "from_node_id": "librarian",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "LIBRARIAN_COMPLETE"
+                ],
+                "priority": 100,
+                "terminal_state_id": "librarian_complete",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "librarian-noop-to-terminal-librarian-noop",
+                "from_node_id": "librarian",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "LIBRARIAN_NOOP"
+                ],
+                "priority": 100,
+                "terminal_state_id": "librarian_noop",
+                "to_node_id": null
+              },
+              {
+                "description": null,
                 "edge_id": "analyst-blocked-to-terminal-blocked",
                 "from_node_id": "analyst",
                 "kind": "terminal",
@@ -13250,6 +13647,19 @@
                 "description": null,
                 "edge_id": "curator-blocked-to-terminal-blocked",
                 "from_node_id": "curator",
+                "kind": "terminal",
+                "max_attempts": null,
+                "on_outcomes": [
+                  "BLOCKED"
+                ],
+                "priority": 100,
+                "terminal_state_id": "blocked",
+                "to_node_id": null
+              },
+              {
+                "description": null,
+                "edge_id": "librarian-blocked-to-terminal-blocked",
+                "from_node_id": "librarian",
                 "kind": "terminal",
                 "max_attempts": null,
                 "on_outcomes": [
@@ -14093,6 +14503,26 @@
               "terminal_state_id": "curator_noop"
             },
             {
+              "edge_id": "librarian-complete-to-terminal-librarian-complete",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "LIBRARIAN_COMPLETE",
+              "priority": 100,
+              "source_node_id": "librarian",
+              "target_node_id": null,
+              "terminal_state_id": "librarian_complete"
+            },
+            {
+              "edge_id": "librarian-noop-to-terminal-librarian-noop",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "LIBRARIAN_NOOP",
+              "priority": 100,
+              "source_node_id": "librarian",
+              "target_node_id": null,
+              "terminal_state_id": "librarian_noop"
+            },
+            {
               "edge_id": "analyst-blocked-to-terminal-blocked",
               "kind": "terminal",
               "max_attempts": null,
@@ -14119,6 +14549,16 @@
               "outcome": "BLOCKED",
               "priority": 100,
               "source_node_id": "curator",
+              "target_node_id": null,
+              "terminal_state_id": "blocked"
+            },
+            {
+              "edge_id": "librarian-blocked-to-terminal-blocked",
+              "kind": "terminal",
+              "max_attempts": null,
+              "outcome": "BLOCKED",
+              "priority": 100,
+              "source_node_id": "librarian",
               "target_node_id": null,
               "terminal_state_id": "blocked"
             }
@@ -14230,6 +14670,39 @@
               "stage_kind_id": "curator",
               "thinking_level": null,
               "timeout_seconds": 3600
+            },
+            {
+              "allowed_result_classes_by_outcome": {
+                "BLOCKED": [
+                  "blocked",
+                  "recoverable_failure"
+                ],
+                "LIBRARIAN_COMPLETE": [
+                  "success"
+                ],
+                "LIBRARIAN_NOOP": [
+                  "no_op"
+                ]
+              },
+              "attached_skill_additions": [],
+              "declared_output_artifacts": [
+                "stage_result",
+                "skill_install_report"
+              ],
+              "entrypoint_contract_id": "librarian.contract.v1",
+              "entrypoint_path": "entrypoints/learning/librarian.md",
+              "model_name": null,
+              "model_reasoning_effort": null,
+              "node_id": "librarian",
+              "plane": "learning",
+              "required_skill_paths": [
+                "skills/stage/learning/librarian-core/SKILL.md"
+              ],
+              "runner_name": "pi_rpc",
+              "running_status_marker": "LIBRARIAN_RUNNING",
+              "stage_kind_id": "librarian",
+              "thinking_level": null,
+              "timeout_seconds": 3600
             }
           ],
           "plane": "learning",
@@ -14273,6 +14746,26 @@
               "terminal_class": "no_op",
               "terminal_state_id": "curator_noop",
               "writes_status": "CURATOR_NOOP"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
+                "skill_install_report"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "success",
+              "terminal_state_id": "librarian_complete",
+              "writes_status": "LIBRARIAN_COMPLETE"
+            },
+            {
+              "emits_artifacts": [
+                "stage_result",
+                "skill_install_report"
+              ],
+              "ends_plane_run": true,
+              "terminal_class": "no_op",
+              "terminal_state_id": "librarian_noop",
+              "writes_status": "LIBRARIAN_NOOP"
             },
             {
               "emits_artifacts": [
@@ -14366,6 +14859,32 @@
             },
             {
               "description": null,
+              "edge_id": "librarian-complete-to-terminal-librarian-complete",
+              "from_node_id": "librarian",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "LIBRARIAN_COMPLETE"
+              ],
+              "priority": 100,
+              "terminal_state_id": "librarian_complete",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "librarian-noop-to-terminal-librarian-noop",
+              "from_node_id": "librarian",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "LIBRARIAN_NOOP"
+              ],
+              "priority": 100,
+              "terminal_state_id": "librarian_noop",
+              "to_node_id": null
+            },
+            {
+              "description": null,
               "edge_id": "analyst-blocked-to-terminal-blocked",
               "from_node_id": "analyst",
               "kind": "terminal",
@@ -14394,6 +14913,19 @@
               "description": null,
               "edge_id": "curator-blocked-to-terminal-blocked",
               "from_node_id": "curator",
+              "kind": "terminal",
+              "max_attempts": null,
+              "on_outcomes": [
+                "BLOCKED"
+              ],
+              "priority": 100,
+              "terminal_state_id": "blocked",
+              "to_node_id": null
+            },
+            {
+              "description": null,
+              "edge_id": "librarian-blocked-to-terminal-blocked",
+              "from_node_id": "librarian",
               "kind": "terminal",
               "max_attempts": null,
               "on_outcomes": [
@@ -14445,6 +14977,18 @@
             "source_stage": "consultant",
             "target_skill_id": null,
             "target_stage": "analyst"
+          },
+          {
+            "on_terminal_results": [
+              "PLANNER_COMPLETE"
+            ],
+            "preferred_output_paths": [],
+            "requested_action": "install",
+            "rule_id": "planning.planner.complete-to-librarian",
+            "source_plane": "planning",
+            "source_stage": "planner",
+            "target_skill_id": null,
+            "target_stage": "librarian"
           }
         ],
         "loop_ids_by_plane": {
@@ -15267,6 +15811,12 @@
           },
           {
             "asset_family": "entrypoint",
+            "compile_time_path": "entrypoints/learning/librarian.md",
+            "content_sha256": "<content-sha256>",
+            "logical_id": "entrypoint:entrypoints/learning/librarian.md"
+          },
+          {
+            "asset_family": "entrypoint",
             "compile_time_path": "entrypoints/learning/professor.md",
             "content_sha256": "<content-sha256>",
             "logical_id": "entrypoint:entrypoints/learning/professor.md"
@@ -15387,6 +15937,12 @@
           },
           {
             "asset_family": "skill",
+            "compile_time_path": "skills/stage/learning/librarian-core/SKILL.md",
+            "content_sha256": "<content-sha256>",
+            "logical_id": "skill:skills/stage/learning/librarian-core/SKILL.md"
+          },
+          {
+            "asset_family": "skill",
             "compile_time_path": "skills/stage/learning/professor-core/SKILL.md",
             "content_sha256": "<content-sha256>",
             "logical_id": "skill:skills/stage/learning/professor-core/SKILL.md"
@@ -15480,6 +16036,12 @@
             "compile_time_path": "registry/stage_kinds/execution/fixer.json",
             "content_sha256": "<content-sha256>",
             "logical_id": "stage_kind:fixer"
+          },
+          {
+            "asset_family": "stage_kind",
+            "compile_time_path": "registry/stage_kinds/learning/librarian.json",
+            "content_sha256": "<content-sha256>",
+            "logical_id": "stage_kind:librarian"
           },
           {
             "asset_family": "stage_kind",
@@ -15700,6 +16262,20 @@
               "running_status_marker": "CURATOR_RUNNING",
               "stage": "learning.curator",
               "stage_kind_id": "curator",
+              "thinking_level": "none",
+              "timeout_seconds": "3600"
+            },
+            {
+              "attached_skills": "none",
+              "entrypoint_contract_id": "librarian.contract.v1",
+              "entrypoint_path": "entrypoints/learning/librarian.md",
+              "model_name": "none",
+              "model_reasoning_effort": "none",
+              "required_skills": "skills/stage/learning/librarian-core/SKILL.md",
+              "runner_name": "pi_rpc",
+              "running_status_marker": "LIBRARIAN_RUNNING",
+              "stage": "learning.librarian",
+              "stage_kind_id": "librarian",
               "thinking_level": "none",
               "timeout_seconds": "3600"
             },

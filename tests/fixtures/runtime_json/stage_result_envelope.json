@@ -38,7 +38,10 @@
     "builder pass"
   ],
   "metadata": {
-    "request_id": "request-001"
+    "request_id": "request-001",
+    "active_work_item_kind": "task",
+    "active_work_item_id": "task-001",
+    "active_work_item_path": "millrace-agents/tasks/active/task-001.md"
   },
   "started_at": "2026-04-15T00:00:00Z",
   "completed_at": "2026-04-15T00:00:00Z"

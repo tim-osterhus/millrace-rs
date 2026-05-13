@@ -702,6 +702,18 @@ fn request_metadata(
         json!(request.preferred_report_path),
     );
     metadata.insert(
+        "active_work_item_kind".to_owned(),
+        json!(request.active_work_item_kind.map(|kind| kind.as_str())),
+    );
+    metadata.insert(
+        "active_work_item_id".to_owned(),
+        json!(request.active_work_item_id),
+    );
+    metadata.insert(
+        "active_work_item_path".to_owned(),
+        json!(request.active_work_item_path),
+    );
+    metadata.insert(
         "skill_revision_evidence_path".to_owned(),
         json!(request.skill_revision_evidence_path),
     );

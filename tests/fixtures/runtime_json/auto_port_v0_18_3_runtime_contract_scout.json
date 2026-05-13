@@ -1,0 +1,55 @@
+{
+  "contract_sources": [
+    "../millrace-py/src/millrace_ai/contracts/enums.py",
+    "../millrace-py/src/millrace_ai/contracts/stage_metadata.py",
+    "../millrace-py/src/millrace_ai/runners/normalization.py",
+    "../millrace-py/src/millrace_ai/runtime/learning_triggers.py",
+    "../millrace-py/src/millrace_ai/runtime/stage_requests.py",
+    "../millrace-py/tests/assets/test_modes.py",
+    "../millrace-py/tests/assets/test_stage_kinds.py",
+    "../millrace-py/tests/runtime/test_runtime.py"
+  ],
+  "expected_rust_contract_targets": [
+    "src/contracts/enums.rs",
+    "src/contracts/runtime_json.rs",
+    "src/contracts/stage_metadata.rs",
+    "src/runners/normalization.rs",
+    "src/runtime/mod.rs",
+    "src/runtime/startup.rs",
+    "src/runtime/supervisor.rs",
+    "src/runtime/tick.rs",
+    "tests/contracts_runtime_json.rs",
+    "tests/contracts_stage_metadata.rs",
+    "tests/runtime_daemon.rs",
+    "tests/runtime_serial.rs",
+    "tests/runners_normalization.rs",
+    "tests/parity_cli.rs"
+  ],
+  "kind": "auto_port_v0_18_3_runtime_contract_scout",
+  "no_live_guarantees": [
+    "no live Codex runner",
+    "no live Pi runner",
+    "no network",
+    "no credentials",
+    "no web server",
+    "no remote skill installation",
+    "no release upload",
+    "no publishing"
+  ],
+  "python_reference": {
+    "diff_range": "v0.18.2..v0.18.3",
+    "previous_commit": "5444cb9485ea90b67b2ed6ba7e0723ae9fe7b79f",
+    "previous_tag": "v0.18.2",
+    "target_commit": "6556e55c8463ce9256716bc425a49059b4c5981c",
+    "target_tag": "v0.18.3"
+  },
+  "rust_reference": {
+    "current_repo_crate_version": "0.3.2",
+    "current_repo_version_role": "previous_baseline_for_python_v0.18.2",
+    "planned_crate_version": "0.3.3",
+    "planned_version_role": "target_release_for_python_v0.18.3",
+    "previous_repo_crate_version": "0.3.2",
+    "previous_repo_version_role": "released_target_for_python_v0.18.2"
+  },
+  "schema_version": "1.0"
+}

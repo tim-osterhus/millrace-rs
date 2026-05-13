@@ -188,7 +188,12 @@ fn stage_result_json() -> Value {
             "total_tokens": 135
         },
         "notes": ["builder pass"],
-        "metadata": {"request_id": "request-001"},
+        "metadata": {
+            "request_id": "request-001",
+            "active_work_item_kind": "task",
+            "active_work_item_id": "task-001",
+            "active_work_item_path": "millrace-agents/tasks/active/task-001.md"
+        },
         "started_at": NOW,
         "completed_at": NOW
     })
@@ -377,6 +382,12 @@ fn python_produced_runtime_json_fixtures_round_trip_against_rust_contracts() {
     assert_eq!(
         stage_result.terminal_result,
         TerminalResult::Execution(ExecutionTerminalResult::BuilderComplete)
+    );
+    assert_eq!(stage_result.metadata["active_work_item_kind"], "task");
+    assert_eq!(stage_result.metadata["active_work_item_id"], "task-001");
+    assert_eq!(
+        stage_result.metadata["active_work_item_path"],
+        "millrace-agents/tasks/active/task-001.md"
     );
 
     let request_driven = assert_python_stage_result_fixture_round_trips(python_model_dump_fixture(
@@ -774,6 +785,112 @@ fn auto_port_v0_18_2_runtime_contract_scout_pins_status_recon_ownership_sources(
                 .iter()
                 .any(|value| value.as_str() == Some(guarantee)),
             "missing v0.18.2 runtime contract scout guarantee {guarantee}"
+        );
+    }
+}
+
+#[test]
+fn auto_port_v0_18_3_runtime_contract_scout_pins_librarian_trigger_runner_metadata_sources() {
+    let fixture: Value = python_model_dump_fixture(include_str!(
+        "fixtures/runtime_json/auto_port_v0_18_3_runtime_contract_scout.json"
+    ));
+    assert_eq!(fixture["schema_version"], "1.0");
+    assert_eq!(fixture["kind"], "auto_port_v0_18_3_runtime_contract_scout");
+    assert_eq!(fixture["python_reference"]["previous_tag"], "v0.18.2");
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.18.3");
+    assert_eq!(
+        fixture["python_reference"]["previous_commit"],
+        "5444cb9485ea90b67b2ed6ba7e0723ae9fe7b79f"
+    );
+    assert_eq!(
+        fixture["python_reference"]["target_commit"],
+        "6556e55c8463ce9256716bc425a49059b4c5981c"
+    );
+    assert_eq!(
+        fixture["python_reference"]["diff_range"],
+        "v0.18.2..v0.18.3"
+    );
+    assert_eq!(
+        fixture["rust_reference"]["current_repo_crate_version"],
+        "0.3.2"
+    );
+    assert_eq!(
+        fixture["rust_reference"]["current_repo_version_role"],
+        "previous_baseline_for_python_v0.18.2"
+    );
+    assert_eq!(fixture["rust_reference"]["planned_crate_version"], "0.3.3");
+    assert_ne!(
+        fixture["rust_reference"]["planned_crate_version"],
+        fixture["rust_reference"]["current_repo_crate_version"],
+        "v0.18.3 runtime scout must not treat Rust 0.3.2 as the target"
+    );
+
+    let sources = fixture["contract_sources"]
+        .as_array()
+        .expect("contract source references are present");
+    for source_path in [
+        "../millrace-py/src/millrace_ai/contracts/enums.py",
+        "../millrace-py/src/millrace_ai/contracts/stage_metadata.py",
+        "../millrace-py/src/millrace_ai/runners/normalization.py",
+        "../millrace-py/src/millrace_ai/runtime/learning_triggers.py",
+        "../millrace-py/src/millrace_ai/runtime/stage_requests.py",
+        "../millrace-py/tests/assets/test_modes.py",
+        "../millrace-py/tests/assets/test_stage_kinds.py",
+        "../millrace-py/tests/runtime/test_runtime.py",
+    ] {
+        assert!(
+            sources
+                .iter()
+                .any(|value| value.as_str() == Some(source_path)),
+            "missing v0.18.3 runtime/Librarian metadata source {source_path}"
+        );
+    }
+
+    let targets = fixture["expected_rust_contract_targets"]
+        .as_array()
+        .expect("expected Rust contract targets are present");
+    for target_path in [
+        "src/contracts/enums.rs",
+        "src/contracts/runtime_json.rs",
+        "src/contracts/stage_metadata.rs",
+        "src/runners/normalization.rs",
+        "src/runtime/mod.rs",
+        "src/runtime/startup.rs",
+        "src/runtime/supervisor.rs",
+        "src/runtime/tick.rs",
+        "tests/contracts_runtime_json.rs",
+        "tests/contracts_stage_metadata.rs",
+        "tests/runtime_daemon.rs",
+        "tests/runtime_serial.rs",
+        "tests/runners_normalization.rs",
+        "tests/parity_cli.rs",
+    ] {
+        assert!(
+            targets
+                .iter()
+                .any(|value| value.as_str() == Some(target_path)),
+            "missing v0.18.3 Rust contract target {target_path}"
+        );
+    }
+
+    let guarantees = fixture["no_live_guarantees"]
+        .as_array()
+        .expect("non-live guarantees are present");
+    for guarantee in [
+        "no live Codex runner",
+        "no live Pi runner",
+        "no network",
+        "no credentials",
+        "no web server",
+        "no remote skill installation",
+        "no release upload",
+        "no publishing",
+    ] {
+        assert!(
+            guarantees
+                .iter()
+                .any(|value| value.as_str() == Some(guarantee)),
+            "missing v0.18.3 runtime contract scout guarantee {guarantee}"
         );
     }
 }
@@ -1180,6 +1297,54 @@ fn python_v0_17_4_request_driven_no_op_terminal_identity_round_trips() {
     );
     assert_eq!(decoded.result_class, ResultClass::NoOp);
     assert!(!decoded.success);
+}
+
+#[test]
+fn python_v0_18_3_librarian_stage_result_runtime_json_round_trips() {
+    let mut complete = stage_result_json();
+    complete["run_id"] = json!("run-librarian");
+    complete["plane"] = json!("learning");
+    complete["stage"] = json!("librarian");
+    complete["node_id"] = json!("librarian");
+    complete["stage_kind_id"] = json!("librarian");
+    complete["work_item_kind"] = json!("learning_request");
+    complete["work_item_id"] = json!("learn-librarian");
+    complete["terminal_result"] = json!("LIBRARIAN_COMPLETE");
+    complete["result_class"] = json!("success");
+    complete["summary_status_marker"] = json!("### LIBRARIAN_COMPLETE");
+    complete["success"] = json!(true);
+    complete["detected_marker"] = json!("### LIBRARIAN_COMPLETE");
+
+    let decoded_complete = round_trip_stage_result(complete);
+    assert_eq!(decoded_complete.stage, StageName::Librarian);
+    assert_eq!(
+        decoded_complete.terminal_result,
+        TerminalResult::Learning(LearningTerminalResult::LibrarianComplete)
+    );
+    assert_eq!(decoded_complete.result_class, ResultClass::Success);
+
+    let mut no_op = stage_result_json();
+    no_op["run_id"] = json!("run-librarian-noop");
+    no_op["plane"] = json!("learning");
+    no_op["stage"] = json!("librarian");
+    no_op["node_id"] = json!("librarian");
+    no_op["stage_kind_id"] = json!("librarian");
+    no_op["work_item_kind"] = json!("learning_request");
+    no_op["work_item_id"] = json!("learn-librarian");
+    no_op["terminal_result"] = json!("LIBRARIAN_NOOP");
+    no_op["result_class"] = json!("no_op");
+    no_op["summary_status_marker"] = json!("### LIBRARIAN_NOOP");
+    no_op["success"] = json!(false);
+    no_op["detected_marker"] = json!("### LIBRARIAN_NOOP");
+
+    let decoded_no_op = round_trip_stage_result(no_op);
+    assert_eq!(decoded_no_op.stage, StageName::Librarian);
+    assert_eq!(
+        decoded_no_op.terminal_result,
+        TerminalResult::Learning(LearningTerminalResult::LibrarianNoop)
+    );
+    assert_eq!(decoded_no_op.result_class, ResultClass::NoOp);
+    assert!(!decoded_no_op.success);
 }
 
 #[test]

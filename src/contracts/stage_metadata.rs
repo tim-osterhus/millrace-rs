@@ -73,6 +73,10 @@ const L_CURATOR_COMPLETE: TerminalResult =
     TerminalResult::Learning(LearningTerminalResult::CuratorComplete);
 const L_CURATOR_NOOP: TerminalResult =
     TerminalResult::Learning(LearningTerminalResult::CuratorNoop);
+const L_LIBRARIAN_COMPLETE: TerminalResult =
+    TerminalResult::Learning(LearningTerminalResult::LibrarianComplete);
+const L_LIBRARIAN_NOOP: TerminalResult =
+    TerminalResult::Learning(LearningTerminalResult::LibrarianNoop);
 const L_BLOCKED: TerminalResult = TerminalResult::Learning(LearningTerminalResult::Blocked);
 
 /// Legal result classes for one terminal outcome.
@@ -380,6 +384,22 @@ const CURATOR_ALLOWED: &[OutcomeResultClasses] = &[
     },
 ];
 
+const LIBRARIAN_LEGAL: &[TerminalResult] = &[L_LIBRARIAN_COMPLETE, L_LIBRARIAN_NOOP, L_BLOCKED];
+const LIBRARIAN_ALLOWED: &[OutcomeResultClasses] = &[
+    OutcomeResultClasses {
+        terminal_result: L_LIBRARIAN_COMPLETE,
+        result_classes: SUCCESS_CLASSES,
+    },
+    OutcomeResultClasses {
+        terminal_result: L_LIBRARIAN_NOOP,
+        result_classes: NO_OP_CLASSES,
+    },
+    OutcomeResultClasses {
+        terminal_result: L_BLOCKED,
+        result_classes: BLOCKED_CLASSES,
+    },
+];
+
 const BUILDER_METADATA: StageMetadata = StageMetadata {
     stage: StageName::Builder,
     plane: Plane::Execution,
@@ -482,6 +502,12 @@ const CURATOR_METADATA: StageMetadata = StageMetadata {
     legal_terminal_results: CURATOR_LEGAL,
     allowed_result_classes_by_outcome: CURATOR_ALLOWED,
 };
+const LIBRARIAN_METADATA: StageMetadata = StageMetadata {
+    stage: StageName::Librarian,
+    plane: Plane::Learning,
+    legal_terminal_results: LIBRARIAN_LEGAL,
+    allowed_result_classes_by_outcome: LIBRARIAN_ALLOWED,
+};
 
 /// Stage metadata entries keyed by each stage value.
 pub const STAGE_METADATA_BY_VALUE: &[StageMetadata] = &[
@@ -502,6 +528,7 @@ pub const STAGE_METADATA_BY_VALUE: &[StageMetadata] = &[
     ANALYST_METADATA,
     PROFESSOR_METADATA,
     CURATOR_METADATA,
+    LIBRARIAN_METADATA,
 ];
 
 /// Canonical stage names in metadata order.
@@ -523,6 +550,7 @@ pub const STAGE_NAME_BY_VALUE: &[StageName] = &[
     StageName::Analyst,
     StageName::Professor,
     StageName::Curator,
+    StageName::Librarian,
 ];
 
 /// Stage-to-plane relationships in metadata order.
@@ -544,6 +572,7 @@ pub const STAGE_TO_PLANE: &[(StageName, Plane)] = &[
     (StageName::Analyst, Plane::Learning),
     (StageName::Professor, Plane::Learning),
     (StageName::Curator, Plane::Learning),
+    (StageName::Librarian, Plane::Learning),
 ];
 
 /// Python-compatible active work-item ownership policy for each stage.
@@ -565,6 +594,7 @@ pub const STAGE_ALLOWED_WORK_ITEM_KINDS: &[(StageName, &[WorkItemKind])] = &[
     (StageName::Analyst, LEARNING_REQUEST_WORK_ITEMS),
     (StageName::Professor, LEARNING_REQUEST_WORK_ITEMS),
     (StageName::Curator, LEARNING_REQUEST_WORK_ITEMS),
+    (StageName::Librarian, LEARNING_REQUEST_WORK_ITEMS),
 ];
 
 /// Legal terminal results for every stage in metadata order.
@@ -586,6 +616,7 @@ pub const STAGE_LEGAL_TERMINAL_RESULTS: &[(StageName, &[TerminalResult])] = &[
     (StageName::Analyst, ANALYST_LEGAL),
     (StageName::Professor, PROFESSOR_LEGAL),
     (StageName::Curator, CURATOR_LEGAL),
+    (StageName::Librarian, LIBRARIAN_LEGAL),
 ];
 
 /// Returns stage metadata for a known stage.
@@ -609,6 +640,7 @@ pub fn stage_metadata(stage: StageName) -> &'static StageMetadata {
         StageName::Analyst => &ANALYST_METADATA,
         StageName::Professor => &PROFESSOR_METADATA,
         StageName::Curator => &CURATOR_METADATA,
+        StageName::Librarian => &LIBRARIAN_METADATA,
     }
 }
 
@@ -649,7 +681,7 @@ pub const fn allowed_work_item_kinds(stage: StageName) -> &'static [WorkItemKind
         }
         StageName::Auditor => INCIDENT_WORK_ITEMS,
         StageName::Arbiter => NO_ACTIVE_WORK_ITEMS,
-        StageName::Analyst | StageName::Professor | StageName::Curator => {
+        StageName::Analyst | StageName::Professor | StageName::Curator | StageName::Librarian => {
             LEARNING_REQUEST_WORK_ITEMS
         }
     }
@@ -691,6 +723,7 @@ pub const fn running_status_marker(stage: StageName) -> &'static str {
         StageName::Analyst => "ANALYST_RUNNING",
         StageName::Professor => "PROFESSOR_RUNNING",
         StageName::Curator => "CURATOR_RUNNING",
+        StageName::Librarian => "LIBRARIAN_RUNNING",
     }
 }
 
@@ -720,6 +753,7 @@ pub fn stage_name_for_value(stage_value: &str) -> Result<StageName, ContractErro
         "analyst" => Ok(StageName::Analyst),
         "professor" => Ok(StageName::Professor),
         "curator" => Ok(StageName::Curator),
+        "librarian" => Ok(StageName::Librarian),
         _ => Err(ContractError::UnknownStageValue {
             value: stage_value.to_owned(),
         }),

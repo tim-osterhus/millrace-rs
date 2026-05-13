@@ -1,6 +1,6 @@
 [package]
 name = "millrace-ai"
-version = "0.3.2"
+version = "0.3.3"
 edition = "2024"
 rust-version = "1.85"
 description = "Experimental Rust implementation of the Millrace runtime."
@@ -24,6 +24,9 @@ include = [
     "/tests/**/*.rs",
     "/tests/fixtures/**/*",
     "/tests/support/**/*",
+    "!**/__pycache__/**",
+    "!**/*.pyc",
+    "!**/*.pyo",
 ]
 
 [lib]

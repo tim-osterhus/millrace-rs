@@ -28,6 +28,26 @@ uses this compiler evidence as package-readiness proof that Integrator
 entrypoints, stage-kind registry files, skills, integrated mode bindings, graph
 fixtures, and the v0.18.2 compiler scout fixture are included by the crate
 package boundary.
+`auto_port_v0_18_3_compiler_contract_scout.json` is target-facing scout
+evidence for Python `v0.18.2..v0.18.3`. It pins the Librarian entrypoint,
+learning graph and loop additions, learning mode trigger-bearing assets,
+Librarian stage-kind registry, librarian-core skill, shipped skill lint
+surfaces, compiler materialization source references, and expected Rust
+fixture/test targets. The Librarian asset/compiler graph/mode slice now lands
+the managed assets, compiler materialization/export coverage, normalized
+compiler parity fixture updates, and workspace-baseline synchronization; the
+runner normalization/artifact-metadata slice now lands source metadata
+preservation; and the active Librarian lifecycle slice now lands focused serial
+and daemon runtime coverage. The shipped skill lint/guidance slice now lands
+recursive packaged `SKILL.md` lint coverage, `marathon-qa-audit`
+section-contract migration, Curator/Recon/Planner guidance updates, and
+live/baseline asset sync coverage.
+The Rust `0.3.3` release evidence in
+`tests/fixtures/cli_parity/auto_port_v0_18_3_release_parity_evidence.json`
+uses this compiler evidence as package-readiness proof that Librarian
+entrypoints, stage-kind registry files, skills, learning graph/loop assets,
+learning mode trigger bindings, shipped skill lint assets, and the v0.18.3
+compiler scout fixture are included by the crate package boundary.
 
 Regenerate intentionally with:
 

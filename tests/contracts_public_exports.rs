@@ -291,7 +291,10 @@ fn public_metadata_helpers_expose_the_stage_contract_boundary() {
         stage_name_for_plane(Plane::Execution, "builder").unwrap(),
         StageName::Builder
     );
-    assert_eq!(stage_name_for_value("curator").unwrap(), StageName::Curator);
+    assert_eq!(
+        stage_name_for_value("librarian").unwrap(),
+        StageName::Librarian
+    );
     assert_eq!(running_status_marker(StageName::Builder), "BUILDER_RUNNING");
     assert_eq!(
         legal_terminal_markers(StageName::Builder),
@@ -310,7 +313,7 @@ fn public_metadata_helpers_expose_the_stage_contract_boundary() {
     );
     assert_eq!(
         known_stage_values_for_plane(Plane::Learning),
-        ["analyst", "professor", "curator"]
+        ["analyst", "professor", "curator", "librarian"]
     );
     assert_eq!(
         known_stage_values_for_plane(Plane::Planning),
@@ -327,6 +330,10 @@ fn public_metadata_helpers_expose_the_stage_contract_boundary() {
     assert_eq!(
         terminal_result_for_plane(Plane::Learning, "ANALYST_NOOP").unwrap(),
         TerminalResult::Learning(LearningTerminalResult::AnalystNoop)
+    );
+    assert_eq!(
+        terminal_result_for_plane(Plane::Learning, "LIBRARIAN_NOOP").unwrap(),
+        TerminalResult::Learning(LearningTerminalResult::LibrarianNoop)
     );
     assert_eq!(
         terminal_result_for_plane(Plane::Planning, "RECON_NOOP").unwrap(),
@@ -349,6 +356,12 @@ fn public_metadata_helpers_expose_the_stage_contract_boundary() {
     validate_stage_result_class(
         StageName::Analyst,
         TerminalResult::Learning(LearningTerminalResult::AnalystNoop),
+        ResultClass::NoOp,
+    )
+    .unwrap();
+    validate_stage_result_class(
+        StageName::Librarian,
+        TerminalResult::Learning(LearningTerminalResult::LibrarianNoop),
         ResultClass::NoOp,
     )
     .unwrap();

@@ -11,7 +11,7 @@ millrace --version
 millrace version
 ```
 
-For Rust `0.3.2`, both commands print `millrace 0.3.2`.
+For Rust `0.3.3`, both commands print `millrace 0.3.3`.
 
 ## Probe Intake And Inspection
 
@@ -71,8 +71,21 @@ artifacts.
 ## Web Boundary
 
 Python `millrace-web` exposes graph and trace data through read-only dashboard
-routes, and Python `v0.18.2` syncs that optional package to version `0.18.2`.
-Rust `0.3.2` shadows the accepted local inspection behavior through the CLI
+routes, and Python `v0.18.3` syncs that optional package to version `0.18.3`.
+Rust `0.3.3` shadows the accepted local inspection behavior through the CLI
 commands above and keeps the optional web dashboard as an explicit unsupported
 gap. No Rust web server, dashboard HTTP API, static shell, SSE stream, separate
 dashboard package, or Rust-managed web asset is part of this crate release.
+
+## Librarian And Learning Evidence
+
+Rust `0.3.3` adds the Python `v0.18.3` Librarian learning-stage parity surface.
+There is no new operator web or server command. Operators inspect the result
+through the existing local CLI and workspace artifacts:
+
+- `millrace compile show` and `millrace compile graph` expose the compiled
+  Librarian node, legal terminals, required skill, and learning trigger rules.
+- `millrace runs show`, `millrace runs tail`, and `millrace runs trace` expose
+  persisted Librarian request/result/trace evidence.
+- `millrace status` continues to report learning queue depths and active run
+  state without mutating the workspace.

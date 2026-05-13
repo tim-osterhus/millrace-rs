@@ -21,7 +21,7 @@ Run the published-package verification path on a clean release candidate:
 cargo publish --dry-run
 ```
 
-During active Millrace Builder/Checker worktree validation, the `0.3.2`
+During active Millrace Builder/Checker worktree validation, the `0.3.3`
 release fixture records offline package verification as Builder evidence.
 The non-uploading dirty-worktree substitutes are:
 
@@ -48,14 +48,16 @@ The test suite covers:
   metadata, managed live/baseline assets, `execution.with_integrator`
   materialization/export, workspace baseline synchronization, opt-in integrated
   mode resolution, runtime routing, and run-trace evidence
-- release fixtures through Rust `0.3.2` version metadata, docs, package
-  include rules, Python `v0.18.2` source references, required release-readiness
-  command results, package verification evidence, and explicit web-gap evidence
-- target-facing Python `v0.18.1..v0.18.2` guardrail fixtures for Rust `0.3.2`
-  integrated modes, status JSON diagnostics, Recon hardening, stage/work-item
-  ownership, docs/version, final release checks, package dry-run evidence,
-  web-package evidence, generated scout mappings, and no-live guarantees, with
-  those behavior targets now implemented
+- release fixtures through Rust `0.3.3` version metadata, docs, package
+  include rules including generated-cache exclusions, Python `v0.18.3` source
+  references, required release-readiness command results, package verification
+  evidence, and explicit web-gap evidence
+- target-facing Python `v0.18.2..v0.18.3` guardrail fixtures for Rust `0.3.3`
+  Librarian contracts/assets/graph/modes, Planner-to-Librarian triggers,
+  learning request artifact metadata, runner normalization metadata, shipped
+  skill lint guidance, docs/version, final release checks, package dry-run
+  evidence, web-package evidence, generated scout mappings, and no-live
+  guarantees, with those behavior targets now implemented
 - Recon invalid-handoff hardening coverage for handoff-specific emitted-id
   validation, generated task/spec id checks before import, durable
   `recon_handoff_invalid` runtime error evidence, active-probe blocking, and
@@ -65,6 +67,10 @@ The test suite covers:
   `StageRunRequest` validation, serial and daemon pre-runner guards, stale
   pairing runtime error/event evidence, active-artifact requeue behavior,
   snapshot clearing, and closure-target Arbiter exemption
+- Librarian lifecycle coverage for Planner-triggered install requests,
+  targeted Librarian dispatch, complete/no-op done transitions, blocked
+  recoverable-failure evidence, runner source metadata preservation, and daemon
+  trace evidence
 
 Some live smoke tests are gated because they require real local credentials,
 network access, or provider CLIs:

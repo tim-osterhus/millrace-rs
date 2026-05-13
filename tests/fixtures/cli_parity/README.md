@@ -39,9 +39,9 @@ missing Rust test references in that fixture. `web_dashboard_parity_decision.jso
 records the Python v0.17.3 optional `packages/millrace-web` surface as an
 intentional unsupported Rust parity gap, records the Python v0.17.4 package
 version/dependency sync, records the Python v0.18.0 graph/trace dashboard
-evidence for that same gap, and records the Python v0.18.1 package/runtime app
-version sync plus the Python v0.18.2 package/runtime app version sync without
-authorizing a Rust web implementation. It names
+evidence for that same gap, and records the Python v0.18.1, v0.18.2, and
+v0.18.3 package/runtime app version sync without authorizing a Rust web
+implementation. It names
 the workspace registry, summary DTO, queue/run/snapshot/baseline/compiled-plan/
 Arbiter/usage-governance/event readers, static shell, CLI/server boundary, and
 package-boundary tests, while documenting that Rust currently keeps the
@@ -136,6 +136,32 @@ publish dry-run limitation, allow-dirty dry-run/package substitutes, and the
 Python v0.18.2 `millrace-web` package/version unsupported-gap evidence. It
 also confirms Builder release evidence does not require publish, upload, push,
 tag, or deployment commands.
+`auto_port_v0_18_3_parity_evidence.json` records target-facing guardrails for
+the Python `v0.18.2..v0.18.3` to Rust `0.3.3` auto-port. It maps every
+generated scout changed path to an expected Rust implementation, test,
+documentation, fixture, package evidence, or unsupported-gap evidence target;
+pins Librarian contracts/assets/graph/modes, Planner-to-Librarian trigger
+metadata, learning request artifact metadata, runner normalization metadata,
+shipped skill lint and guidance handoff source references, docs, version,
+release-check, package dry-run, and `millrace-web` source references; and keeps
+Rust `0.3.2` as the previous baseline while Rust `0.3.3` is the target. The
+runner normalization/artifact-metadata target is now backed by focused runtime
+JSON, runner normalization, serial runtime, and daemon runtime coverage, and the
+active Librarian lifecycle target is now backed by focused serial and daemon
+runtime coverage. The shipped skill lint/guidance target is now backed by
+recursive packaged skill lint coverage and live/baseline guidance asset
+synchronization.
+
+`auto_port_v0_18_3_release_parity_evidence.json` records the Rust `0.3.3`
+final release-parity evidence for Python `v0.18.2..v0.18.3`, including
+version-visible CLI metadata, generated-scout path mapping evidence, package
+include rules, README/changelog/roadmap/runtime docs, Librarian learning,
+runner normalization, shipped skill lint package-readiness evidence, required
+Builder verification command results, source-package mapping, dirty-worktree
+package verification, generated-cache package exclusion evidence, and the
+Python v0.18.3 `millrace-web` package/version unsupported-gap evidence. It also
+confirms Builder release evidence does not
+require publish, upload, push, tag, or deployment commands.
 
 The evidence is intentionally not a byte-for-byte transcript. Paths, generated
 ids, timestamps, package versions, command ids, run ids, compact run handles,

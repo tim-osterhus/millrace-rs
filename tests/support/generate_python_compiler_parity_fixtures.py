@@ -32,6 +32,10 @@ V0_18_2_SCOUT_FIXTURE_PATH = (
     REPO_ROOT
     / "tests/fixtures/compiler_parity/auto_port_v0_18_2_compiler_contract_scout.json"
 )
+V0_18_3_SCOUT_FIXTURE_PATH = (
+    REPO_ROOT
+    / "tests/fixtures/compiler_parity/auto_port_v0_18_3_compiler_contract_scout.json"
+)
 FIXED_COMPILED_AT = datetime(2026, 4, 28, 15, 30, 0, tzinfo=timezone.utc)
 MODES = (
     "default_codex",
@@ -129,6 +133,12 @@ def main() -> None:
         encoding="utf-8",
     )
     print(f"wrote {V0_18_2_SCOUT_FIXTURE_PATH.relative_to(REPO_ROOT)}")
+
+    V0_18_3_SCOUT_FIXTURE_PATH.write_text(
+        json.dumps(build_v0_18_3_compiler_scout(), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(f"wrote {V0_18_3_SCOUT_FIXTURE_PATH.relative_to(REPO_ROOT)}")
 
 
 def build_case(requested_mode_id: str) -> dict[str, Any]:
@@ -289,6 +299,103 @@ def build_v0_18_2_compiler_scout() -> dict[str, Any]:
             "tests/compiler_contracts.rs",
             "tests/compiler_materialization.rs",
             "tests/compiler_parity.rs",
+            "tests/workspace_assets_baseline.rs",
+        ],
+    }
+
+
+def build_v0_18_3_compiler_scout() -> dict[str, Any]:
+    return {
+        "schema_version": "1.0",
+        "kind": "auto_port_v0_18_3_compiler_contract_scout",
+        "python_reference": {
+            "previous_tag": "v0.18.2",
+            "previous_commit": "5444cb9485ea90b67b2ed6ba7e0723ae9fe7b79f",
+            "target_tag": "v0.18.3",
+            "target_commit": "6556e55c8463ce9256716bc425a49059b4c5981c",
+            "diff_range": "v0.18.2..v0.18.3",
+        },
+        "rust_reference": {
+            "current_repo_crate_version": "0.3.2",
+            "current_repo_version_role": "previous_baseline_for_python_v0.18.2",
+            "previous_repo_crate_version": "0.3.2",
+            "previous_repo_version_role": "released_target_for_python_v0.18.2",
+            "planned_crate_version": "0.3.3",
+            "planned_version_role": "target_release_for_python_v0.18.3",
+        },
+        "compiler_source_refs": [
+            "../millrace-py/src/millrace_ai/contracts/enums.py",
+            "../millrace-py/src/millrace_ai/contracts/stage_metadata.py",
+            "../millrace-py/src/millrace_ai/assets/entrypoints/learning/curator.md",
+            "../millrace-py/src/millrace_ai/assets/entrypoints/learning/librarian.md",
+            "../millrace-py/src/millrace_ai/assets/entrypoints/planning/planner.md",
+            "../millrace-py/src/millrace_ai/assets/entrypoints/planning/recon.md",
+            "../millrace-py/src/millrace_ai/assets/graphs/learning/standard.json",
+            "../millrace-py/src/millrace_ai/assets/loops/learning/default.json",
+            "../millrace-py/src/millrace_ai/assets/modes/learning_codex.json",
+            "../millrace-py/src/millrace_ai/assets/modes/learning_codex_integrated.json",
+            "../millrace-py/src/millrace_ai/assets/modes/learning_pi.json",
+            "../millrace-py/src/millrace_ai/assets/registry/stage_kinds/learning/librarian.json",
+            "../millrace-py/src/millrace_ai/assets/skills/README.md",
+            "../millrace-py/src/millrace_ai/assets/skills/shared/marathon-qa-audit/SKILL.md",
+            "../millrace-py/src/millrace_ai/assets/skills/skills_index.md",
+            "../millrace-py/src/millrace_ai/assets/skills/stage/learning/curator-core/SKILL.md",
+            "../millrace-py/src/millrace_ai/assets/skills/stage/learning/librarian-core/SKILL.md",
+            "../millrace-py/src/millrace_ai/assets/skills/stage/planning/recon-core/SKILL.md",
+            "../millrace-py/src/millrace_ai/compilation/node_materialization.py",
+            "../millrace-py/tests/assets/test_entrypoints.py",
+            "../millrace-py/tests/assets/test_loop_graphs.py",
+            "../millrace-py/tests/assets/test_modes.py",
+            "../millrace-py/tests/assets/test_packaging_runtime_assets.py",
+            "../millrace-py/tests/assets/test_shipped_skill_lint.py",
+            "../millrace-py/tests/assets/test_stage_kinds.py",
+            "../millrace-py/tests/integration/test_compiler.py",
+        ],
+        "expected_rust_targets": [
+            "millrace-agents/entrypoints/learning/curator.md",
+            "millrace-agents/entrypoints/learning/librarian.md",
+            "millrace-agents/entrypoints/planning/planner.md",
+            "millrace-agents/entrypoints/planning/recon.md",
+            "millrace-agents/graphs/learning/standard.json",
+            "millrace-agents/loops/learning/default.json",
+            "millrace-agents/modes/learning_codex.json",
+            "millrace-agents/modes/learning_codex_auto_port.json",
+            "millrace-agents/modes/learning_codex_integrated.json",
+            "millrace-agents/modes/learning_pi.json",
+            "millrace-agents/registry/stage_kinds/learning/librarian.json",
+            "millrace-agents/skills/README.md",
+            "millrace-agents/skills/skills_index.md",
+            "millrace-agents/skills/shared/marathon-qa-audit/SKILL.md",
+            "millrace-agents/skills/stage/learning/curator-core/SKILL.md",
+            "millrace-agents/skills/stage/learning/librarian-core/SKILL.md",
+            "millrace-agents/skills/stage/planning/recon-core/SKILL.md",
+            "src/assets/baseline/entrypoints/learning/curator.md",
+            "src/assets/baseline/entrypoints/learning/librarian.md",
+            "src/assets/baseline/entrypoints/planning/planner.md",
+            "src/assets/baseline/entrypoints/planning/recon.md",
+            "src/assets/baseline/graphs/learning/standard.json",
+            "src/assets/baseline/loops/learning/default.json",
+            "src/assets/baseline/modes/learning_codex.json",
+            "src/assets/baseline/modes/learning_codex_integrated.json",
+            "src/assets/baseline/modes/learning_pi.json",
+            "src/assets/baseline/registry/stage_kinds/learning/librarian.json",
+            "src/assets/baseline/skills/README.md",
+            "src/assets/baseline/skills/skills_index.md",
+            "src/assets/baseline/skills/shared/marathon-qa-audit/SKILL.md",
+            "src/assets/baseline/skills/stage/learning/curator-core/SKILL.md",
+            "src/assets/baseline/skills/stage/learning/librarian-core/SKILL.md",
+            "src/assets/baseline/skills/stage/planning/recon-core/SKILL.md",
+            "src/compiler/assets.rs",
+            "src/compiler/contracts.rs",
+            "src/compiler/graph_exports.rs",
+            "src/compiler/materialization.rs",
+            "src/contracts/enums.rs",
+            "src/contracts/stage_metadata.rs",
+            "tests/compiler_assets.rs",
+            "tests/compiler_contracts.rs",
+            "tests/compiler_materialization.rs",
+            "tests/compiler_parity.rs",
+            "tests/shipped_skill_lint.rs",
             "tests/workspace_assets_baseline.rs",
         ],
     }

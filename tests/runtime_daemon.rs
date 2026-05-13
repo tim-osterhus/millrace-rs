@@ -5,20 +5,23 @@ use tempfile::TempDir;
 
 use millrace_ai::contracts::{
     ActiveRunRequestKind, ActiveRunState, LearningRequestAction, LearningRequestDocument,
-    MailboxCommand, MailboxCommandEnvelope, Plane, ProbeDocument, ReloadOutcome, RunTraceGraph,
-    RuntimeJsonContract, RuntimeMode, SpecDocument, SpecSourceType, StageName, TaskDocument,
-    Timestamp, TokenUsage, WatcherMode, WorkItemKind,
+    LearningStageName, LearningTerminalResult, MailboxCommand, MailboxCommandEnvelope, Plane,
+    ProbeDocument, ReloadOutcome, ResultClass, RunTraceGraph, RuntimeJsonContract, RuntimeMode,
+    SpecDocument, SpecSourceType, StageName, TaskDocument, TerminalResult, Timestamp, TokenUsage,
+    WatcherMode, WorkItemKind,
 };
-use millrace_ai::work_documents::{parse_spec_document, render_task_document};
+use millrace_ai::work_documents::{
+    parse_learning_request_document, parse_spec_document, render_task_document,
+};
 use millrace_ai::workspace::{
     QueueStore, RuntimeOwnershipLockOptions, RuntimeOwnershipLockState,
     acquire_runtime_ownership_lock_with_options, initialize_workspace,
-    inspect_runtime_ownership_lock, load_execution_status, load_planning_status, load_snapshot,
-    save_snapshot, write_mailbox_command,
+    inspect_runtime_ownership_lock, load_execution_status, load_learning_status,
+    load_planning_status, load_snapshot, save_snapshot, write_mailbox_command,
 };
 use millrace_ai::{
-    BasicTerminalMonitor, CodexCliRunnerAdapter, FakeRunner, FakeRunnerConfig, FakeRunnerResult,
-    PiRpcRunnerAdapter, RuntimeDaemonLoopExitReason, RuntimeDaemonLoopOptions,
+    BasicTerminalMonitor, CodexCliRunnerAdapter, FakeRunner, FakeRunnerConfig, FakeRunnerOutput,
+    FakeRunnerResult, PiRpcRunnerAdapter, RuntimeDaemonLoopExitReason, RuntimeDaemonLoopOptions,
     RuntimeDaemonSleeper, RuntimeDaemonSupervisor, RuntimeMonitorEvent, RuntimeMonitorFanout,
     RuntimeStartupError, RuntimeStartupOptions, RuntimeTickOptions, RuntimeTickResult,
     apply_stage_worker_outcome, load_runtime_startup_config, run_runtime_daemon_loop,
@@ -2000,6 +2003,190 @@ fn daemon_supervisor_learning_mode_dispatches_learning_beside_execution() {
             .active_runs_by_plane
             .contains_key(&Plane::Learning)
     );
+}
+
+#[test]
+fn daemon_supervisor_planner_trigger_dispatches_librarian_and_traces_spawned_request() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    QueueStore::from_paths(paths.clone())
+        .enqueue_spec(&spec_document("spec-daemon-librarian"))
+        .unwrap();
+
+    let planner_run_dir = paths.runs_dir.join("run-daemon-planner-librarian");
+    fs::create_dir_all(&planner_run_dir).unwrap();
+    fs::write(
+        planner_run_dir.join("planner_summary.md"),
+        "# Planner Summary\n\nGenerated or refined spec paths:\n- millrace-agents/specs/active/spec-daemon-librarian.md\n",
+    )
+    .unwrap();
+
+    let mut options = daemon_options("supervisor-planner-librarian");
+    options.requested_mode_id = Some("learning_codex".to_owned());
+    let mut session = startup_runtime_daemon_for_paths(&paths, options).unwrap();
+    let mut planner_result = FakeRunnerResult::structured_terminal_result(
+        "PLANNER_COMPLETE",
+        Some(ResultClass::Success),
+    );
+    if let FakeRunnerOutput::StructuredTerminalResult {
+        summary_artifact_paths,
+        ..
+    } = &mut planner_result.output
+    {
+        summary_artifact_paths.push("planner_summary.md".to_owned());
+    }
+    let runner = FakeRunner::new(
+        FakeRunnerConfig::new(FakeRunnerResult::terminal_marker("### BUILDER_COMPLETE"))
+            .unwrap()
+            .with_stage_result(StageName::Planner, planner_result)
+            .with_stage_result(
+                StageName::Manager,
+                FakeRunnerResult::terminal_marker("### MANAGER_COMPLETE"),
+            )
+            .with_stage_result(
+                StageName::Librarian,
+                FakeRunnerResult::structured_terminal_result(
+                    "LIBRARIAN_COMPLETE",
+                    Some(ResultClass::Success),
+                ),
+            ),
+    );
+    let mut supervisor = RuntimeDaemonSupervisor::new(runner);
+
+    let first = supervisor
+        .run_cycle(
+            &mut session,
+            fixed_tick_options("run-daemon-planner-librarian", "request-daemon-planner"),
+        )
+        .unwrap();
+    assert_eq!(first.dispatched_count, 1);
+    assert!(first.completions.is_empty());
+    assert_eq!(supervisor.active_worker_planes(), vec![Plane::Planning]);
+
+    let mut saw_planner_completion = false;
+    let mut saw_librarian_dispatch = false;
+    let mut saw_librarian_completion = false;
+    for _ in 0..5 {
+        let outcome = supervisor
+            .run_cycle(&mut session, runtime_tick_options())
+            .unwrap();
+
+        if outcome.completions.iter().any(|completion| {
+            completion
+                .stage_result
+                .as_ref()
+                .is_some_and(|stage_result| stage_result.stage == StageName::Planner)
+        }) {
+            saw_planner_completion = true;
+            let mut learning_documents = Vec::new();
+            for directory in [
+                &paths.learning_requests_queue_dir,
+                &paths.learning_requests_active_dir,
+            ] {
+                for entry in fs::read_dir(directory).unwrap() {
+                    let path = entry.unwrap().path();
+                    if path.extension().and_then(|value| value.to_str()) == Some("md") {
+                        learning_documents.push(
+                            parse_learning_request_document(&fs::read_to_string(path).unwrap())
+                                .unwrap(),
+                        );
+                    }
+                }
+            }
+            assert_eq!(learning_documents.len(), 1);
+            let document = &learning_documents[0];
+            assert_eq!(document.requested_action, LearningRequestAction::Install);
+            assert_eq!(document.target_stage, Some(LearningStageName::Librarian));
+            assert_eq!(
+                document.trigger_metadata["rule_id"],
+                "planning.planner.complete-to-librarian"
+            );
+            assert!(
+                document.trigger_metadata["source_active_work_item_path"]
+                    .as_str()
+                    .unwrap()
+                    .ends_with("millrace-agents/specs/active/spec-daemon-librarian.md")
+            );
+            assert!(
+                document.trigger_metadata["stage_result_path"]
+                    .as_str()
+                    .unwrap()
+                    .ends_with("stage_results/request-daemon-planner.json")
+            );
+            assert!(
+                document.trigger_metadata["artifact_paths"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|path| path
+                        .as_str()
+                        .is_some_and(|path| path.ends_with("planner_summary.md")))
+            );
+
+            let trace = RunTraceGraph::from_json_str(
+                &fs::read_to_string(planner_run_dir.join("run_trace.json")).unwrap(),
+            )
+            .unwrap();
+            let spawned = trace
+                .edges
+                .iter()
+                .flat_map(|edge| edge.spawned_work.iter())
+                .find(|spawned| spawned.kind.as_str() == "learning_request")
+                .unwrap();
+            assert_eq!(spawned.reason.as_deref(), Some("learning_trigger"));
+            assert_eq!(
+                spawned.source_terminal_result.as_deref(),
+                Some("PLANNER_COMPLETE")
+            );
+        }
+
+        if session
+            .snapshot
+            .active_runs_by_plane
+            .get(&Plane::Learning)
+            .is_some_and(|active| active.stage == StageName::Librarian)
+        {
+            saw_librarian_dispatch = true;
+        }
+
+        if let Some(completion) = outcome.completions.iter().find(|completion| {
+            completion
+                .stage_result
+                .as_ref()
+                .is_some_and(|stage_result| stage_result.stage == StageName::Librarian)
+        }) {
+            saw_librarian_completion = true;
+            let stage_result = completion.stage_result.as_ref().unwrap();
+            assert_eq!(
+                stage_result.terminal_result,
+                TerminalResult::Learning(LearningTerminalResult::LibrarianComplete)
+            );
+            assert_eq!(stage_result.result_class, ResultClass::Success);
+            assert_eq!(completion.request.runner_name.as_deref(), Some("codex_cli"));
+            assert_eq!(
+                completion.request.running_status_marker,
+                "LIBRARIAN_RUNNING"
+            );
+            assert!(
+                completion
+                    .request
+                    .entrypoint_path
+                    .ends_with("millrace-agents/entrypoints/learning/librarian.md")
+            );
+            break;
+        }
+    }
+
+    assert!(saw_planner_completion);
+    assert!(saw_librarian_dispatch);
+    assert!(saw_librarian_completion);
+    assert_eq!(
+        fs::read_dir(&paths.learning_requests_done_dir)
+            .unwrap()
+            .count(),
+        1
+    );
+    assert_eq!(load_learning_status(&paths).unwrap(), "### IDLE");
 }
 
 #[test]

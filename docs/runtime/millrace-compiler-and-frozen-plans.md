@@ -43,3 +43,18 @@ execution modes continue to route Builder success directly to Checker; only the
 integrated modes route Builder success through Integrator before Checker.
 Compiler graph validation also rejects direct Recon handoff edges to stage
 nodes, preserving runtime ownership of generated task/spec promotion.
+
+For Python `v0.18.3` asset/compiler-mode parity, Rust also packages the
+Librarian learning entrypoint, `librarian-core` skill, learning stage-kind
+registry, learning graph/loop terminal states, and learning mode bindings with
+`planning.planner.complete-to-librarian` install trigger rules. Materialized
+plans and compiled-stage-graph exports preserve the Librarian node, legal
+terminal classes including `LIBRARIAN_NOOP` as `no_op`, required skill path,
+runner metadata, timeout metadata, and `skill_install_report` artifact metadata
+without making graph exports runtime routing authority. Runtime learning
+triggers now preserve the persisted stage-result artifact, stage-produced
+artifacts such as `planner_summary.md`, and source work-item kind/id/active-path
+metadata when enqueueing learning requests. Targeted Librarian learning-request
+claims dispatch to the Librarian node, complete `LIBRARIAN_COMPLETE` and
+`LIBRARIAN_NOOP` requests into done with success/no-op semantics, and preserve
+recoverable blocked evidence for Librarian `BLOCKED`.

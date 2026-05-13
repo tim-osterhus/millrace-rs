@@ -118,6 +118,13 @@ fn opt_in_integrated_execution_assets_resolve_without_changing_default_mode() {
             .iter()
             .all(|asset| asset.compile_time_path != "graphs/execution/with_integrator.json")
     );
+    assert!(default.mode.learning_trigger_rules.is_empty());
+    assert!(
+        default
+            .resolved_assets
+            .iter()
+            .all(|asset| !asset.compile_time_path.contains("librarian"))
+    );
 
     let integrated = resolve_compile_assets(&paths, Some("default_codex_integrated")).unwrap();
     assert_eq!(integrated.mode_id, "default_codex_integrated");
@@ -172,7 +179,7 @@ fn opt_in_integrated_execution_assets_resolve_without_changing_default_mode() {
             .as_ref()
             .is_some_and(|policy| policy.may_run_concurrently.len() == 2)
     );
-    assert_eq!(learning_integrated.mode.learning_trigger_rules.len(), 3);
+    assert_eq!(learning_integrated.mode.learning_trigger_rules.len(), 4);
     assert!(
         learning_integrated
             .mode
@@ -186,6 +193,29 @@ fn opt_in_integrated_execution_assets_resolve_without_changing_default_mode() {
             .stage_runner_bindings
             .contains_key(&millrace_ai::contracts::StageName::Integrator)
     );
+    assert_eq!(
+        learning_integrated
+            .mode
+            .stage_runner_bindings
+            .get(&millrace_ai::contracts::StageName::Librarian)
+            .map(String::as_str),
+        Some("codex_cli")
+    );
+    let learning_integrated_paths: Vec<_> = learning_integrated
+        .resolved_assets
+        .iter()
+        .map(|asset| asset.compile_time_path.as_str())
+        .collect();
+    for expected_path in [
+        "registry/stage_kinds/learning/librarian.json",
+        "entrypoints/learning/librarian.md",
+        "skills/stage/learning/librarian-core/SKILL.md",
+    ] {
+        assert!(
+            learning_integrated_paths.contains(&expected_path),
+            "learning integrated resolution missed {expected_path}"
+        );
+    }
 }
 
 #[test]

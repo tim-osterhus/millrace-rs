@@ -447,6 +447,117 @@ fn compiler_parity_scout_pins_python_v0_18_2_integrator_assets_and_graph_sources
     }
 }
 
+#[test]
+fn compiler_parity_scout_pins_python_v0_18_3_librarian_assets_graph_modes_and_skill_lint_sources() {
+    let fixture: Value = serde_json::from_str(
+        &read_fixture("compiler_parity/auto_port_v0_18_3_compiler_contract_scout.json")
+            .expect("read v0.18.3 compiler scout fixture"),
+    )
+    .expect("parse v0.18.3 compiler scout fixture");
+    assert_eq!(fixture["schema_version"], "1.0");
+    assert_eq!(fixture["kind"], "auto_port_v0_18_3_compiler_contract_scout");
+    assert_eq!(fixture["python_reference"]["previous_tag"], "v0.18.2");
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.18.3");
+    assert_eq!(
+        fixture["python_reference"]["previous_commit"],
+        "5444cb9485ea90b67b2ed6ba7e0723ae9fe7b79f"
+    );
+    assert_eq!(
+        fixture["python_reference"]["target_commit"],
+        "6556e55c8463ce9256716bc425a49059b4c5981c"
+    );
+    assert_eq!(
+        fixture["python_reference"]["diff_range"],
+        "v0.18.2..v0.18.3"
+    );
+    assert_eq!(
+        fixture["rust_reference"]["current_repo_crate_version"],
+        "0.3.2"
+    );
+    assert_eq!(
+        fixture["rust_reference"]["current_repo_version_role"],
+        "previous_baseline_for_python_v0.18.2"
+    );
+    assert_eq!(fixture["rust_reference"]["planned_crate_version"], "0.3.3");
+    assert_ne!(
+        fixture["rust_reference"]["planned_crate_version"],
+        fixture["rust_reference"]["current_repo_crate_version"],
+        "v0.18.3 compiler scout must not treat Rust 0.3.2 as the target"
+    );
+
+    let sources: BTreeSet<_> = fixture["compiler_source_refs"]
+        .as_array()
+        .expect("compiler source refs are present")
+        .iter()
+        .map(|value| value.as_str().expect("compiler source ref"))
+        .collect();
+    for source_path in [
+        "../millrace-py/src/millrace_ai/contracts/enums.py",
+        "../millrace-py/src/millrace_ai/contracts/stage_metadata.py",
+        "../millrace-py/src/millrace_ai/assets/entrypoints/learning/librarian.md",
+        "../millrace-py/src/millrace_ai/assets/graphs/learning/standard.json",
+        "../millrace-py/src/millrace_ai/assets/loops/learning/default.json",
+        "../millrace-py/src/millrace_ai/assets/modes/learning_codex.json",
+        "../millrace-py/src/millrace_ai/assets/modes/learning_codex_integrated.json",
+        "../millrace-py/src/millrace_ai/assets/modes/learning_pi.json",
+        "../millrace-py/src/millrace_ai/assets/registry/stage_kinds/learning/librarian.json",
+        "../millrace-py/src/millrace_ai/assets/skills/shared/marathon-qa-audit/SKILL.md",
+        "../millrace-py/src/millrace_ai/assets/skills/stage/learning/librarian-core/SKILL.md",
+        "../millrace-py/src/millrace_ai/compilation/node_materialization.py",
+        "../millrace-py/tests/assets/test_packaging_runtime_assets.py",
+        "../millrace-py/tests/assets/test_shipped_skill_lint.py",
+        "../millrace-py/tests/integration/test_compiler.py",
+    ] {
+        assert!(
+            sources.contains(source_path),
+            "missing v0.18.3 compiler/Librarian source {source_path}"
+        );
+    }
+
+    let targets: BTreeSet<_> = fixture["expected_rust_targets"]
+        .as_array()
+        .expect("expected Rust targets are present")
+        .iter()
+        .map(|value| value.as_str().expect("expected Rust target"))
+        .collect();
+    for target_path in [
+        "millrace-agents/entrypoints/learning/librarian.md",
+        "millrace-agents/graphs/learning/standard.json",
+        "millrace-agents/loops/learning/default.json",
+        "millrace-agents/modes/learning_codex.json",
+        "millrace-agents/modes/learning_codex_auto_port.json",
+        "millrace-agents/modes/learning_codex_integrated.json",
+        "millrace-agents/modes/learning_pi.json",
+        "millrace-agents/registry/stage_kinds/learning/librarian.json",
+        "millrace-agents/skills/stage/learning/librarian-core/SKILL.md",
+        "src/assets/baseline/entrypoints/learning/librarian.md",
+        "src/assets/baseline/graphs/learning/standard.json",
+        "src/assets/baseline/loops/learning/default.json",
+        "src/assets/baseline/modes/learning_codex.json",
+        "src/assets/baseline/modes/learning_codex_integrated.json",
+        "src/assets/baseline/modes/learning_pi.json",
+        "src/assets/baseline/registry/stage_kinds/learning/librarian.json",
+        "src/assets/baseline/skills/stage/learning/librarian-core/SKILL.md",
+        "src/compiler/assets.rs",
+        "src/compiler/contracts.rs",
+        "src/compiler/graph_exports.rs",
+        "src/compiler/materialization.rs",
+        "src/contracts/enums.rs",
+        "src/contracts/stage_metadata.rs",
+        "tests/compiler_assets.rs",
+        "tests/compiler_contracts.rs",
+        "tests/compiler_materialization.rs",
+        "tests/compiler_parity.rs",
+        "tests/shipped_skill_lint.rs",
+        "tests/workspace_assets_baseline.rs",
+    ] {
+        assert!(
+            targets.contains(target_path),
+            "missing v0.18.3 compiler/Librarian Rust target {target_path}"
+        );
+    }
+}
+
 fn init_workspace(root: &std::path::Path) {
     run_rust_millrace(["init", "--workspace", root.to_str().unwrap()])
         .expect("run Rust millrace init")

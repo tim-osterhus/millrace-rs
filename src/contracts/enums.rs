@@ -125,6 +125,7 @@ string_enum! {
         Analyst => "analyst",
         Professor => "professor",
         Curator => "curator",
+        Librarian => "librarian",
     }
 }
 
@@ -148,6 +149,7 @@ string_enum! {
         Analyst => "analyst",
         Professor => "professor",
         Curator => "curator",
+        Librarian => "librarian",
     }
 }
 
@@ -170,7 +172,7 @@ impl StageName {
             | Self::Mechanic
             | Self::Auditor
             | Self::Arbiter => Plane::Planning,
-            Self::Analyst | Self::Professor | Self::Curator => Plane::Learning,
+            Self::Analyst | Self::Professor | Self::Curator | Self::Librarian => Plane::Learning,
         }
     }
 }
@@ -209,6 +211,7 @@ impl From<LearningStageName> for StageName {
             LearningStageName::Analyst => Self::Analyst,
             LearningStageName::Professor => Self::Professor,
             LearningStageName::Curator => Self::Curator,
+            LearningStageName::Librarian => Self::Librarian,
         }
     }
 }
@@ -256,6 +259,8 @@ string_enum! {
         ProfessorNoop => "PROFESSOR_NOOP",
         CuratorComplete => "CURATOR_COMPLETE",
         CuratorNoop => "CURATOR_NOOP",
+        LibrarianComplete => "LIBRARIAN_COMPLETE",
+        LibrarianNoop => "LIBRARIAN_NOOP",
         Blocked => "BLOCKED",
     }
 }

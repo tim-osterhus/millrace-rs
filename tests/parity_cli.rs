@@ -284,7 +284,7 @@ fn rust_version_command_has_millrace_shape() {
     let version_line =
         parse_version_line(output.stdout_trimmed()).expect("parse Rust version line");
     assert_eq!(version_line.binary_name, "millrace");
-    assert_eq!(version_line.version, "0.3.2");
+    assert_eq!(version_line.version, "0.3.3");
     assert_eq!(version_line.version, env!("CARGO_PKG_VERSION"));
 }
 
@@ -1698,7 +1698,42 @@ fn rust_crate_release_metadata_and_package_include_rules_are_0_3_1() {
 
 #[test]
 fn rust_crate_release_metadata_and_package_include_rules_are_0_3_2() {
-    assert_eq!(env!("CARGO_PKG_VERSION"), "0.3.2");
+    let fixture: Value = serde_json::from_str(
+        &read_fixture("cli_parity/auto_port_v0_18_2_release_parity_evidence.json")
+            .expect("read v0.18.2 release parity evidence fixture"),
+    )
+    .expect("parse v0.18.2 release parity evidence fixture");
+    assert_eq!(fixture["rust_release"]["crate_version"], "0.3.2");
+    assert_eq!(
+        fixture["rust_release"]["version_command_expectation"],
+        "millrace 0.3.2"
+    );
+
+    let include = fixture["rust_release"]["package_include_surfaces"]
+        .as_array()
+        .expect("historical v0.18.2 package include surfaces");
+    for expected in [
+        "Cargo.lock",
+        "CHANGELOG.md",
+        "README.md",
+        "ROADMAP.md",
+        "docs/**/*.md",
+        "src/assets/**/*",
+        "src/**/*.rs",
+        "tests/**/*.rs",
+        "tests/fixtures/**/*",
+        "tests/support/**/*",
+    ] {
+        assert!(
+            include.iter().any(|value| value.as_str() == Some(expected)),
+            "historical v0.18.2 release fixture missing package include surface {expected}"
+        );
+    }
+}
+
+#[test]
+fn rust_crate_release_metadata_and_package_include_rules_are_0_3_3() {
+    assert_eq!(env!("CARGO_PKG_VERSION"), "0.3.3");
 
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let manifest: toml::Value =
@@ -1710,7 +1745,7 @@ fn rust_crate_release_metadata_and_package_include_rules_are_0_3_2() {
         .expect("package table");
     assert_eq!(
         package.get("version").and_then(toml::Value::as_str),
-        Some("0.3.2")
+        Some("0.3.3")
     );
     let include = package
         .get("include")
@@ -1723,6 +1758,9 @@ fn rust_crate_release_metadata_and_package_include_rules_are_0_3_2() {
         "/ROADMAP.md",
         "/docs/**/*.md",
         "/src/assets/**/*",
+        "!**/__pycache__/**",
+        "!**/*.pyc",
+        "!**/*.pyo",
         "/src/**/*.rs",
         "/tests/**/*.rs",
         "/tests/fixtures/**/*",
@@ -1750,8 +1788,8 @@ fn rust_crate_release_metadata_and_package_include_rules_are_0_3_2() {
 
     let lockfile = fs::read_to_string(repo_root.join("Cargo.lock")).expect("read Cargo.lock");
     assert!(
-        lockfile.contains("[[package]]\nname = \"millrace-ai\"\nversion = \"0.3.2\"\n"),
-        "Cargo.lock package metadata must track the 0.3.2 crate version"
+        lockfile.contains("[[package]]\nname = \"millrace-ai\"\nversion = \"0.3.3\"\n"),
+        "Cargo.lock package metadata must track the 0.3.3 crate version"
     );
 }
 
@@ -3650,6 +3688,980 @@ fn committed_auto_port_v0_18_2_parity_fixture_covers_integrator_status_recon_own
 }
 
 #[test]
+fn committed_auto_port_v0_18_3_parity_fixture_covers_librarian_learning_trigger_metadata_skill_lint_and_web_guardrails()
+ {
+    let fixture: Value = serde_json::from_str(
+        &read_fixture("cli_parity/auto_port_v0_18_3_parity_evidence.json")
+            .expect("read v0.18.3 auto-port parity evidence fixture"),
+    )
+    .expect("parse v0.18.3 auto-port parity evidence fixture");
+    assert_eq!(fixture["kind"], "auto_port_v0_18_3_parity_evidence");
+    assert_eq!(fixture["schema_version"], "1.0");
+    assert_eq!(fixture["python_reference"]["previous_tag"], "v0.18.2");
+    assert_eq!(
+        fixture["python_reference"]["previous_commit"],
+        "5444cb9485ea90b67b2ed6ba7e0723ae9fe7b79f"
+    );
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.18.3");
+    assert_eq!(
+        fixture["python_reference"]["target_commit"],
+        "6556e55c8463ce9256716bc425a49059b4c5981c"
+    );
+    assert_eq!(
+        fixture["python_reference"]["diff_range"],
+        "v0.18.2..v0.18.3"
+    );
+    assert_ne!(
+        fixture["python_reference"]["target_tag"], fixture["python_reference"]["previous_tag"],
+        "v0.18.3 parity fixture still treats Python v0.18.2 as the target"
+    );
+    assert_eq!(
+        fixture["rust_reference"]["current_repo_crate_version"],
+        "0.3.2"
+    );
+    assert_eq!(
+        fixture["rust_reference"]["current_repo_version_role"],
+        "previous_baseline_for_python_v0.18.2"
+    );
+    assert_eq!(
+        fixture["rust_reference"]["previous_repo_version_role"],
+        "released_target_for_python_v0.18.2"
+    );
+    assert_eq!(fixture["rust_reference"]["planned_crate_version"], "0.3.3");
+    assert_ne!(
+        fixture["rust_reference"]["planned_crate_version"],
+        fixture["rust_reference"]["current_repo_crate_version"],
+        "v0.18.3 parity fixture still treats Rust 0.3.2 as the planned target"
+    );
+
+    let required_surfaces = fixture["required_surfaces"]
+        .as_array()
+        .expect("required surfaces are present");
+    let required_surface_names: BTreeSet<_> = required_surfaces
+        .iter()
+        .map(|surface| surface.as_str().expect("surface name"))
+        .collect();
+    let expected_surfaces = BTreeSet::from([
+        "librarian_contracts_stage_metadata",
+        "librarian_assets_compiler_modes",
+        "planner_librarian_learning_triggers",
+        "learning_request_artifact_metadata",
+        "runner_normalization_metadata",
+        "shipped_skill_lint_guidance_handoffs",
+        "docs_version_web_package_evidence",
+        "source_reference_guardrails",
+        "release_validation_guardrails",
+    ]);
+    assert_eq!(required_surface_names, expected_surfaces);
+
+    let required_axes = fixture["required_coverage_axes"]
+        .as_array()
+        .expect("required coverage axes are present");
+    let required_axis_names: BTreeSet<_> = required_axes
+        .iter()
+        .map(|axis| axis.as_str().expect("coverage axis"))
+        .collect();
+    for axis in [
+        "python_diff_pin",
+        "rust_version_transition_pin",
+        "auto_port_state_currentness",
+        "generated_scout_changed_paths",
+        "librarian_contract_source_refs",
+        "librarian_asset_source_refs",
+        "librarian_graph_mode_source_refs",
+        "planner_librarian_trigger_source_refs",
+        "learning_request_artifact_metadata_source_refs",
+        "runner_normalization_metadata_source_refs",
+        "shipped_skill_lint_source_refs",
+        "guidance_handoff_source_refs",
+        "docs_source_refs",
+        "web_version_package_evidence",
+        "expected_rust_target_mapping",
+        "release_check_evidence",
+        "package_dry_run_evidence",
+        "no_live_external_dependencies",
+    ] {
+        assert!(
+            required_axis_names.contains(axis),
+            "missing v0.18.3 parity coverage axis {axis}"
+        );
+    }
+
+    let allowed_rust_targets = BTreeSet::from([
+        "Cargo.toml",
+        "Cargo.lock",
+        "CHANGELOG.md",
+        "README.md",
+        "ROADMAP.md",
+        "docs/millrace-technical-overview.md",
+        "docs/rust-port-roadmap.md",
+        "docs/source-package-map.md",
+        "docs/runtime/",
+        "millrace-agents/auto-port/generated/auto-port-python-v0.18.2-to-v0.18.3-rust-0.3.3.md",
+        "millrace-agents/auto-port/state.json",
+        "millrace-agents/entrypoints/learning/curator.md",
+        "millrace-agents/entrypoints/learning/librarian.md",
+        "millrace-agents/entrypoints/planning/planner.md",
+        "millrace-agents/entrypoints/planning/recon.md",
+        "millrace-agents/graphs/learning/standard.json",
+        "millrace-agents/loops/learning/default.json",
+        "millrace-agents/modes/learning_codex.json",
+        "millrace-agents/modes/learning_codex_auto_port.json",
+        "millrace-agents/modes/learning_codex_integrated.json",
+        "millrace-agents/modes/learning_pi.json",
+        "millrace-agents/registry/stage_kinds/learning/librarian.json",
+        "millrace-agents/skills/README.md",
+        "millrace-agents/skills/skills_index.md",
+        "millrace-agents/skills/shared/marathon-qa-audit/SKILL.md",
+        "millrace-agents/skills/stage/learning/curator-core/SKILL.md",
+        "millrace-agents/skills/stage/learning/librarian-core/SKILL.md",
+        "millrace-agents/skills/stage/planning/recon-core/SKILL.md",
+        "src/assets/baseline/entrypoints/learning/curator.md",
+        "src/assets/baseline/entrypoints/learning/librarian.md",
+        "src/assets/baseline/entrypoints/planning/planner.md",
+        "src/assets/baseline/entrypoints/planning/recon.md",
+        "src/assets/baseline/graphs/learning/standard.json",
+        "src/assets/baseline/loops/learning/default.json",
+        "src/assets/baseline/modes/learning_codex.json",
+        "src/assets/baseline/modes/learning_codex_integrated.json",
+        "src/assets/baseline/modes/learning_pi.json",
+        "src/assets/baseline/registry/stage_kinds/learning/librarian.json",
+        "src/assets/baseline/skills/README.md",
+        "src/assets/baseline/skills/skills_index.md",
+        "src/assets/baseline/skills/shared/marathon-qa-audit/SKILL.md",
+        "src/assets/baseline/skills/stage/learning/curator-core/SKILL.md",
+        "src/assets/baseline/skills/stage/learning/librarian-core/SKILL.md",
+        "src/assets/baseline/skills/stage/planning/recon-core/SKILL.md",
+        "src/compiler/assets.rs",
+        "src/compiler/contracts.rs",
+        "src/compiler/graph_exports.rs",
+        "src/compiler/materialization.rs",
+        "src/contracts/enums.rs",
+        "src/contracts/runtime_json.rs",
+        "src/contracts/stage_metadata.rs",
+        "src/runtime/mod.rs",
+        "src/runtime/run_traces.rs",
+        "src/runtime/startup.rs",
+        "src/runtime/supervisor.rs",
+        "src/runtime/tick.rs",
+        "src/runners/normalization.rs",
+        "tests/compiler_assets.rs",
+        "tests/compiler_contracts.rs",
+        "tests/compiler_materialization.rs",
+        "tests/compiler_parity.rs",
+        "tests/contracts_runtime_json.rs",
+        "tests/contracts_stage_metadata.rs",
+        "tests/fixtures/cli_parity/auto_port_v0_18_3_parity_evidence.json",
+        "tests/fixtures/cli_parity/web_dashboard_parity_decision.json",
+        "tests/fixtures/compiler_parity/auto_port_v0_18_3_compiler_contract_scout.json",
+        "tests/fixtures/runtime_json/auto_port_v0_18_3_runtime_contract_scout.json",
+        "tests/parity_cli.rs",
+        "tests/runtime_daemon.rs",
+        "tests/runtime_serial.rs",
+        "tests/runners_normalization.rs",
+        "tests/shipped_skill_lint.rs",
+        "tests/workspace_assets_baseline.rs",
+    ]);
+
+    let mut referenced_sources = BTreeSet::new();
+    let mut referenced_targets = BTreeSet::new();
+    let mut covered_axes = BTreeSet::new();
+    for surface in fixture["source_reference_surfaces"]
+        .as_array()
+        .expect("source reference surfaces are present")
+    {
+        let surface_name = surface["surface"].as_str().expect("source surface");
+        assert!(
+            required_surface_names.contains(surface_name),
+            "v0.18.3 source surface references unknown surface {surface_name}"
+        );
+        for axis in surface["coverage"].as_array().expect("coverage array") {
+            let axis = axis.as_str().expect("coverage axis");
+            assert!(
+                required_axis_names.contains(axis),
+                "v0.18.3 source surface references unknown coverage axis {axis}"
+            );
+            covered_axes.insert(axis);
+        }
+        for source in surface["python_sources"]
+            .as_array()
+            .expect("python_sources array")
+        {
+            referenced_sources.insert(source.as_str().expect("Python source path").to_owned());
+        }
+        for target in surface["expected_rust_targets"]
+            .as_array()
+            .expect("expected_rust_targets array")
+        {
+            let target_path = target.as_str().expect("Rust target path");
+            assert!(
+                allowed_rust_targets.contains(target_path),
+                "v0.18.3 source surface references unknown Rust target path {target_path}"
+            );
+            referenced_targets.insert(target_path.to_owned());
+        }
+    }
+
+    for axis in [
+        "librarian_contract_source_refs",
+        "librarian_asset_source_refs",
+        "librarian_graph_mode_source_refs",
+        "planner_librarian_trigger_source_refs",
+        "learning_request_artifact_metadata_source_refs",
+        "runner_normalization_metadata_source_refs",
+        "shipped_skill_lint_source_refs",
+        "guidance_handoff_source_refs",
+        "docs_source_refs",
+        "web_version_package_evidence",
+        "expected_rust_target_mapping",
+        "release_check_evidence",
+        "package_dry_run_evidence",
+    ] {
+        assert!(
+            covered_axes.contains(axis),
+            "source-reference surfaces do not cover v0.18.3 axis {axis}"
+        );
+    }
+
+    for source_path in [
+        "../millrace-py/src/millrace_ai/assets/entrypoints/learning/librarian.md",
+        "../millrace-py/src/millrace_ai/assets/graphs/learning/standard.json",
+        "../millrace-py/src/millrace_ai/assets/loops/learning/default.json",
+        "../millrace-py/src/millrace_ai/assets/modes/learning_codex.json",
+        "../millrace-py/src/millrace_ai/assets/modes/learning_codex_integrated.json",
+        "../millrace-py/src/millrace_ai/assets/modes/learning_pi.json",
+        "../millrace-py/src/millrace_ai/assets/registry/stage_kinds/learning/librarian.json",
+        "../millrace-py/src/millrace_ai/assets/skills/shared/marathon-qa-audit/SKILL.md",
+        "../millrace-py/src/millrace_ai/assets/skills/stage/learning/librarian-core/SKILL.md",
+        "../millrace-py/src/millrace_ai/assets/entrypoints/planning/planner.md",
+        "../millrace-py/src/millrace_ai/assets/entrypoints/planning/recon.md",
+        "../millrace-py/src/millrace_ai/compilation/node_materialization.py",
+        "../millrace-py/src/millrace_ai/runners/normalization.py",
+        "../millrace-py/src/millrace_ai/runtime/learning_triggers.py",
+        "../millrace-py/src/millrace_ai/runtime/stage_requests.py",
+        "../millrace-py/tests/assets/test_shipped_skill_lint.py",
+        "../millrace-py/tests/runtime/test_runtime.py",
+        "../millrace-py/packages/millrace-web/pyproject.toml",
+    ] {
+        assert!(
+            referenced_sources.contains(source_path),
+            "missing v0.18.3 Python source reference {source_path}"
+        );
+    }
+
+    for target_path in [
+        "millrace-agents/entrypoints/learning/librarian.md",
+        "millrace-agents/graphs/learning/standard.json",
+        "millrace-agents/modes/learning_codex_auto_port.json",
+        "millrace-agents/registry/stage_kinds/learning/librarian.json",
+        "src/contracts/enums.rs",
+        "src/contracts/stage_metadata.rs",
+        "src/runners/normalization.rs",
+        "src/runtime/tick.rs",
+        "tests/fixtures/cli_parity/web_dashboard_parity_decision.json",
+        "tests/fixtures/compiler_parity/auto_port_v0_18_3_compiler_contract_scout.json",
+        "tests/fixtures/runtime_json/auto_port_v0_18_3_runtime_contract_scout.json",
+        "tests/parity_cli.rs",
+        "tests/shipped_skill_lint.rs",
+    ] {
+        assert!(
+            referenced_targets.contains(target_path),
+            "missing v0.18.3 expected Rust target {target_path}"
+        );
+    }
+
+    let expected_changed_paths = BTreeSet::from([
+        "CHANGELOG.md",
+        "README.md",
+        "ROADMAP.md",
+        "docs/millrace-technical-overview.md",
+        "docs/runtime/README.md",
+        "docs/runtime/millrace-cli-reference.md",
+        "docs/runtime/millrace-compiler-and-frozen-plans.md",
+        "docs/runtime/millrace-entrypoint-mapping.md",
+        "docs/runtime/millrace-loop-authoring.md",
+        "docs/runtime/millrace-modes-and-loops.md",
+        "docs/runtime/millrace-runtime-architecture.md",
+        "docs/runtime/millrace-runtime-lifecycle-diagram.md",
+        "docs/runtime/millrace-workspace-baselines-and-upgrades.md",
+        "docs/skills/millrace-ops-agent-manual/SKILL.md",
+        "docs/source-package-map.md",
+        "packages/millrace-web/CHANGELOG.md",
+        "packages/millrace-web/pyproject.toml",
+        "packages/millrace-web/src/millrace_web/__init__.py",
+        "packages/millrace-web/src/millrace_web/app.py",
+        "src/millrace_ai/__init__.py",
+        "src/millrace_ai/assets/entrypoints/learning/curator.md",
+        "src/millrace_ai/assets/entrypoints/learning/librarian.md",
+        "src/millrace_ai/assets/entrypoints/planning/planner.md",
+        "src/millrace_ai/assets/entrypoints/planning/recon.md",
+        "src/millrace_ai/assets/graphs/learning/standard.json",
+        "src/millrace_ai/assets/loops/learning/default.json",
+        "src/millrace_ai/assets/modes/learning_codex.json",
+        "src/millrace_ai/assets/modes/learning_codex_integrated.json",
+        "src/millrace_ai/assets/modes/learning_pi.json",
+        "src/millrace_ai/assets/registry/stage_kinds/learning/librarian.json",
+        "src/millrace_ai/assets/skills/README.md",
+        "src/millrace_ai/assets/skills/shared/marathon-qa-audit/SKILL.md",
+        "src/millrace_ai/assets/skills/skills_index.md",
+        "src/millrace_ai/assets/skills/stage/learning/curator-core/SKILL.md",
+        "src/millrace_ai/assets/skills/stage/learning/librarian-core/SKILL.md",
+        "src/millrace_ai/assets/skills/stage/planning/recon-core/SKILL.md",
+        "src/millrace_ai/compilation/node_materialization.py",
+        "src/millrace_ai/contracts/enums.py",
+        "src/millrace_ai/contracts/stage_metadata.py",
+        "src/millrace_ai/runners/normalization.py",
+        "src/millrace_ai/runtime/learning_triggers.py",
+        "src/millrace_ai/runtime/stage_requests.py",
+        "tests/assets/test_entrypoints.py",
+        "tests/assets/test_loop_graphs.py",
+        "tests/assets/test_modes.py",
+        "tests/assets/test_packaging_runtime_assets.py",
+        "tests/assets/test_shipped_skill_lint.py",
+        "tests/assets/test_stage_kinds.py",
+        "tests/integration/test_compiler.py",
+        "tests/runtime/test_runtime.py",
+    ]);
+
+    let generated_scout_path = Path::new(env!("CARGO_MANIFEST_DIR")).join(
+        fixture["python_reference"]["generated_scout"]
+            .as_str()
+            .expect("generated scout path"),
+    );
+    let generated_scout =
+        fs::read_to_string(generated_scout_path).expect("read v0.18.3 generated scout");
+    let mut generated_changed_paths = BTreeSet::new();
+    let mut in_changed_paths = false;
+    for line in generated_scout.lines() {
+        if line == "Changed Python paths:" {
+            in_changed_paths = true;
+            continue;
+        }
+        if !in_changed_paths {
+            continue;
+        }
+        if line == "Diff stat:" {
+            break;
+        }
+        if let Some(path) = line
+            .trim()
+            .strip_prefix("- `")
+            .and_then(|rest| rest.strip_suffix('`'))
+        {
+            generated_changed_paths.insert(path);
+        }
+    }
+    assert_eq!(
+        generated_changed_paths, expected_changed_paths,
+        "v0.18.3 generated scout changed paths drifted from guardrail expectation"
+    );
+
+    let changed_mappings = fixture["changed_path_mappings"]
+        .as_array()
+        .expect("changed path mappings are present");
+    let mapped_changed_paths: BTreeSet<_> = changed_mappings
+        .iter()
+        .map(|mapping| mapping["python_path"].as_str().expect("Python path"))
+        .collect();
+    assert_eq!(
+        mapped_changed_paths.len(),
+        changed_mappings.len(),
+        "v0.18.3 path mappings must not contain duplicate Python paths"
+    );
+    assert_eq!(
+        mapped_changed_paths, generated_changed_paths,
+        "v0.18.3 parity fixture must map every generated scout path exactly"
+    );
+
+    let allowed_target_kinds = BTreeSet::from([
+        "implementation",
+        "test",
+        "documentation",
+        "fixture",
+        "package_evidence",
+        "unsupported_gap_evidence",
+        "reference_evidence",
+    ]);
+    let mut covered_mapping_surfaces = BTreeSet::new();
+    for mapping in changed_mappings {
+        let python_path = mapping["python_path"].as_str().expect("Python path");
+        assert!(!python_path.is_empty(), "mapping has empty Python path");
+        let surface_name = mapping["surface"].as_str().expect("mapping surface");
+        assert!(
+            required_surface_names.contains(surface_name),
+            "v0.18.3 path mapping uses unknown surface {surface_name}"
+        );
+        covered_mapping_surfaces.insert(surface_name);
+        assert!(
+            mapping["change_role"]
+                .as_str()
+                .is_some_and(is_snake_case_rust_test_name),
+            "v0.18.3 path mapping has malformed change_role: {mapping:?}"
+        );
+        let rust_targets = mapping["rust_targets"]
+            .as_array()
+            .expect("rust target mappings are present");
+        assert!(
+            !rust_targets.is_empty(),
+            "v0.18.3 path mapping has no Rust target: {mapping:?}"
+        );
+        let mut has_package_or_gap_evidence = false;
+        for target in rust_targets {
+            let kind = target["kind"].as_str().expect("Rust target kind");
+            assert!(
+                allowed_target_kinds.contains(kind),
+                "v0.18.3 path mapping uses unknown Rust target kind {kind}"
+            );
+            let path = target["path"].as_str().expect("Rust target path");
+            assert!(
+                allowed_rust_targets.contains(path),
+                "v0.18.3 path mapping uses unknown Rust target path {path}"
+            );
+            if python_path.starts_with("packages/millrace-web/") {
+                assert_ne!(
+                    kind, "implementation",
+                    "web package mapping must not authorize Rust web implementation expansion"
+                );
+            }
+            has_package_or_gap_evidence |=
+                kind == "package_evidence" || kind == "unsupported_gap_evidence";
+        }
+        if python_path.starts_with("packages/millrace-web/") {
+            assert!(
+                has_package_or_gap_evidence,
+                "web package mapping must remain explicit package or unsupported-gap evidence"
+            );
+        }
+    }
+    let expected_mapping_surfaces = BTreeSet::from([
+        "librarian_contracts_stage_metadata",
+        "librarian_assets_compiler_modes",
+        "planner_librarian_learning_triggers",
+        "learning_request_artifact_metadata",
+        "runner_normalization_metadata",
+        "shipped_skill_lint_guidance_handoffs",
+        "docs_version_web_package_evidence",
+        "release_validation_guardrails",
+    ]);
+    assert_eq!(covered_mapping_surfaces, expected_mapping_surfaces);
+
+    let available_tests = rust_test_functions_by_file(&[
+        "tests/compiler_parity.rs",
+        "tests/contracts_runtime_json.rs",
+        "tests/parity_cli.rs",
+    ]);
+    for guardrail in fixture["active_guardrail_tests"]
+        .as_array()
+        .expect("active guardrail tests are present")
+    {
+        let test_file = guardrail["file"].as_str().expect("guardrail file");
+        let test_name = guardrail["name"].as_str().expect("guardrail name");
+        assert!(
+            available_tests.contains_key(test_file),
+            "v0.18.3 fixture references unsupported guardrail test file {test_file}"
+        );
+        assert!(
+            is_snake_case_rust_test_name(test_name),
+            "v0.18.3 fixture references malformed guardrail test name {test_name}"
+        );
+        assert!(
+            available_tests[test_file].contains(test_name),
+            "v0.18.3 fixture references stale guardrail test {test_file}::{test_name}"
+        );
+    }
+
+    let required_release_checks = fixture["required_release_checks"]
+        .as_array()
+        .expect("required release checks are present");
+    for command in [
+        "git -C ../millrace-py diff --name-only v0.18.2..v0.18.3",
+        "cargo fmt --check",
+        "cargo test --test compiler_parity",
+        "cargo test --test parity_cli",
+        "cargo test --test contracts_runtime_json",
+        "cargo test --test compiler_contracts",
+        "cargo test --test compiler_materialization",
+        "cargo clippy --all-targets --all-features -- -D warnings",
+        "cargo test --all",
+        "cargo publish --dry-run",
+        "cargo package --allow-dirty --offline",
+    ] {
+        assert!(
+            required_release_checks
+                .iter()
+                .any(|value| value.as_str() == Some(command)),
+            "missing v0.18.3 required release check {command}"
+        );
+    }
+
+    let dashboard_fixture: Value = serde_json::from_str(
+        &read_fixture("cli_parity/web_dashboard_parity_decision.json")
+            .expect("read web dashboard parity decision fixture"),
+    )
+    .expect("parse web dashboard parity decision fixture");
+    assert_eq!(
+        dashboard_fixture["v0_18_3_version_package_evidence"]["python_target_tag"],
+        "v0.18.3"
+    );
+    assert_eq!(
+        dashboard_fixture["v0_18_3_version_package_evidence"]["diff_range"],
+        "v0.18.2..v0.18.3"
+    );
+    let web_sources =
+        dashboard_fixture["v0_18_3_version_package_evidence"]["changed_python_sources"]
+            .as_array()
+            .expect("v0.18.3 web package source list");
+    for source_path in [
+        "../millrace-py/packages/millrace-web/CHANGELOG.md",
+        "../millrace-py/packages/millrace-web/pyproject.toml",
+        "../millrace-py/packages/millrace-web/src/millrace_web/__init__.py",
+        "../millrace-py/packages/millrace-web/src/millrace_web/app.py",
+    ] {
+        assert!(
+            web_sources
+                .iter()
+                .any(|value| value.as_str() == Some(source_path)),
+            "missing v0.18.3 web package evidence source {source_path}"
+        );
+    }
+    assert_eq!(
+        dashboard_fixture["v0_18_3_version_package_evidence"]["rust_release_handling"],
+        "Recorded as v0.18.3 package/version evidence for the existing unsupported dashboard gap; no Rust web server, static shell, SSE stream, or separate dashboard package is added."
+    );
+
+    let non_live_guarantees = fixture["non_live_guarantees"]
+        .as_array()
+        .expect("non-live guarantees are present");
+    for guarantee in [
+        "no live Codex runner",
+        "no live Pi runner",
+        "no network",
+        "no credentials",
+        "no web server",
+        "no remote skill installation",
+        "no release upload",
+        "no publishing",
+    ] {
+        assert!(
+            non_live_guarantees
+                .iter()
+                .any(|value| value.as_str() == Some(guarantee)),
+            "missing v0.18.3 non-live guarantee {guarantee}"
+        );
+    }
+}
+
+#[test]
+fn committed_auto_port_v0_18_3_release_parity_evidence_covers_version_docs_package_librarian_learning_skill_lint_and_web_gap()
+ {
+    let fixture: Value = serde_json::from_str(
+        &read_fixture("cli_parity/auto_port_v0_18_3_release_parity_evidence.json")
+            .expect("read v0.18.3 release parity evidence fixture"),
+    )
+    .expect("parse v0.18.3 release parity evidence fixture");
+    assert_eq!(fixture["kind"], "auto_port_v0_18_3_release_parity_evidence");
+    assert_eq!(fixture["schema_version"], "1.0");
+    assert_eq!(fixture["python_reference"]["previous_tag"], "v0.18.2");
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.18.3");
+    assert_eq!(
+        fixture["python_reference"]["target_commit"],
+        "6556e55c8463ce9256716bc425a49059b4c5981c"
+    );
+    assert_eq!(
+        fixture["python_reference"]["diff_range"],
+        "v0.18.2..v0.18.3"
+    );
+    assert_eq!(fixture["rust_release"]["crate_version"], "0.3.3");
+    assert_eq!(fixture["rust_release"]["previous_crate_version"], "0.3.2");
+    assert_eq!(
+        fixture["rust_release"]["version_command_expectation"],
+        "millrace 0.3.3"
+    );
+
+    let include = fixture["rust_release"]["package_include_surfaces"]
+        .as_array()
+        .expect("package include surfaces are present");
+    for expected in [
+        "Cargo.lock",
+        "CHANGELOG.md",
+        "README.md",
+        "ROADMAP.md",
+        "docs/**/*.md",
+        "src/assets/**/*",
+        "src/**/*.rs",
+        "tests/**/*.rs",
+        "tests/fixtures/**/*",
+        "tests/support/**/*",
+    ] {
+        assert!(
+            include.iter().any(|value| value.as_str() == Some(expected)),
+            "missing v0.18.3 release package include surface {expected}"
+        );
+    }
+    let excluded = fixture["rust_release"]["excluded_runtime_workspace_artifacts"]
+        .as_array()
+        .expect("excluded runtime workspace artifacts are present");
+    for forbidden in ["millrace-agents/**", "ideas/**", "target/**"] {
+        assert!(
+            excluded
+                .iter()
+                .any(|value| value.as_str() == Some(forbidden)),
+            "missing v0.18.3 excluded runtime workspace artifact {forbidden}"
+        );
+    }
+    let cache_excludes = fixture["rust_release"]["generated_cache_excludes"]
+        .as_array()
+        .expect("generated cache excludes are present");
+    for forbidden in ["!**/__pycache__/**", "!**/*.pyc", "!**/*.pyo"] {
+        assert!(
+            cache_excludes
+                .iter()
+                .any(|value| value.as_str() == Some(forbidden)),
+            "missing v0.18.3 generated cache exclude {forbidden}"
+        );
+    }
+
+    let readiness = fixture["rust_release"]["package_readiness_evidence"]
+        .as_array()
+        .expect("package readiness evidence is present");
+    for expected in [
+        "Librarian managed entrypoint included under src/assets/baseline/entrypoints/learning/librarian.md",
+        "Librarian learning graph and loop assets included under src/assets/baseline/graphs/learning/standard.json and src/assets/baseline/loops/learning/default.json",
+        "Learning mode trigger assets included under src/assets/baseline/modes/learning_codex.json, src/assets/baseline/modes/learning_codex_integrated.json, and src/assets/baseline/modes/learning_pi.json",
+        "Librarian stage-kind registry and core skill included under src/assets/baseline/registry/stage_kinds/learning/librarian.json and src/assets/baseline/skills/stage/learning/librarian-core/SKILL.md",
+        "Shipped skill lint assets included under src/assets/baseline/skills/README.md, src/assets/baseline/skills/skills_index.md, src/assets/baseline/skills/shared/marathon-qa-audit/SKILL.md, and stage skill directories",
+        "runtime docs included under docs/runtime/",
+        "source package map included under docs/source-package-map.md",
+        "v0.18.3 parity fixtures included under tests/fixtures/cli_parity/auto_port_v0_18_3_parity_evidence.json, tests/fixtures/compiler_parity/auto_port_v0_18_3_compiler_contract_scout.json, and tests/fixtures/runtime_json/auto_port_v0_18_3_runtime_contract_scout.json",
+        "release fixture included under tests/fixtures/cli_parity/auto_port_v0_18_3_release_parity_evidence.json",
+        "web-dashboard unsupported-gap evidence included under tests/fixtures/cli_parity/web_dashboard_parity_decision.json",
+        "generated Python cache artifacts excluded by Cargo package rules for __pycache__, .pyc, and .pyo paths",
+        "version-visible CLI output checked by cargo run --quiet -- --version",
+        "Cargo metadata checked by cargo metadata --no-deps --format-version 1",
+        "full crate lint checked by cargo clippy --all-targets --all-features -- -D warnings",
+        "full crate test suite checked by cargo test --all",
+        "plain cargo publish --dry-run checked and blocked only by the dirty Builder worktree",
+        "cargo publish --dry-run --allow-dirty checked the release candidate without uploading",
+        "package content checked by cargo package --allow-dirty --offline",
+    ] {
+        assert!(
+            readiness
+                .iter()
+                .any(|value| value.as_str() == Some(expected)),
+            "missing v0.18.3 package readiness evidence {expected}"
+        );
+    }
+
+    let required_surfaces = fixture["required_surfaces"]
+        .as_array()
+        .expect("required surfaces are present");
+    let required_surface_names: BTreeSet<_> = required_surfaces
+        .iter()
+        .map(|surface| surface.as_str().expect("surface name"))
+        .collect();
+    let expected_surfaces = BTreeSet::from([
+        "librarian_learning_release_docs",
+        "package_release_evidence",
+        "web_dashboard_v0_18_3_package_gap",
+        "final_release_validation",
+    ]);
+    assert_eq!(required_surface_names, expected_surfaces);
+
+    let available_tests = rust_test_functions_by_file(&[
+        "tests/parity_cli.rs",
+        "tests/compiler_parity.rs",
+        "tests/contracts_runtime_json.rs",
+        "tests/compiler_contracts.rs",
+        "tests/compiler_materialization.rs",
+        "tests/workspace_assets_baseline.rs",
+        "tests/contracts_stage_metadata.rs",
+        "tests/runners_normalization.rs",
+        "tests/runtime_serial.rs",
+        "tests/runtime_daemon.rs",
+        "tests/shipped_skill_lint.rs",
+    ]);
+    let required_rust_refs = BTreeSet::from([
+        "tests/parity_cli.rs::rust_version_command_has_millrace_shape",
+        "tests/parity_cli.rs::rust_version_subcommand_matches_version_flag",
+        "tests/parity_cli.rs::rust_crate_release_metadata_and_package_include_rules_are_0_3_3",
+        "tests/parity_cli.rs::committed_auto_port_v0_18_3_parity_fixture_covers_librarian_learning_trigger_metadata_skill_lint_and_web_guardrails",
+        "tests/parity_cli.rs::committed_web_dashboard_parity_decision_records_unsupported_gap_with_sources",
+        "tests/parity_cli.rs::committed_auto_port_v0_18_3_release_parity_evidence_covers_version_docs_package_librarian_learning_skill_lint_and_web_gap",
+        "tests/compiler_parity.rs::compiler_parity_scout_pins_python_v0_18_3_librarian_assets_graph_modes_and_skill_lint_sources",
+        "tests/contracts_runtime_json.rs::auto_port_v0_18_3_runtime_contract_scout_pins_librarian_trigger_runner_metadata_sources",
+        "tests/compiler_contracts.rs::baseline_mode_graph_and_stage_kind_assets_parse_through_contracts",
+        "tests/compiler_materialization.rs::learning_modes_materialize_learning_graph_triggers_and_concurrency_policy",
+        "tests/compiler_materialization.rs::learning_mode_graph_exports_use_stable_plane_order_and_learning_edges",
+        "tests/workspace_assets_baseline.rs::live_guidance_assets_match_packaged_baseline",
+        "tests/contracts_stage_metadata.rs::every_stage_has_metadata_and_plane",
+        "tests/contracts_runtime_json.rs::python_v0_18_3_librarian_stage_result_runtime_json_round_trips",
+        "tests/runners_normalization.rs::raw_result_normalization_preserves_active_work_item_source_metadata",
+        "tests/runtime_serial.rs::serial_tick_planner_complete_triggers_librarian_request_with_planner_artifacts",
+        "tests/runtime_serial.rs::serial_tick_targeted_librarian_learning_request_uses_librarian_metadata_and_marks_done",
+        "tests/runtime_serial.rs::serial_tick_librarian_blocked_preserves_recoverable_failure_evidence",
+        "tests/runtime_daemon.rs::daemon_supervisor_planner_trigger_dispatches_librarian_and_traces_spawned_request",
+        "tests/shipped_skill_lint.rs::every_shipped_skill_package_passes_packaged_skill_lint",
+    ]);
+
+    let surfaces = fixture["surfaces"]
+        .as_array()
+        .expect("surface entries are present");
+    let mut covered_surfaces = BTreeSet::new();
+    let mut referenced_paths = BTreeSet::new();
+    let mut seen_rust_refs = BTreeSet::new();
+    for surface in surfaces {
+        let surface_name = surface["surface"].as_str().expect("surface name");
+        assert!(
+            required_surface_names.contains(surface_name),
+            "v0.18.3 release fixture references unknown surface {surface_name}"
+        );
+        covered_surfaces.insert(surface_name);
+        for source in surface["python_sources"]
+            .as_array()
+            .expect("python_sources array")
+        {
+            referenced_paths.insert(source.as_str().expect("Python source path"));
+        }
+        for rust_test in surface["rust_tests"].as_array().expect("rust_tests array") {
+            let test_file = rust_test["file"].as_str().expect("Rust test file");
+            let test_name = rust_test["name"].as_str().expect("Rust test name");
+            assert!(
+                available_tests.contains_key(test_file),
+                "v0.18.3 release fixture references unsupported Rust test file {test_file}"
+            );
+            assert!(
+                available_tests[test_file].contains(test_name),
+                "v0.18.3 release fixture references stale Rust test {test_file}::{test_name}"
+            );
+            let rust_ref = format!("{test_file}::{test_name}");
+            assert!(
+                required_rust_refs.contains(rust_ref.as_str()),
+                "v0.18.3 release fixture references unknown Rust test {rust_ref}"
+            );
+            seen_rust_refs.insert(rust_ref);
+        }
+    }
+    assert_eq!(covered_surfaces, expected_surfaces);
+    for rust_ref in &required_rust_refs {
+        assert!(
+            seen_rust_refs.contains(*rust_ref),
+            "missing required v0.18.3 release Rust test {rust_ref}"
+        );
+    }
+
+    for source_path in [
+        "../millrace-py/CHANGELOG.md",
+        "../millrace-py/README.md",
+        "../millrace-py/ROADMAP.md",
+        "../millrace-py/docs/source-package-map.md",
+        "../millrace-py/docs/runtime/millrace-compiler-and-frozen-plans.md",
+        "../millrace-py/docs/runtime/millrace-entrypoint-mapping.md",
+        "../millrace-py/src/millrace_ai/assets/entrypoints/learning/librarian.md",
+        "../millrace-py/src/millrace_ai/assets/graphs/learning/standard.json",
+        "../millrace-py/src/millrace_ai/runtime/learning_triggers.py",
+        "../millrace-py/src/millrace_ai/runtime/stage_requests.py",
+        "../millrace-py/src/millrace_ai/runners/normalization.py",
+        "../millrace-py/packages/millrace-web/pyproject.toml",
+        "../millrace-py/packages/millrace-web/src/millrace_web/app.py",
+    ] {
+        assert!(
+            referenced_paths.contains(source_path),
+            "missing v0.18.3 release Python source reference {source_path}"
+        );
+    }
+
+    let local_docs = fixture["local_docs"]
+        .as_array()
+        .expect("local docs list is present");
+    for doc_path in [
+        "README.md",
+        "CHANGELOG.md",
+        "ROADMAP.md",
+        "docs/millrace-technical-overview.md",
+        "docs/rust-port-roadmap.md",
+        "docs/source-package-map.md",
+        "docs/testing.md",
+        "docs/runtime/README.md",
+        "docs/runtime/millrace-cli-reference.md",
+        "docs/runtime/millrace-compiler-and-frozen-plans.md",
+        "docs/runtime/millrace-entrypoint-mapping.md",
+        "docs/runtime/millrace-loop-authoring.md",
+        "docs/runtime/millrace-modes-and-loops.md",
+        "docs/runtime/millrace-runtime-architecture.md",
+        "docs/runtime/millrace-runtime-lifecycle-diagram.md",
+        "docs/runtime/millrace-workspace-baselines-and-upgrades.md",
+        "millrace-agents/outline.md",
+        "tests/fixtures/cli_parity/README.md",
+        "tests/fixtures/compiler_parity/README.md",
+        "tests/fixtures/runtime_json/README.md",
+    ] {
+        assert!(
+            local_docs
+                .iter()
+                .any(|value| value.as_str() == Some(doc_path)),
+            "missing v0.18.3 release local doc reference {doc_path}"
+        );
+    }
+
+    let mapping_evidence = &fixture["changed_path_mapping_evidence"];
+    assert_eq!(
+        mapping_evidence["generated_scout"],
+        "millrace-agents/auto-port/generated/auto-port-python-v0.18.2-to-v0.18.3-rust-0.3.3.md"
+    );
+    assert_eq!(
+        mapping_evidence["evidence_fixture"],
+        "tests/fixtures/cli_parity/auto_port_v0_18_3_parity_evidence.json"
+    );
+    assert_eq!(mapping_evidence["mapped_python_paths"], 50);
+    let mapped_target_kinds: BTreeSet<_> = mapping_evidence["mapped_target_kinds"]
+        .as_array()
+        .expect("mapped target kinds are present")
+        .iter()
+        .map(|kind| kind.as_str().expect("mapped target kind"))
+        .collect();
+    assert_eq!(
+        mapped_target_kinds,
+        BTreeSet::from([
+            "implementation",
+            "test",
+            "documentation",
+            "fixture",
+            "package_evidence",
+            "unsupported_gap_evidence",
+            "reference_evidence",
+        ])
+    );
+
+    let validation = fixture["release_readiness_commands"]
+        .as_array()
+        .expect("release-readiness commands are present");
+    for command in [
+        "cargo fmt --check",
+        "cargo clippy --all-targets --all-features -- -D warnings",
+        "cargo test --all",
+        "cargo publish --dry-run",
+        "cargo publish --dry-run --allow-dirty",
+        "cargo package --allow-dirty --offline",
+        "cargo metadata --no-deps --format-version 1",
+        "cargo run --quiet -- --version",
+    ] {
+        assert!(
+            validation
+                .iter()
+                .any(|value| value.as_str() == Some(command)),
+            "missing v0.18.3 release validation command {command}"
+        );
+    }
+    let forbidden = fixture["forbidden_release_actions"]
+        .as_array()
+        .expect("forbidden release actions are present");
+    for command in validation {
+        let command = command.as_str().expect("release command");
+        assert!(
+            !forbidden
+                .iter()
+                .any(|value| value.as_str() == Some(command)),
+            "release-readiness command must not be a forbidden release action: {command}"
+        );
+    }
+
+    let results = fixture["release_readiness_results"]
+        .as_array()
+        .expect("release-readiness results are present");
+    let results_by_command: BTreeMap<_, _> = results
+        .iter()
+        .map(|result| (result["command"].as_str().expect("result command"), result))
+        .collect();
+    for command in validation {
+        let command = command.as_str().expect("release command");
+        assert!(
+            results_by_command.contains_key(command),
+            "missing v0.18.3 release result for {command}"
+        );
+    }
+    assert_eq!(
+        results_by_command["cargo metadata --no-deps --format-version 1"]["observed_package_version"],
+        "0.3.3"
+    );
+    assert_eq!(
+        results_by_command["cargo run --quiet -- --version"]["observed_stdout"],
+        "millrace 0.3.3"
+    );
+    assert_eq!(
+        results_by_command["cargo package --allow-dirty --offline"]["status"],
+        "passed"
+    );
+    assert_eq!(
+        results_by_command["cargo publish --dry-run"]["status"],
+        "blocked_dirty_worktree"
+    );
+    assert_eq!(
+        results_by_command["cargo publish --dry-run"]["result_class"],
+        "arbiter_visible_remediation_evidence"
+    );
+    assert_eq!(
+        results_by_command["cargo publish --dry-run --allow-dirty"]["status"],
+        "passed"
+    );
+    assert_eq!(
+        results_by_command["cargo publish --dry-run --allow-dirty"]["observed_terminal_warning"],
+        "aborting upload due to dry run"
+    );
+    assert_eq!(
+        results_by_command["cargo package --allow-dirty --offline"]["compressed_size"],
+        "638.2KiB"
+    );
+    assert_eq!(
+        results_by_command["cargo package --allow-dirty --offline --list | rg \"__pycache__|\\.pyc|\\.pyo\""]
+            ["status"],
+        "passed_no_matches"
+    );
+
+    let closure_guard = &fixture["arbiter_closure_guard"];
+    assert_eq!(closure_guard["crate_version_gate"], "0.3.3");
+    let completion_withheld_until = closure_guard["completion_withheld_until"]
+        .as_array()
+        .expect("completion guard reasons are present");
+    assert!(completion_withheld_until.iter().any(|reason| {
+        reason.as_str().is_some_and(|reason| {
+            reason.contains(
+                "same-lineage tasks auto-port-0-18-3-01 through auto-port-0-18-3-07 are done",
+            )
+        })
+    }));
+    assert!(completion_withheld_until.iter().any(|reason| {
+        reason.as_str().is_some_and(|reason| {
+            reason.contains("plain cargo publish --dry-run is rerun in a clean committed worktree")
+        })
+    }));
+
+    let gaps = fixture["explicit_gaps"]
+        .as_array()
+        .expect("explicit gaps are present");
+    assert!(gaps.iter().any(|gap| {
+        gap["surface"].as_str() == Some("python_packages_millrace_web")
+            && gap["status"].as_str() == Some("deferred_unsupported_gap")
+            && gap["v0_18_3_version_package_gap"].as_bool() == Some(true)
+            && gap["evidence_fixture"].as_str()
+                == Some("tests/fixtures/cli_parity/web_dashboard_parity_decision.json")
+    }));
+
+    let dashboard_fixture: Value = serde_json::from_str(
+        &read_fixture("cli_parity/web_dashboard_parity_decision.json")
+            .expect("read web dashboard parity decision fixture"),
+    )
+    .expect("parse web dashboard parity decision fixture");
+    assert_eq!(
+        dashboard_fixture["v0_18_3_version_package_evidence"]["python_target_tag"],
+        "v0.18.3"
+    );
+    assert_eq!(
+        dashboard_fixture["v0_18_3_version_package_evidence"]["rust_release_handling"],
+        "Recorded as v0.18.3 package/version evidence for the existing unsupported dashboard gap; no Rust web server, static shell, SSE stream, or separate dashboard package is added."
+    );
+}
+
+#[test]
 fn committed_auto_port_v0_18_1_release_parity_evidence_covers_version_docs_package_recon_and_web_gap()
  {
     let fixture: Value = serde_json::from_str(
@@ -5138,8 +6150,10 @@ fn rust_compile_show_renders_representative_inspection_fields() {
         "entry: learning.learning_request -> analyst\n",
         "completion: closure_target -> arbiter\n",
         "completion_behavior.trigger: backlog_drained\n",
-        "learning_triggers: 3\n",
+        "learning_triggers: 4\n",
         "learning_trigger: execution.doublechecker.success-to-analyst\n",
+        "learning_trigger: planning.planner.complete-to-librarian\n",
+        "learning_trigger.target_stage: librarian\n",
         "concurrency_policy: present\n",
         "concurrency_policy.mutually_exclusive_planes: execution, planning\n",
         "node_order: execution.0 -> builder\n",

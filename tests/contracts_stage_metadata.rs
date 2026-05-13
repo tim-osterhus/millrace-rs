@@ -43,7 +43,7 @@ fn enum_values_match_python_reference_contracts() {
     );
     assert_eq!(
         values(LearningStageName::ALL, LearningStageName::as_str),
-        ["analyst", "professor", "curator"]
+        ["analyst", "professor", "curator", "librarian"]
     );
     assert_eq!(
         values(
@@ -89,6 +89,8 @@ fn enum_values_match_python_reference_contracts() {
             "PROFESSOR_NOOP",
             "CURATOR_COMPLETE",
             "CURATOR_NOOP",
+            "LIBRARIAN_COMPLETE",
+            "LIBRARIAN_NOOP",
             "BLOCKED",
         ]
     );
@@ -225,6 +227,18 @@ fn stage_work_item_ownership_matrix_matches_runtime_contracts() {
         allowed_work_item_kinds(StageName::Curator),
         [WorkItemKind::LearningRequest]
     );
+    assert_eq!(
+        allowed_work_item_kinds(StageName::Librarian),
+        [WorkItemKind::LearningRequest]
+    );
+    assert!(stage_allows_work_item_kind(
+        StageName::Librarian,
+        WorkItemKind::LearningRequest
+    ));
+    assert!(!stage_allows_work_item_kind(
+        StageName::Librarian,
+        WorkItemKind::Task
+    ));
 }
 
 #[test]
@@ -240,6 +254,10 @@ fn python_v0_17_4_learning_noop_enum_values_parse_as_first_class_contracts() {
     assert_eq!(
         LearningTerminalResult::from_value("CURATOR_NOOP").unwrap(),
         LearningTerminalResult::CuratorNoop
+    );
+    assert_eq!(
+        LearningTerminalResult::from_value("LIBRARIAN_NOOP").unwrap(),
+        LearningTerminalResult::LibrarianNoop
     );
     assert_eq!(ResultClass::from_value("no_op").unwrap(), ResultClass::NoOp);
 }
@@ -284,7 +302,7 @@ fn every_stage_has_metadata_and_plane() {
     );
     assert_eq!(
         known_stage_values_for_plane(Plane::Learning),
-        ["analyst", "professor", "curator"]
+        ["analyst", "professor", "curator", "librarian"]
     );
 }
 
@@ -296,6 +314,10 @@ fn legal_markers_and_running_markers_derive_from_metadata() {
         "INTEGRATOR_RUNNING"
     );
     assert_eq!(running_status_marker(StageName::Curator), "CURATOR_RUNNING");
+    assert_eq!(
+        running_status_marker(StageName::Librarian),
+        "LIBRARIAN_RUNNING"
+    );
     assert_eq!(
         legal_terminal_markers(StageName::Builder),
         vec!["### BUILDER_COMPLETE".to_owned(), "### BLOCKED".to_owned()]
@@ -333,6 +355,14 @@ fn legal_markers_and_running_markers_derive_from_metadata() {
             "### BLOCKED".to_owned()
         ]
     );
+    assert_eq!(
+        legal_terminal_markers(StageName::Librarian),
+        vec![
+            "### LIBRARIAN_COMPLETE".to_owned(),
+            "### LIBRARIAN_NOOP".to_owned(),
+            "### BLOCKED".to_owned()
+        ]
+    );
 
     for stage in StageName::ALL.iter().copied() {
         let metadata = stage_metadata(stage);
@@ -367,6 +397,10 @@ fn terminal_result_lookup_is_plane_specific() {
     assert_eq!(
         terminal_result_for_plane(Plane::Learning, "ANALYST_NOOP").unwrap(),
         TerminalResult::Learning(LearningTerminalResult::AnalystNoop)
+    );
+    assert_eq!(
+        terminal_result_for_plane(Plane::Learning, "LIBRARIAN_COMPLETE").unwrap(),
+        TerminalResult::Learning(LearningTerminalResult::LibrarianComplete)
     );
     assert_eq!(
         blocked_terminal_for_plane(Plane::Learning),
@@ -504,6 +538,24 @@ fn legal_stage_result_class_combinations_validate() {
         ResultClass::Blocked,
     )
     .unwrap();
+    validate_stage_result_class(
+        StageName::Librarian,
+        TerminalResult::Learning(LearningTerminalResult::LibrarianComplete),
+        ResultClass::Success,
+    )
+    .unwrap();
+    validate_stage_result_class(
+        StageName::Librarian,
+        TerminalResult::Learning(LearningTerminalResult::LibrarianNoop),
+        ResultClass::NoOp,
+    )
+    .unwrap();
+    validate_stage_result_class(
+        StageName::Librarian,
+        TerminalResult::Learning(LearningTerminalResult::Blocked),
+        ResultClass::RecoverableFailure,
+    )
+    .unwrap();
 
     let builder_allowed = allowed_result_classes_by_outcome(StageName::Builder);
     assert_eq!(builder_allowed.len(), 2);
@@ -518,6 +570,7 @@ fn python_v0_17_4_learning_stage_metadata_allows_only_stage_specific_noop_classe
     let analyst_noop = TerminalResult::Learning(LearningTerminalResult::AnalystNoop);
     let professor_noop = TerminalResult::Learning(LearningTerminalResult::ProfessorNoop);
     let curator_noop = TerminalResult::Learning(LearningTerminalResult::CuratorNoop);
+    let librarian_noop = TerminalResult::Learning(LearningTerminalResult::LibrarianNoop);
 
     assert_eq!(
         legal_terminal_markers(StageName::Analyst),
@@ -543,10 +596,19 @@ fn python_v0_17_4_learning_stage_metadata_allows_only_stage_specific_noop_classe
             "### BLOCKED".to_owned()
         ]
     );
+    assert_eq!(
+        legal_terminal_markers(StageName::Librarian),
+        vec![
+            "### LIBRARIAN_COMPLETE".to_owned(),
+            "### LIBRARIAN_NOOP".to_owned(),
+            "### BLOCKED".to_owned()
+        ]
+    );
 
     validate_stage_result_class(StageName::Analyst, analyst_noop, ResultClass::NoOp).unwrap();
     validate_stage_result_class(StageName::Professor, professor_noop, ResultClass::NoOp).unwrap();
     validate_stage_result_class(StageName::Curator, curator_noop, ResultClass::NoOp).unwrap();
+    validate_stage_result_class(StageName::Librarian, librarian_noop, ResultClass::NoOp).unwrap();
 
     assert_eq!(
         allowed_result_classes_by_outcome(StageName::Analyst)[1].result_classes,
@@ -554,6 +616,10 @@ fn python_v0_17_4_learning_stage_metadata_allows_only_stage_specific_noop_classe
     );
     assert!(matches!(
         validate_stage_result_class(StageName::Analyst, professor_noop, ResultClass::NoOp),
+        Err(ContractError::TerminalResultNotAllowed { .. })
+    ));
+    assert!(matches!(
+        validate_stage_result_class(StageName::Curator, librarian_noop, ResultClass::NoOp),
         Err(ContractError::TerminalResultNotAllowed { .. })
     ));
     assert!(matches!(

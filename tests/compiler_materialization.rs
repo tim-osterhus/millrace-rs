@@ -7,7 +7,9 @@ use millrace_ai::{
         export_compiled_stage_graph_at, export_compiled_stage_graphs_at,
         materialize_graph_plane_plan, resolve_compile_assets,
     },
-    contracts::{LearningStageName, Plane, ResultClass, Timestamp},
+    contracts::{
+        LearningRequestAction, LearningStageName, Plane, ResultClass, StageName, Timestamp,
+    },
     workspace::initialize_workspace,
 };
 use tempfile::TempDir;
@@ -60,6 +62,13 @@ fn default_codex_materializes_execution_and_planning_graphs() {
     assert_eq!(plan.execution_graph.loop_id, "execution.standard");
     assert_eq!(plan.planning_graph.loop_id, "planning.standard");
     assert!(plan.learning_graph.is_none());
+    assert!(plan.learning_trigger_rules.is_empty());
+    assert!(
+        plan.graphs_by_plane
+            .values()
+            .flat_map(|graph| graph.nodes.iter())
+            .all(|node| node.node_id != "librarian")
+    );
     assert_eq!(plan.execution_graph.nodes.len(), 7);
     assert_eq!(plan.planning_graph.nodes.len(), 6);
     assert_eq!(
@@ -304,7 +313,7 @@ fn learning_integrated_mode_materializes_learning_graph_with_integrated_executio
     assert_eq!(plan.execution_graph.loop_id, "execution.with_integrator");
     assert_eq!(plan.learning_loop_id.as_deref(), Some("learning.standard"));
     assert!(plan.learning_graph.is_some());
-    assert_eq!(plan.learning_trigger_rules.len(), 3);
+    assert_eq!(plan.learning_trigger_rules.len(), 4);
     let concurrency = plan.concurrency_policy.as_ref().unwrap();
     assert_eq!(concurrency.mutually_exclusive_planes.len(), 1);
     assert_eq!(concurrency.may_run_concurrently.len(), 2);
@@ -314,6 +323,12 @@ fn learning_integrated_mode_materializes_learning_graph_with_integrated_executio
     assert!(
         plan.source_refs
             .contains(&"mode:learning_codex_integrated".to_owned())
+    );
+    let librarian = node(plan.learning_graph.as_ref().unwrap(), "librarian");
+    assert_eq!(librarian.runner_name.as_deref(), Some("codex_cli"));
+    assert_eq!(
+        librarian.required_skill_paths,
+        ["skills/stage/learning/librarian-core/SKILL.md".to_owned()]
     );
 }
 
@@ -357,7 +372,7 @@ fn learning_modes_materialize_learning_graph_triggers_and_concurrency_policy() {
             .iter()
             .map(|node| node.node_id.as_str())
             .collect::<Vec<_>>(),
-        vec!["analyst", "professor", "curator"]
+        vec!["analyst", "professor", "curator", "librarian"]
     );
     assert!(
         learning_graph
@@ -365,7 +380,7 @@ fn learning_modes_materialize_learning_graph_triggers_and_concurrency_policy() {
             .iter()
             .all(|node| node.runner_name.as_deref() == Some("codex_cli"))
     );
-    assert_eq!(plan.learning_trigger_rules.len(), 3);
+    assert_eq!(plan.learning_trigger_rules.len(), 4);
     assert_eq!(
         plan.learning_trigger_rules[0].rule_id,
         "execution.doublechecker.success-to-analyst"
@@ -380,6 +395,44 @@ fn learning_modes_materialize_learning_graph_triggers_and_concurrency_policy() {
             .preferred_output_paths
             .is_empty()
     );
+    let librarian_trigger = plan
+        .learning_trigger_rules
+        .iter()
+        .find(|rule| rule.rule_id == "planning.planner.complete-to-librarian")
+        .unwrap();
+    assert_eq!(librarian_trigger.source_stage, StageName::Planner);
+    assert_eq!(librarian_trigger.target_stage, LearningStageName::Librarian);
+    assert_eq!(
+        librarian_trigger.requested_action,
+        LearningRequestAction::Install
+    );
+    assert_eq!(
+        librarian_trigger.on_terminal_results,
+        ["PLANNER_COMPLETE".to_owned()]
+    );
+    let librarian = node(learning_graph, "librarian");
+    assert_eq!(librarian.stage_kind_id, "librarian");
+    assert_eq!(
+        librarian.entrypoint_path,
+        "entrypoints/learning/librarian.md"
+    );
+    assert_eq!(
+        librarian.entrypoint_contract_id.as_deref(),
+        Some("librarian.contract.v1")
+    );
+    assert_eq!(librarian.running_status_marker, "LIBRARIAN_RUNNING");
+    assert_eq!(
+        librarian.allowed_result_classes_by_outcome["LIBRARIAN_NOOP"],
+        vec![ResultClass::NoOp]
+    );
+    assert_eq!(
+        librarian.required_skill_paths,
+        ["skills/stage/learning/librarian-core/SKILL.md".to_owned()]
+    );
+    assert_eq!(
+        librarian.declared_output_artifacts,
+        vec!["stage_result".to_owned(), "skill_install_report".to_owned()]
+    );
     assert!(
         learning_graph
             .terminal_states
@@ -390,10 +443,25 @@ fn learning_modes_materialize_learning_graph_triggers_and_concurrency_policy() {
     );
     assert!(
         learning_graph
+            .terminal_states
+            .iter()
+            .any(|state| state.terminal_state_id == "librarian_noop"
+                && state.terminal_class == GraphLoopTerminalClass::NoOp
+                && state.writes_status == "LIBRARIAN_NOOP")
+    );
+    assert!(
+        learning_graph
             .compiled_transitions
             .iter()
             .any(|transition| transition.outcome == "CURATOR_NOOP"
                 && transition.terminal_state_id.as_deref() == Some("curator_noop"))
+    );
+    assert!(
+        learning_graph
+            .compiled_transitions
+            .iter()
+            .any(|transition| transition.outcome == "LIBRARIAN_NOOP"
+                && transition.terminal_state_id.as_deref() == Some("librarian_noop"))
     );
     let concurrency = plan.concurrency_policy.as_ref().unwrap();
     assert_eq!(concurrency.mutually_exclusive_planes.len(), 1);
@@ -621,6 +689,32 @@ fn learning_mode_graph_exports_use_stable_plane_order_and_learning_edges() {
             .any(|edge| edge.outcome == "CURATOR_NOOP"
                 && edge.terminal_state_id.as_deref() == Some("curator_noop"))
     );
+    let librarian = learning
+        .nodes
+        .iter()
+        .find(|node| node.node_id == "librarian")
+        .unwrap();
+    assert_eq!(
+        librarian.entrypoint_path,
+        "entrypoints/learning/librarian.md"
+    );
+    assert_eq!(
+        librarian.required_skill_paths,
+        ["skills/stage/learning/librarian-core/SKILL.md".to_owned()]
+    );
+    assert_eq!(librarian.runner_name.as_deref(), Some("codex_cli"));
+    assert_eq!(
+        librarian.allowed_result_classes_by_outcome["LIBRARIAN_NOOP"],
+        vec![ResultClass::NoOp]
+    );
+    assert!(
+        learning
+            .edges
+            .iter()
+            .any(|edge| edge.source_node_id == "librarian"
+                && edge.outcome == "LIBRARIAN_COMPLETE"
+                && edge.terminal_state_id.as_deref() == Some("librarian_complete"))
+    );
     assert!(
         learning
             .terminal_states
@@ -628,6 +722,16 @@ fn learning_mode_graph_exports_use_stable_plane_order_and_learning_edges() {
             .any(|state| state.terminal_state_id == "analyst_noop"
                 && state.terminal_class == "no_op"
                 && state.writes_status == "ANALYST_NOOP")
+    );
+    assert!(
+        learning
+            .terminal_states
+            .iter()
+            .any(|state| state.terminal_state_id == "librarian_noop"
+                && state.terminal_class == "no_op"
+                && state.writes_status == "LIBRARIAN_NOOP"
+                && state.emits_artifacts
+                    == ["stage_result".to_owned(), "skill_install_report".to_owned()])
     );
     assert!(
         learning

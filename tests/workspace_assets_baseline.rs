@@ -123,9 +123,11 @@ fn initialize_workspace_deploys_managed_assets_and_manifest_io() {
         "entrypoints/execution/builder.md",
         "entrypoints/execution/integrator.md",
         "entrypoints/planning/recon.md",
+        "entrypoints/learning/librarian.md",
         "skills/stage/execution/builder-core/SKILL.md",
         "skills/stage/execution/integrator-core/SKILL.md",
         "skills/stage/planning/recon-core/SKILL.md",
+        "skills/stage/learning/librarian-core/SKILL.md",
         "modes/default_codex.json",
         "modes/default_codex_integrated.json",
         "modes/learning_codex_integrated.json",
@@ -135,6 +137,7 @@ fn initialize_workspace_deploys_managed_assets_and_manifest_io() {
         "registry/stage_kinds/execution/builder.json",
         "registry/stage_kinds/execution/integrator.json",
         "registry/stage_kinds/planning/recon.json",
+        "registry/stage_kinds/learning/librarian.json",
         "loops/execution/default.json",
         "loops/execution/with_integrator.json",
     ];
@@ -290,7 +293,22 @@ fn initialized_workspace_integrator_assets_match_packaged_baseline() {
             .as_array()
             .unwrap()
             .len(),
-        3
+        4
+    );
+    assert_eq!(
+        learning_mode["stage_runner_bindings"]["librarian"],
+        "codex_cli"
+    );
+    assert!(
+        learning_mode["learning_trigger_rules"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(
+                |rule| rule["rule_id"] == "planning.planner.complete-to-librarian"
+                    && rule["target_stage"] == "librarian"
+                    && rule["requested_action"] == "install"
+            )
     );
 }
 
@@ -369,12 +387,15 @@ fn initialized_workspace_learning_assets_match_packaged_noop_trigger_baseline() 
         "registry/stage_kinds/learning/analyst.json",
         "registry/stage_kinds/learning/professor.json",
         "registry/stage_kinds/learning/curator.json",
+        "registry/stage_kinds/learning/librarian.json",
         "entrypoints/learning/analyst.md",
         "entrypoints/learning/professor.md",
         "entrypoints/learning/curator.md",
+        "entrypoints/learning/librarian.md",
         "skills/stage/learning/analyst-core/SKILL.md",
         "skills/stage/learning/professor-core/SKILL.md",
         "skills/stage/learning/curator-core/SKILL.md",
+        "skills/stage/learning/librarian-core/SKILL.md",
     ];
 
     for relative_path in learning_assets {
@@ -389,6 +410,13 @@ fn initialized_workspace_learning_assets_match_packaged_noop_trigger_baseline() 
         &fs::read(paths.runtime_root.join("graphs/learning/standard.json")).unwrap(),
     )
     .unwrap();
+    assert!(
+        learning_graph["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|node| { node["node_id"] == "librarian" && node["stage_kind_id"] == "librarian" })
+    );
     let terminal_states = learning_graph["terminal_states"].as_array().unwrap();
     assert!(terminal_states.iter().any(|state| {
         state["terminal_state_id"] == "analyst_noop" && state["terminal_class"] == "no_op"
@@ -399,11 +427,73 @@ fn initialized_workspace_learning_assets_match_packaged_noop_trigger_baseline() 
     assert!(terminal_states.iter().any(|state| {
         state["terminal_state_id"] == "curator_noop" && state["terminal_class"] == "no_op"
     }));
+    assert!(terminal_states.iter().any(|state| {
+        state["terminal_state_id"] == "librarian_noop" && state["terminal_class"] == "no_op"
+    }));
+    assert!(
+        learning_graph["edges"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|edge| {
+                edge["edge_id"] == "librarian-complete-to-terminal-librarian-complete"
+                    && edge["terminal_state_id"] == "librarian_complete"
+            })
+    );
 
     for mode in ["learning_codex.json", "learning_pi.json"] {
-        let mode_text = fs::read_to_string(paths.runtime_root.join("modes").join(mode)).unwrap();
+        let mode_path = paths.runtime_root.join("modes").join(mode);
+        let mode_text = fs::read_to_string(&mode_path).unwrap();
+        let mode_json: Value = serde_json::from_str(&mode_text).unwrap();
         assert!(!mode_text.contains("success-to-curator"));
         assert!(mode_text.contains("success-to-analyst"));
+        assert_eq!(
+            mode_json["stage_runner_bindings"]["librarian"],
+            if mode == "learning_pi.json" {
+                "pi_rpc"
+            } else {
+                "codex_cli"
+            }
+        );
+        assert!(
+            mode_json["learning_trigger_rules"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(
+                    |rule| rule["rule_id"] == "planning.planner.complete-to-librarian"
+                        && rule["target_stage"] == "librarian"
+                        && rule["requested_action"] == "install"
+                )
+        );
+    }
+}
+
+#[test]
+fn live_guidance_assets_match_packaged_baseline() {
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let live_root = repo_root.join("millrace-agents");
+    let source_root = repo_root.join("src/assets/baseline");
+    if !live_root.is_dir() {
+        return;
+    }
+    let guidance_assets = [
+        "entrypoints/learning/curator.md",
+        "entrypoints/planning/planner.md",
+        "entrypoints/planning/recon.md",
+        "skills/README.md",
+        "skills/skills_index.md",
+        "skills/shared/marathon-qa-audit/SKILL.md",
+        "skills/stage/learning/curator-core/SKILL.md",
+        "skills/stage/planning/recon-core/SKILL.md",
+    ];
+
+    for relative_path in guidance_assets {
+        assert_eq!(
+            fs::read(live_root.join(relative_path)).unwrap(),
+            fs::read(source_root.join(relative_path)).unwrap(),
+            "live workspace guidance asset drifted from packaged baseline: {relative_path}",
+        );
     }
 }
 

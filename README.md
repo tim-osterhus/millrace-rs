@@ -4,10 +4,12 @@
 governed runtime for long-running agent work.
 
 The production implementation is currently the Python package
-[`millrace-ai`](https://pypi.org/project/millrace-ai/). The Rust `0.3.2`
-release consolidates the Python `v0.18.1..v0.18.2` Integrator, integrated-mode,
-status JSON, Recon-hardening, and ownership parity pass on top of the earlier
-probe/Recon and graph/trace ports while the crate remains experimental.
+[`millrace-ai`](https://pypi.org/project/millrace-ai/). The Rust `0.3.3`
+release consolidates the Python `v0.18.2..v0.18.3` Librarian,
+Planner-to-Librarian trigger, learning request artifact metadata, runner
+normalization metadata, shipped skill lint/guidance, docs/version, package, and
+web-gap evidence pass on top of the earlier Integrator, probe/Recon, and
+graph/trace ports while the crate remains experimental.
 
 ## Package Names
 
@@ -65,9 +67,11 @@ compiled-plan authority, and currentness inspection boundary through
 `millrace_ai::compiler`, including the Python v0.18.2 Integrator
 contracts/assets/compiler graph subset for the opt-in
 `execution.with_integrator` graph plus the opt-in `default_codex_integrated`
-and `learning_codex_integrated` modes. Integrated runtime routing now preserves
-standard Builder -> Checker execution while the opt-in integrated graph routes
-Builder success through Integrator before Checker and records trace evidence.
+and `learning_codex_integrated` modes, and the Python v0.18.3 Librarian
+learning graph/mode subset for Planner-to-Librarian optional-skill preparation.
+Integrated runtime routing now preserves standard Builder -> Checker execution
+while the opt-in integrated graph routes Builder success through Integrator
+before Checker and records trace evidence.
 The runtime contract surface also exposes
 Python-compatible `run_trace_graph` contracts plus runtime-owned
 `run_trace.json` persistence and read-only fallback inspection helpers. The
@@ -143,9 +147,14 @@ Learning promotion and skill-evidence parity is also implemented for the
 runtime-owned surfaces: stage-result learning triggers enqueue learning-request
 documents with trigger, artifact, `target_skill_id`, and normalized
 `preferred_output_paths` evidence in queued request fields, trigger metadata,
-and `learning_request_enqueued` events. Learning no-op terminal results
-complete active learning requests into `learning/requests/done/` with
-non-success `no_op` stage-result, terminal-marker, and router-decision evidence.
+and `learning_request_enqueued` events. Planner completion in learning-enabled
+modes now creates targeted Librarian install requests with persisted
+stage-result, stage-produced Planner artifact, and source work-item metadata;
+default non-learning modes do not enqueue those requests. Targeted
+`learning_request` work dispatches to the requested learning stage, including
+Librarian, and `LIBRARIAN_COMPLETE`/`LIBRARIAN_NOOP` complete active requests
+into `learning/requests/done/` with success/no-op semantics while Librarian
+`BLOCKED` preserves recoverable-failure blocked evidence.
 Stage requests preserve skill-revision evidence in run directories, Curator
 `skill_update` artifacts create auditable learning update-candidate promotion
 records, deferred records apply only after foreground execution and planning
@@ -222,9 +231,11 @@ compile fingerprints, and builds dispatchers with `codex_cli` and `pi_rpc`
 adapters for runtime operator paths.
 
 The contract layer currently covers canonical enum values including planning
-`recon`, probe work items/status hints, root-intake kinds, stage metadata, legal
-terminal and running markers, result-class validation, and safe identifier
-validation. It also includes typed task, probe, spec, incident, and
+`recon` and learning `librarian`, probe work items/status hints, root-intake
+kinds, stage metadata, legal terminal and running markers including
+`LIBRARIAN_COMPLETE`, `LIBRARIAN_NOOP`, and `LIBRARIAN_RUNNING`,
+result-class validation, and safe identifier validation. It also includes typed
+task, probe, spec, incident, and
 learning-request work-document contracts with headed markdown parse/render
 helpers, root-intake lineage fields, a typed Arbiter closure-target-state
 contract, typed Recon packet contracts and markdown helpers, plus serde-backed
@@ -259,7 +270,15 @@ fixtures and final Rust `0.3.1` release evidence for the Recon/probe auto-port,
 plus target-facing Python `v0.18.1..v0.18.2` guardrails and Rust `0.3.2`
 release evidence for Integrator, integrated-mode, status JSON, Recon-hardening,
 ownership, docs/version, release-check, package dry-run, and web-package
-evidence slices.
+evidence slices, plus target-facing Python `v0.18.2..v0.18.3` guardrails and
+final Rust `0.3.3` release evidence for Librarian, Planner-to-Librarian trigger,
+learning request artifact metadata, runner normalization metadata, shipped skill
+lint, guidance handoff, docs/version, package verification, release-check, and
+web-package evidence. The runner normalization/artifact-metadata target is now
+implemented with focused runtime JSON, runner normalization, serial runtime, and
+daemon runtime coverage, and the shipped skill lint/guidance target is now
+implemented with recursive packaged skill lint coverage plus live/baseline
+guidance asset synchronization.
 The Slice 5
 evidence maps
 Rust fake-runner startup, tick, routing,
@@ -328,7 +347,7 @@ evidence without adding a Rust web implementation. The v0.18.2 guardrail
 fixture maps all 57 generated Python scout paths to expected Rust
 implementation, test, documentation, fixture, package-evidence, or
 unsupported-gap targets and keeps Rust `0.3.1` as the previous baseline while
-Rust `0.3.2` is the current target. It pins Integrator assets,
+Rust `0.3.2` is the target. It pins Integrator assets,
 `execution.with_integrator`, integrated modes, status JSON diagnostics, Recon
 invalid-handoff hardening, graph validation guards, stage/work-item ownership,
 release-check commands, package dry-run evidence, `millrace-web` source
@@ -341,11 +360,36 @@ runtime-owned. Stage/work-item ownership checks now validate active runs before
 serial or daemon runner dispatch, preserve closure-target Arbiter activation,
 record `stage_work_item_ownership_invalid` runtime error evidence, and emit
 `runtime_stage_work_item_ownership_invalid` event evidence for stale pairings;
-the final Rust `0.3.2` release-parity evidence now reconciles Cargo metadata,
+the final Rust `0.3.2` release-parity evidence reconciles Cargo metadata,
 runtime docs, source-package mapping, parity fixture docs, package include
 readiness, required release-readiness checks, the dirty-worktree publish dry-run
 limitation, allow-dirty dry-run/package verification, and Python
-`millrace-web` v0.18.2 package/version unsupported-gap evidence. Focused
+`millrace-web` v0.18.2 package/version unsupported-gap evidence. The v0.18.3
+guardrail fixture maps all 50 generated Python scout paths to expected Rust
+implementation, test, documentation, fixture, package-evidence, or
+unsupported-gap targets while keeping Rust `0.3.2` as the previous baseline and
+Rust `0.3.3` as the target. It pins Librarian contracts/assets,
+learning graph/modes, Planner-to-Librarian learning triggers, learning request
+artifact metadata, runner normalization metadata, shipped skill lint and guidance
+handoff source references, release-check commands, package dry-run evidence,
+`millrace-web` package/version source references, and no-live guarantees; the
+Librarian contract metadata slice has landed with learning-request-only
+ownership and complete/no-op result metadata, and the Librarian
+asset/compiler-mode slice has landed with managed assets, learning graph/loop
+and mode bindings, compiler materialization/export coverage, and workspace
+baseline synchronization; the runner normalization/artifact-metadata slice has
+landed with normalized active work item metadata plus learning-request artifact
+and source metadata coverage; the active Librarian lifecycle slice has landed
+with Planner-triggered install requests, targeted Librarian dispatch,
+complete/no-op done transitions, blocked evidence, and daemon run-trace
+coverage; the shipped skill lint/guidance slice has landed with recursive
+packaged `SKILL.md` lint coverage, `marathon-qa-audit` section-contract
+migration, Curator/Recon/Planner guidance updates, and live/baseline asset sync
+coverage; the final Rust `0.3.3` release-parity evidence now reconciles Cargo
+metadata, runtime docs, source-package mapping, parity fixture docs, package
+include readiness, required Builder checks, package verification, and Python
+`millrace-web` v0.18.3 package/version unsupported-gap evidence.
+Focused
 `run once`
 coverage exercises one-stage mocked Codex dispatcher execution, idle/pause/stop
 outcomes, startup failures, lock contention, and run-artifact inspection, and
@@ -442,6 +486,19 @@ generated-scout path mappings, package include readiness, runtime docs,
 source-package mapping, required release-readiness command results, the
 dirty-worktree publish dry-run limitation, allow-dirty dry-run/package
 verification, and the Python `v0.18.2` `millrace-web` package/version
+unsupported gap; and
+`tests/fixtures/cli_parity/auto_port_v0_18_3_parity_evidence.json` records the
+target-facing Rust `0.3.3` guardrails for Python `v0.18.2..v0.18.3` Librarian
+contracts/assets/graph/modes, Planner-to-Librarian trigger metadata, learning
+request artifact metadata, runner normalization metadata, shipped skill lint
+and guidance handoff source references, all 50 generated scout paths, required
+release checks, package dry-run evidence, `millrace-web` package/version
+unsupported-gap evidence, and no-live guarantees; and
+`tests/fixtures/cli_parity/auto_port_v0_18_3_release_parity_evidence.json`
+records the final Rust `0.3.3` release-parity evidence for version metadata,
+generated-scout path mappings, package include readiness, runtime docs,
+source-package mapping, required Builder verification command results, package
+verification, and the Python `v0.18.3` `millrace-web` package/version
 unsupported gap. The optional
 Python `millrace-web` dashboard
 remains an explicit unsupported Rust parity gap with source references,
@@ -494,7 +551,19 @@ v0.18.1 compiler scout fixture remains alongside the normalized fixture as
 target-facing source evidence, and the v0.18.2 compiler scout fixture records
 Integrator entrypoint/skill/registry assets, Checker asset updates,
 `execution.with_integrator`, integrated Codex modes, package baseline targets,
-compiler targets, and fixture/test targets. Focused contract, asset,
+compiler targets, and fixture/test targets. The v0.18.3 compiler scout fixture
+records Librarian entrypoint/skill/stage-kind assets, learning graph/loop/mode
+targets, shipped skill lint/guidance source references, package baseline
+targets, compiler targets, and fixture/test targets. The Librarian
+asset/compiler graph/mode slice now implements those assets and compiler
+surfaces with focused compiler, parity, materialization/export, and
+workspace-baseline coverage, and the runner normalization/artifact-metadata
+slice now implements source metadata preservation, while the active Librarian
+lifecycle slice now implements Planner-triggered Librarian requests, targeted
+dispatch, complete/no-op/blocked result application, and daemon trace coverage;
+the shipped skill lint/guidance slice now implements recursive skill lint and
+guidance handoff coverage, with docs and release evidence reconciled for Rust
+`0.3.3`. Focused contract, asset,
 materialization/export, and workspace-baseline tests now cover the implemented
 Integrator contracts/assets/compiler graph subset, and focused compiler, CLI,
 serial runtime, daemon runtime, and baseline tests cover the opt-in integrated
@@ -609,6 +678,7 @@ Python runtime.
 ## Documentation
 
 - [Architecture](docs/architecture.md)
+- [Technical overview](docs/millrace-technical-overview.md)
 - [Testing](docs/testing.md)
 - [Runtime docs](docs/runtime/README.md)
 - [Release roadmap](ROADMAP.md)
@@ -620,8 +690,8 @@ Python runtime.
 The historical public proof package for the v0.1.0 autonomous port campaign
 lives in
 [`tim-osterhus/millrace-rs-port-docs`](https://github.com/tim-osterhus/millrace-rs-port-docs).
-The crate-local `0.3.2` release evidence lives in `CHANGELOG.md` and
-`tests/fixtures/cli_parity/auto_port_v0_18_2_release_parity_evidence.json`.
+The crate-local `0.3.3` release evidence lives in `CHANGELOG.md` and
+`tests/fixtures/cli_parity/auto_port_v0_18_3_release_parity_evidence.json`.
 
 ## License
 

@@ -47,8 +47,15 @@ into both queued work documents and trigger metadata. This preserves
 `target_skill_id` and `preferred_output_paths` for downstream learning stages
 without allowing destination-less direct Curator requests.
 
+For Python `v0.18.3` parity, Planner completion in learning-enabled modes can
+enqueue targeted Librarian install requests. Those requests preserve the
+stage-result artifact, Planner-produced artifacts, and source work-item
+metadata. Targeted Librarian dispatch uses learning-request active paths,
+`LIBRARIAN_COMPLETE` and `LIBRARIAN_NOOP` move requests to done, and Librarian
+`BLOCKED` preserves recoverable-failure blocked evidence.
+
 The optional Python `millrace-web` package remains outside the accepted Rust
-runtime boundary, including the Python `v0.18.2` package/runtime version sync.
+runtime boundary, including the Python `v0.18.3` package/runtime version sync.
 Rust inspection stays local and read-only through CLI commands
 such as `queue ls/show`, `status show`, `runs ls/show/tail`, `modes show`,
 `config show`, `compile show`, `compile graph`, and `runs trace <run_id>`.
