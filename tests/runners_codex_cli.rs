@@ -90,6 +90,8 @@ fn sample_request(
         thinking_level: None,
         model_reasoning_effort: None,
         timeout_seconds: 120,
+        execution_capability_grants: Vec::new(),
+        capability_support_decisions: Vec::new(),
     };
     request.validate().unwrap();
     request

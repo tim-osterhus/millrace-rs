@@ -6,14 +6,20 @@ use serde_json::Value;
 use tempfile::TempDir;
 
 use millrace_ai::contracts::{
-    ActiveRunRequestKind, ActiveRunState, MailboxCommand, MailboxCommandEnvelope,
-    MailboxSupersedeCascade, Plane, ProbeDocument, RuntimeJsonContract, SpecDocument,
-    SpecSourceType, StageName, TaskDocument, Timestamp, WorkItemKind,
+    ActiveRunRequestKind, ActiveRunState, ApprovalPolicyRef, CapabilityDecisionState,
+    CapabilityEnforcementMode, CapabilityEvidenceStatus, CapabilityScope, ExecutionCapabilityGrant,
+    MailboxCommand, MailboxCommandEnvelope, MailboxSupersedeCascade, Plane, ProbeDocument,
+    RuntimeJsonContract, SpecDocument, SpecSourceType, StageName, TaskDocument, Timestamp,
+    WorkItemKind,
 };
 use millrace_ai::work_documents::parse_task_document;
 use millrace_ai::workspace::{
     QueueStore, RuntimeControl, RuntimeControlMode, RuntimeOwnershipLockOptions,
     acquire_runtime_ownership_lock_with_options, initialize_workspace, load_snapshot,
+};
+use millrace_ai::{
+    ExecutionCapabilityApprovalRequest, ensure_execution_capability_approval,
+    list_execution_capability_approvals,
 };
 use support::parity::read_json_fixture;
 
@@ -101,6 +107,55 @@ fn probe_document(probe_id: &str) -> ProbeDocument {
 
 fn active_lock_options(session_id: &str) -> RuntimeOwnershipLockOptions {
     RuntimeOwnershipLockOptions::new(process::id(), "test-host", session_id, NOW).unwrap()
+}
+
+fn approval_grant() -> ExecutionCapabilityGrant {
+    ExecutionCapabilityGrant {
+        grant_id: "grant-package-install".to_owned(),
+        request_id: "request-package-install".to_owned(),
+        capability_id: "package.install".to_owned(),
+        access: "execute".to_owned(),
+        scope: CapabilityScope {
+            kind: "package_manager".to_owned(),
+            value: "cargo".to_owned(),
+            metadata: Default::default(),
+        },
+        required: true,
+        decision_state: CapabilityDecisionState::ApprovalRequired,
+        enforcement_mode: CapabilityEnforcementMode::NotApplicable,
+        approval_policy_ref: Some(ApprovalPolicyRef {
+            policy_id: "operator.package_install".to_owned(),
+            gate_scope: "stage".to_owned(),
+            expiration_seconds: None,
+            required_decision: "approved".to_owned(),
+        }),
+        evidence_requirements: Vec::new(),
+        evidence_status: CapabilityEvidenceStatus::NotRequired,
+        decision_reason: "package installs require operator approval".to_owned(),
+        resolved_by: "test".to_owned(),
+        fingerprint: String::new(),
+    }
+}
+
+fn create_pending_approval(paths: &millrace_ai::WorkspacePaths) -> String {
+    let grant = approval_grant();
+    ensure_execution_capability_approval(
+        paths,
+        ExecutionCapabilityApprovalRequest {
+            request_id: "request-approval",
+            run_id: "run-approval",
+            plane: Plane::Execution,
+            node_id: "builder",
+            stage_kind_id: "builder",
+            work_item_kind: Some(WorkItemKind::Task),
+            work_item_id: Some("task-approval"),
+            grant: &grant,
+            now: &timestamp(NOW),
+            requested_by: "runtime",
+        },
+    )
+    .unwrap()
+    .approval_id
 }
 
 fn mailbox_json_paths(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
@@ -687,6 +742,77 @@ fn active_daemon_lock_routes_operator_intervention_commands_to_mailbox_envelopes
         .find(|envelope| envelope.command == MailboxCommand::ArchiveInvalidIncident)
         .unwrap();
     assert_eq!(archive_invalid.payload["filename"], "incident-invalid.md");
+}
+
+#[test]
+fn direct_approval_decisions_resolve_pending_approvals() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+    let approval_id = create_pending_approval(&paths);
+    let control = RuntimeControl::from_paths(paths.clone()).unwrap();
+
+    let result = control
+        .approve_execution_capability_with_issuer(
+            &approval_id,
+            "operator verified package install",
+            "test-operator",
+        )
+        .unwrap();
+
+    assert_eq!(result.mode, RuntimeControlMode::Direct);
+    assert_eq!(result.action, MailboxCommand::ApproveExecutionCapability);
+    assert!(result.applied);
+    assert!(result.detail.contains(&approval_id));
+    assert!(mailbox_json_paths(&paths.mailbox_incoming_dir).is_empty());
+    let listing = list_execution_capability_approvals(&paths).unwrap();
+    assert!(listing.pending.is_empty());
+    assert_eq!(listing.resolved.len(), 1);
+    assert_eq!(listing.resolved[0].approval_id, approval_id);
+    assert_eq!(listing.resolved[0].status.as_str(), "approved");
+    assert_eq!(
+        listing.resolved[0].decision_reason.as_deref(),
+        Some("operator verified package install")
+    );
+    assert_eq!(
+        listing.resolved[0].decided_by.as_deref(),
+        Some("test-operator")
+    );
+}
+
+#[test]
+fn active_daemon_lock_routes_approval_decisions_to_mailbox_envelopes() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+    let approval_id = create_pending_approval(&paths);
+    acquire_runtime_ownership_lock_with_options(
+        &paths,
+        active_lock_options("approval-daemon-session"),
+    )
+    .unwrap();
+    let control = RuntimeControl::from_paths(paths.clone()).unwrap();
+
+    let result = control
+        .deny_execution_capability_with_issuer(
+            &approval_id,
+            "operator declined package install",
+            "test-operator",
+        )
+        .unwrap();
+
+    assert_eq!(result.mode, RuntimeControlMode::Mailbox);
+    assert_eq!(result.action, MailboxCommand::DenyExecutionCapability);
+    assert!(!result.applied);
+    let envelope = read_mailbox(result.mailbox_path.as_ref().unwrap());
+    assert_eq!(envelope.command, MailboxCommand::DenyExecutionCapability);
+    assert_eq!(envelope.issuer, "test-operator");
+    assert_eq!(envelope.payload["approval_id"], approval_id);
+    assert_eq!(
+        envelope.payload["reason"],
+        "operator declined package install"
+    );
+    let listing = list_execution_capability_approvals(&paths).unwrap();
+    assert_eq!(listing.pending.len(), 1);
+    assert!(listing.resolved.is_empty());
 }
 
 #[test]

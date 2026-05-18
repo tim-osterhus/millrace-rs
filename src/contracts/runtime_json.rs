@@ -176,6 +176,7 @@ runtime_string_enum! {
     pub enum BlockedOrigin {
         StageTerminal => "stage_terminal",
         RunnerFailure => "runner_failure",
+        RuntimeCapabilityGate => "runtime_capability_gate",
         RuntimeException => "runtime_exception",
         Operator => "operator",
         Unknown => "unknown",
@@ -189,6 +190,7 @@ runtime_string_enum! {
         Provider => "provider",
         LocalConfiguration => "local_configuration",
         Contract => "contract",
+        RuntimePolicy => "runtime_policy",
         Semantic => "semantic",
         Unknown => "unknown",
     }
@@ -207,6 +209,10 @@ runtime_string_enum! {
         IllegalTerminalResult => "illegal_terminal_result",
         ConflictingTerminalResults => "conflicting_terminal_results",
         MissingRequiredArtifact => "missing_required_artifact",
+        CapabilityGrantDenied => "capability_grant_denied",
+        CapabilityApprovalRequired => "capability_approval_required",
+        CapabilityGrantUnsupported => "capability_grant_unsupported",
+        CapabilityEvidenceMissing => "capability_evidence_missing",
         RunnerTransportFailure => "runner_transport_failure",
     }
 }
@@ -242,6 +248,10 @@ runtime_string_enum! {
         IllegalTerminalResult => "illegal_terminal_result",
         ConflictingTerminalResults => "conflicting_terminal_results",
         MissingRequiredArtifact => "missing_required_artifact",
+        CapabilityGrantDenied => "capability_grant_denied",
+        CapabilityApprovalRequired => "capability_approval_required",
+        CapabilityGrantUnsupported => "capability_grant_unsupported",
+        CapabilityEvidenceMissing => "capability_evidence_missing",
         UnclassifiedFailure => "unclassified_failure",
     }
 }
@@ -1185,7 +1195,17 @@ impl RuntimeJsonContract for MailboxCommandEnvelope {
         validate_literal("schema_version", &self.schema_version, SCHEMA_VERSION)?;
         validate_literal("kind", &self.kind, "mailbox_command")?;
         require_non_blank("command_id", &self.command_id)?;
-        require_non_blank("issuer", &self.issuer)
+        require_non_blank("issuer", &self.issuer)?;
+        match self.command {
+            MailboxCommand::ApproveExecutionCapability
+            | MailboxCommand::DenyExecutionCapability => {
+                MailboxExecutionCapabilityApprovalPayload::from_json_value(Value::Object(
+                    self.payload.clone(),
+                ))?;
+            }
+            _ => {}
+        }
+        Ok(())
     }
 }
 
@@ -1550,6 +1570,39 @@ impl MailboxArchiveInvalidIncidentPayload {
     pub fn validate(&mut self) -> Result<(), RuntimeJsonError> {
         validate_reason(&self.reason)?;
         validate_single_relative_filename("filename", &self.filename)
+    }
+}
+
+/// Payload shape for `approve_execution_capability` and `deny_execution_capability`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MailboxExecutionCapabilityApprovalPayload {
+    pub approval_id: String,
+    pub reason: String,
+}
+
+impl RuntimeJsonContract for MailboxExecutionCapabilityApprovalPayload {
+    const ARTIFACT: &'static str = "mailbox_execution_capability_approval_payload";
+
+    fn validate_contract(&mut self) -> Result<(), RuntimeJsonError> {
+        self.validate()
+    }
+}
+
+impl MailboxExecutionCapabilityApprovalPayload {
+    /// Deserializes and validates an execution-capability approval payload JSON value.
+    pub fn from_json_value(value: Value) -> Result<Self, RuntimeJsonError> {
+        let mut decoded: Self =
+            decode_json("mailbox_execution_capability_approval_payload", value)?;
+        decoded.validate()?;
+        Ok(decoded)
+    }
+
+    /// Validates the approval id and required reason.
+    pub fn validate(&mut self) -> Result<(), RuntimeJsonError> {
+        validate_reason(&self.reason)?;
+        validate_safe_identifier(&self.approval_id, "approval_id")?;
+        Ok(())
     }
 }
 

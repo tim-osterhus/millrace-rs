@@ -58,3 +58,17 @@ metadata when enqueueing learning requests. Targeted Librarian learning-request
 claims dispatch to the Librarian node, complete `LIBRARIAN_COMPLETE` and
 `LIBRARIAN_NOOP` requests into done with success/no-op semantics, and preserve
 recoverable blocked evidence for Librarian `BLOCKED`.
+
+For Python `v0.19.0` execution capability compiler parity, frozen plans also
+include sealed per-node execution capability grants, warnings, policy
+fingerprints, and plan/plane summaries. Grant compilation accepts
+Python-style mode and graph-node `execution_capability_requests` and
+`execution_capability_policies`, preserves Rust stage-scoped compatibility
+fields, combines stage-kind, graph-node, mode, and runtime config policy, and
+lets runtime config defaults take strongest precedence. When
+`[execution_capabilities] enabled = false`, compilation emits zero grants,
+warnings, and summary counts. Strict required-advisory policy fails advisory
+required grants such as the default `workspace.read` grant. `millrace compile
+show` and compiled-stage-graph JSON exports expose this evidence for inspection
+only; serial and daemon runtime dispatch now consume the sealed grants through
+the pre-dispatch capability-gate surface.

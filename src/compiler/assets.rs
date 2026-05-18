@@ -16,7 +16,10 @@ use super::contracts::{
     validate_graph_stage_kind_references,
 };
 use crate::{
-    contracts::{Plane, StageName, validate_safe_identifier},
+    contracts::{
+        CapabilityPolicyDecision, Plane, StageName, validate_capability_id,
+        validate_safe_identifier,
+    },
     workspace::WorkspacePaths,
 };
 
@@ -235,6 +238,7 @@ pub struct EffectiveCompileConfig {
     pub runtime: EffectiveRuntimeCompileConfig,
     pub runners: EffectiveRunnersCompileConfig,
     pub recovery: EffectiveRecoveryCompileConfig,
+    pub execution_capabilities: EffectiveExecutionCapabilitiesConfig,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub stages: BTreeMap<String, EffectiveStageCompileConfig>,
 }
@@ -297,6 +301,44 @@ impl Default for EffectiveRecoveryCompileConfig {
     }
 }
 
+/// Compile-relevant execution capability policy defaults.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct EffectiveExecutionCapabilitiesConfig {
+    pub enabled: bool,
+    pub default_unknown_capability: CapabilityPolicyDecision,
+    pub allow_advisory_grants: bool,
+    pub fail_required_advisory: bool,
+    pub defaults: BTreeMap<String, CapabilityPolicyDecision>,
+}
+
+impl Default for EffectiveExecutionCapabilitiesConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            default_unknown_capability: CapabilityPolicyDecision::Deny,
+            allow_advisory_grants: true,
+            fail_required_advisory: false,
+            defaults: BTreeMap::from([
+                ("network.access".to_owned(), CapabilityPolicyDecision::Deny),
+                (
+                    "package.install".to_owned(),
+                    CapabilityPolicyDecision::ApprovalRequired,
+                ),
+                (
+                    "git.mutate".to_owned(),
+                    CapabilityPolicyDecision::ApprovalRequired,
+                ),
+                ("shell.run".to_owned(), CapabilityPolicyDecision::Allow),
+                (
+                    "workspace.write".to_owned(),
+                    CapabilityPolicyDecision::Allow,
+                ),
+            ]),
+        }
+    }
+}
+
 /// Compile-relevant per-stage override config.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Default)]
 #[serde(deny_unknown_fields)]
@@ -309,7 +351,7 @@ pub struct EffectiveStageCompileConfig {
 }
 
 /// One graph-loop asset loaded for the selected mode.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ResolvedGraphLoopAsset {
     pub plane: Plane,
     pub relative_path: String,
@@ -317,7 +359,7 @@ pub struct ResolvedGraphLoopAsset {
 }
 
 /// One stage-kind registry asset loaded for selected graph nodes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ResolvedStageKindAsset {
     pub stage_kind_id: String,
     pub relative_path: String,
@@ -325,7 +367,7 @@ pub struct ResolvedStageKindAsset {
 }
 
 /// Complete resolved compiler asset set for one workspace/mode/config selection.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ResolvedCompileAssetSet {
     pub mode_id: String,
     pub requested_mode_id: Option<String>,
@@ -433,6 +475,15 @@ pub fn load_effective_compile_config_from_path(
         {
             config.recovery.max_mechanic_attempts = value;
         }
+    }
+
+    if let Some(execution_capabilities) = child_table(root, "execution_capabilities", config_path)?
+    {
+        load_execution_capabilities_config(
+            execution_capabilities,
+            &mut config.execution_capabilities,
+            config_path,
+        )?;
     }
 
     if let Some(stages) = child_table(root, "stages", config_path)? {
@@ -1060,6 +1111,20 @@ fn validate_mode_stage_maps(
                 .copied()
                 .collect::<Vec<_>>(),
         ),
+        (
+            "stage_execution_capability_requests",
+            mode.stage_execution_capability_requests
+                .keys()
+                .copied()
+                .collect::<Vec<_>>(),
+        ),
+        (
+            "stage_execution_capability_policy_overrides",
+            mode.stage_execution_capability_policy_overrides
+                .keys()
+                .copied()
+                .collect::<Vec<_>>(),
+        ),
     ] {
         for stage in stages {
             if !selected_stages.contains(&stage) {
@@ -1288,6 +1353,58 @@ fn reject_unknown_stage_config_keys(
     Ok(())
 }
 
+fn load_execution_capabilities_config(
+    table: &toml::map::Map<String, toml::Value>,
+    config: &mut EffectiveExecutionCapabilitiesConfig,
+    path: &Path,
+) -> CompilerAssetResult<()> {
+    reject_unknown_execution_capabilities_config_keys(table, path)?;
+    if let Some(enabled) = optional_bool(table, "enabled", path)? {
+        config.enabled = enabled;
+    }
+    if let Some(decision) = table.get("default_unknown_capability") {
+        config.default_unknown_capability = parse_capability_policy_decision_value(
+            decision,
+            "execution_capabilities.default_unknown_capability",
+            path,
+        )?;
+    }
+    if let Some(allow_advisory_grants) = optional_bool(table, "allow_advisory_grants", path)? {
+        config.allow_advisory_grants = allow_advisory_grants;
+    }
+    if let Some(fail_required_advisory) = optional_bool(table, "fail_required_advisory", path)? {
+        config.fail_required_advisory = fail_required_advisory;
+    }
+    if let Some(defaults) = optional_capability_policy_decision_map(table, "defaults", path)? {
+        config.defaults = defaults;
+    }
+    Ok(())
+}
+
+fn reject_unknown_execution_capabilities_config_keys(
+    table: &toml::map::Map<String, toml::Value>,
+    path: &Path,
+) -> CompilerAssetResult<()> {
+    for key in table.keys() {
+        if matches!(
+            key.as_str(),
+            "enabled"
+                | "default_unknown_capability"
+                | "allow_advisory_grants"
+                | "fail_required_advisory"
+                | "defaults"
+        ) {
+            continue;
+        }
+        return Err(invalid_config(
+            Some(path),
+            format!("execution_capabilities.{key}"),
+            "unknown execution_capabilities config key",
+        ));
+    }
+    Ok(())
+}
+
 fn child_table<'a>(
     table: &'a toml::map::Map<String, toml::Value>,
     key: &str,
@@ -1314,6 +1431,77 @@ fn optional_string(
         .as_str()
         .map(|value| Some(value.to_owned()))
         .ok_or_else(|| invalid_config(Some(path), key, "must be a string when present"))
+}
+
+fn optional_bool(
+    table: &toml::map::Map<String, toml::Value>,
+    key: &str,
+    path: &Path,
+) -> CompilerAssetResult<Option<bool>> {
+    let Some(value) = table.get(key) else {
+        return Ok(None);
+    };
+    value
+        .as_bool()
+        .map(Some)
+        .ok_or_else(|| invalid_config(Some(path), key, "must be a boolean when present"))
+}
+
+fn optional_capability_policy_decision_map(
+    table: &toml::map::Map<String, toml::Value>,
+    key: &str,
+    path: &Path,
+) -> CompilerAssetResult<Option<BTreeMap<String, CapabilityPolicyDecision>>> {
+    let Some(value) = table.get(key) else {
+        return Ok(None);
+    };
+    let Some(values) = value.as_table() else {
+        return Err(invalid_config(
+            Some(path),
+            format!("execution_capabilities.{key}"),
+            "must be a TOML table when present",
+        ));
+    };
+    let mut parsed = BTreeMap::new();
+    for (capability_id, value) in values {
+        let normalized = validate_capability_id(capability_id).map_err(|error| {
+            invalid_config(
+                Some(path),
+                format!("execution_capabilities.{key}.{capability_id}"),
+                error.to_string(),
+            )
+        })?;
+        parsed.insert(
+            normalized,
+            parse_capability_policy_decision_value(
+                value,
+                &format!("execution_capabilities.{key}.{capability_id}"),
+                path,
+            )?,
+        );
+    }
+    Ok(Some(parsed))
+}
+
+fn parse_capability_policy_decision_value(
+    value: &toml::Value,
+    field: &str,
+    path: &Path,
+) -> CompilerAssetResult<CapabilityPolicyDecision> {
+    let Some(value) = value.as_str() else {
+        return Err(invalid_config(
+            Some(path),
+            field,
+            "must be a string when present",
+        ));
+    };
+    CapabilityPolicyDecision::from_value(value).map_err(|_| {
+        invalid_config(
+            Some(path),
+            field,
+            "must be one of `allow`, `deny`, or `approval_required`",
+        )
+    })
 }
 
 fn optional_positive_u64(

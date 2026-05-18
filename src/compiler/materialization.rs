@@ -15,14 +15,19 @@ use super::{
     contracts::{
         CompiledGraphCompletionEntryPlan, CompiledGraphEntryPlan, CompiledGraphResumePolicyPlan,
         CompiledGraphThresholdPolicyPlan, CompiledGraphTransitionPlan, CompiledRunPlan,
-        CompilerContractError, FrozenGraphPlanePlan, GraphLoopCounterName, GraphLoopDefinition,
-        GraphLoopEdgeDefinition, GraphLoopResumePolicyDefinition,
-        GraphLoopThresholdPolicyDefinition, MaterializedGraphNodePlan, ModeDefinition,
-        RegisteredStageKindDefinition,
+        CompilerContractError, ExecutionCapabilitySummary, FrozenGraphPlanePlan,
+        GraphLoopCounterName, GraphLoopDefinition, GraphLoopEdgeDefinition,
+        GraphLoopResumePolicyDefinition, GraphLoopThresholdPolicyDefinition,
+        MaterializedGraphNodePlan, ModeDefinition, RegisteredStageKindDefinition,
     },
 };
 use crate::{
-    contracts::{LearningStageName, Plane, StageName, Timestamp},
+    contracts::{
+        ApprovalPolicyRef, CapabilityDecisionState, CapabilityEnforcementMode,
+        CapabilityEvidenceStatus, CapabilityPolicyDecision, CapabilityPolicyOverride,
+        CapabilityRequest, CapabilityScope, ExecutionCapabilityGrant, ExecutionCapabilityWarning,
+        LearningStageName, Plane, StageName, Timestamp, capability_grant_fingerprint,
+    },
     workspace::WorkspacePaths,
 };
 
@@ -79,6 +84,13 @@ pub enum CompilerMaterializationError {
     InvalidLearningTrigger {
         /// Rule id.
         rule_id: String,
+        /// Human-readable failure reason.
+        message: String,
+    },
+    /// Capability requests or policy could not be sealed into per-node grants.
+    CapabilityGrant {
+        /// Graph node id.
+        node_id: String,
         /// Human-readable failure reason.
         message: String,
     },
@@ -139,6 +151,12 @@ impl fmt::Display for CompilerMaterializationError {
             ),
             Self::InvalidLearningTrigger { rule_id, message } => {
                 write!(f, "learning trigger {rule_id} is invalid: {message}")
+            }
+            Self::CapabilityGrant { node_id, message } => {
+                write!(
+                    f,
+                    "graph node {node_id} has invalid execution capability grants: {message}"
+                )
             }
             Self::Contract { artifact, message } => {
                 write!(f, "invalid materialized {artifact}: {message}")
@@ -210,6 +228,10 @@ pub fn materialize_compiled_run_plan(
         Some(loop_id) => Some(graph_for_plane(&graphs_by_plane, Plane::Learning, loop_id)?),
         None => None,
     };
+    let execution_capability_summaries_by_plane =
+        execution_capability_summaries_by_plane(&graphs_by_plane);
+    let execution_capability_summary =
+        execution_capability_summary_from_graphs(graphs_by_plane.values());
 
     let compiled_plan_id = build_compiled_plan_id(
         &resolved.mode_id,
@@ -238,6 +260,8 @@ pub fn materialize_compiled_run_plan(
         execution_graph,
         planning_graph,
         learning_graph,
+        execution_capability_summary,
+        execution_capability_summaries_by_plane,
         concurrency_policy: resolved.mode.concurrency_policy.clone(),
         learning_trigger_rules: resolved.mode.learning_trigger_rules.clone(),
         compiled_at,
@@ -301,6 +325,7 @@ pub fn materialize_graph_plane_plan(
         .as_ref()
         .map(|policies| compile_graph_threshold_policies(&policies.threshold_policies, config))
         .unwrap_or_default();
+    let execution_capability_summary = execution_capability_summary_from_nodes(&nodes);
 
     let mut plan = FrozenGraphPlanePlan {
         loop_id: graph_loop.loop_id.clone(),
@@ -315,6 +340,7 @@ pub fn materialize_graph_plane_plan(
         compiled_threshold_policies,
         terminal_states: graph_loop.terminal_states.clone(),
         completion_behavior: graph_loop.completion_behavior.clone(),
+        execution_capability_summary,
     };
     plan.validate()
         .map_err(|error| contract_error("frozen_graph_plane_plan", error))?;
@@ -407,6 +433,14 @@ pub fn materialize_graph_node_plan(
             timeout_seconds = config_timeout;
         }
     }
+    let capability_context = compile_execution_capability_context(
+        node,
+        stage_kind,
+        stage_name,
+        mode,
+        config,
+        runner_name.as_deref(),
+    )?;
 
     let mut plan = MaterializedGraphNodePlan {
         node_id: node.node_id.clone(),
@@ -424,6 +458,9 @@ pub fn materialize_graph_node_plan(
         thinking_level,
         model_reasoning_effort,
         timeout_seconds,
+        execution_capability_grants: capability_context.grants,
+        execution_capability_warnings: capability_context.warnings,
+        execution_capability_policy_fingerprint: capability_context.policy_fingerprint,
     };
     plan.validate()
         .map_err(|error| contract_error("materialized_graph_node_plan", error))?;
@@ -504,6 +541,570 @@ pub fn resolved_threshold_for_policy(
         }
         GraphLoopCounterName::MechanicAttemptCount => config.recovery.max_mechanic_attempts,
     }
+}
+
+struct CompiledCapabilityContext {
+    grants: Vec<ExecutionCapabilityGrant>,
+    warnings: Vec<ExecutionCapabilityWarning>,
+    policy_fingerprint: String,
+}
+
+#[derive(Clone)]
+struct CapabilityPolicyCandidate {
+    source: &'static str,
+    override_: CapabilityPolicyOverride,
+}
+
+fn compile_execution_capability_context(
+    node: &super::contracts::GraphLoopNodeDefinition,
+    stage_kind: &RegisteredStageKindDefinition,
+    stage_name: Option<StageName>,
+    mode: &ModeDefinition,
+    config: &EffectiveCompileConfig,
+    runner_name: Option<&str>,
+) -> CompilerMaterializationResult<CompiledCapabilityContext> {
+    if !config.execution_capabilities.enabled {
+        return Ok(CompiledCapabilityContext {
+            grants: Vec::new(),
+            warnings: Vec::new(),
+            policy_fingerprint: capability_policy_fingerprint(node, &[], &[], config),
+        });
+    }
+
+    let mut requests = default_framework_capability_requests(node, runner_name);
+    append_capability_requests(
+        &mut requests,
+        &stage_kind.execution_capability_requests,
+        "stage_kind",
+    );
+    append_capability_requests(
+        &mut requests,
+        &node.execution_capability_requests,
+        "graph_node",
+    );
+    append_capability_requests(&mut requests, &mode.execution_capability_requests, "mode");
+    if let Some(stage_name) = stage_name {
+        if let Some(mode_requests) = mode.stage_execution_capability_requests.get(&stage_name) {
+            append_capability_requests(&mut requests, mode_requests, "mode");
+        }
+    }
+    let requests = dedupe_capability_requests(requests);
+
+    let mut policies = Vec::new();
+    append_policy_candidates(
+        &mut policies,
+        &stage_kind.execution_capability_policy_overrides,
+        "stage_kind",
+    );
+    append_policy_candidates(&mut policies, &mode.execution_capability_policies, "mode");
+    if let Some(stage_name) = stage_name {
+        if let Some(mode_overrides) = mode
+            .stage_execution_capability_policy_overrides
+            .get(&stage_name)
+        {
+            append_policy_candidates(&mut policies, mode_overrides, "mode");
+        }
+    }
+    append_policy_candidates(
+        &mut policies,
+        &node.execution_capability_policies,
+        "graph_node",
+    );
+    append_policy_candidates(
+        &mut policies,
+        &node.execution_capability_policy_overrides,
+        "graph_node",
+    );
+
+    let policy_fingerprint = capability_policy_fingerprint(node, &requests, &policies, config);
+    let mut grants = Vec::with_capacity(requests.len());
+    let mut warnings = Vec::new();
+    for (index, request) in requests.iter().enumerate() {
+        let grant = resolve_execution_capability_grant(node, request, &policies, config, index)?;
+        warnings.extend(warnings_for_grant(node, request, &grant));
+        grants.push(grant);
+    }
+    Ok(CompiledCapabilityContext {
+        grants,
+        warnings,
+        policy_fingerprint,
+    })
+}
+
+fn default_framework_capability_requests(
+    node: &super::contracts::GraphLoopNodeDefinition,
+    runner_name: Option<&str>,
+) -> Vec<CapabilityRequest> {
+    vec![
+        framework_request(
+            node,
+            "runner.invoke",
+            "execute",
+            CapabilityScope {
+                kind: "runner".to_owned(),
+                value: runner_name.unwrap_or("default").to_owned(),
+                metadata: Map::new(),
+            },
+        ),
+        framework_request(
+            node,
+            "workspace.read",
+            "read",
+            CapabilityScope {
+                kind: "workspace".to_owned(),
+                value: "workspace".to_owned(),
+                metadata: Map::new(),
+            },
+        ),
+        framework_request(
+            node,
+            "artifact.write",
+            "write",
+            CapabilityScope {
+                kind: "artifact_kind".to_owned(),
+                value: "stage_result".to_owned(),
+                metadata: Map::new(),
+            },
+        ),
+    ]
+}
+
+fn framework_request(
+    node: &super::contracts::GraphLoopNodeDefinition,
+    capability_id: &str,
+    access: &str,
+    scope: CapabilityScope,
+) -> CapabilityRequest {
+    CapabilityRequest {
+        request_id: format!(
+            "{}.framework.{}",
+            node.node_id,
+            capability_id.replace('.', "_")
+        ),
+        capability_id: capability_id.to_owned(),
+        access: access.to_owned(),
+        scope,
+        required: true,
+        requires_enforcement: false,
+        reason: "default framework capability required to dispatch a stage".to_owned(),
+        requested_by: "stage_kind_default".to_owned(),
+        policy_source: Some("stage_kind_default".to_owned()),
+    }
+}
+
+fn append_capability_requests(
+    target: &mut Vec<CapabilityRequest>,
+    requests: &[CapabilityRequest],
+    source: &'static str,
+) {
+    for request in requests {
+        let mut request = request.clone();
+        if request.requested_by == "stage" {
+            request.requested_by = source.to_owned();
+        }
+        if request.policy_source.is_none() {
+            request.policy_source = Some(source.to_owned());
+        }
+        target.push(request);
+    }
+}
+
+fn append_policy_candidates(
+    target: &mut Vec<CapabilityPolicyCandidate>,
+    overrides: &[CapabilityPolicyOverride],
+    source: &'static str,
+) {
+    target.extend(
+        overrides
+            .iter()
+            .cloned()
+            .map(|override_| CapabilityPolicyCandidate { source, override_ }),
+    );
+}
+
+fn dedupe_capability_requests(requests: Vec<CapabilityRequest>) -> Vec<CapabilityRequest> {
+    let mut deduped: Vec<CapabilityRequest> = Vec::new();
+    for request in requests {
+        if let Some(existing) = deduped
+            .iter_mut()
+            .find(|existing| capability_request_key(existing) == capability_request_key(&request))
+        {
+            existing.required |= request.required;
+            existing.requires_enforcement |= request.requires_enforcement;
+            if existing.reason.trim().is_empty() && !request.reason.trim().is_empty() {
+                existing.reason = request.reason;
+            }
+            if existing.policy_source.is_none() {
+                existing.policy_source = request.policy_source;
+            }
+            continue;
+        }
+        deduped.push(request);
+    }
+    deduped
+}
+
+fn capability_request_key(request: &CapabilityRequest) -> (String, String, String, String) {
+    (
+        request.capability_id.clone(),
+        request.access.clone(),
+        request.scope.kind.clone(),
+        request.scope.value.clone(),
+    )
+}
+
+fn resolve_execution_capability_grant(
+    node: &super::contracts::GraphLoopNodeDefinition,
+    request: &CapabilityRequest,
+    policies: &[CapabilityPolicyCandidate],
+    config: &EffectiveCompileConfig,
+    index: usize,
+) -> CompilerMaterializationResult<ExecutionCapabilityGrant> {
+    let (decision, resolved_by, decision_reason) =
+        resolve_capability_decision(request, policies, config);
+    let mut decision_state = match decision {
+        CapabilityPolicyDecision::Allow => CapabilityDecisionState::Granted,
+        CapabilityPolicyDecision::Deny => CapabilityDecisionState::Denied,
+        CapabilityPolicyDecision::ApprovalRequired => CapabilityDecisionState::ApprovalRequired,
+    };
+    let mut enforcement_mode = if decision_state == CapabilityDecisionState::Granted {
+        if is_runtime_enforced_capability(&request.capability_id) {
+            CapabilityEnforcementMode::RuntimeEnforced
+        } else {
+            CapabilityEnforcementMode::AdvisoryOnly
+        }
+    } else {
+        CapabilityEnforcementMode::NotApplicable
+    };
+    let mut approval_policy_ref = None;
+    if decision_state == CapabilityDecisionState::ApprovalRequired {
+        approval_policy_ref = Some(ApprovalPolicyRef {
+            policy_id: format!("operator.{}", request.capability_id.replace('.', "_")),
+            gate_scope: "stage".to_owned(),
+            expiration_seconds: None,
+            required_decision: "approved".to_owned(),
+        });
+    }
+    if decision_state == CapabilityDecisionState::Granted
+        && enforcement_mode == CapabilityEnforcementMode::AdvisoryOnly
+        && request.required
+        && (request.requires_enforcement || config.execution_capabilities.fail_required_advisory)
+    {
+        return Err(CompilerMaterializationError::CapabilityGrant {
+            node_id: node.node_id.clone(),
+            message: format!(
+                "required advisory grant rejected for capability {} by requires_enforcement or fail_required_advisory",
+                request.capability_id
+            ),
+        });
+    }
+    if decision_state == CapabilityDecisionState::Granted
+        && enforcement_mode == CapabilityEnforcementMode::AdvisoryOnly
+        && request.required
+        && !config.execution_capabilities.allow_advisory_grants
+    {
+        decision_state = CapabilityDecisionState::Unsupported;
+        enforcement_mode = CapabilityEnforcementMode::NotApplicable;
+    }
+
+    let mut grant = ExecutionCapabilityGrant {
+        grant_id: format!(
+            "grant-{}-{}-{}",
+            node.node_id,
+            request.capability_id.replace('.', "-"),
+            index
+        ),
+        request_id: request.request_id.clone(),
+        capability_id: request.capability_id.clone(),
+        access: request.access.clone(),
+        scope: request.scope.clone(),
+        required: request.required,
+        decision_state,
+        enforcement_mode,
+        approval_policy_ref,
+        evidence_requirements: evidence_requirements_for_grant(request, enforcement_mode),
+        evidence_status: CapabilityEvidenceStatus::NotRequired,
+        decision_reason,
+        resolved_by: resolved_by.to_owned(),
+        fingerprint: String::new(),
+    };
+    if grant.decision_state == CapabilityDecisionState::Granted
+        && !grant.evidence_requirements.is_empty()
+    {
+        grant.evidence_status = CapabilityEvidenceStatus::Pending;
+    }
+    grant.fingerprint = capability_grant_fingerprint(&grant);
+    grant
+        .validate()
+        .map_err(|error| CompilerMaterializationError::CapabilityGrant {
+            node_id: node.node_id.clone(),
+            message: error.to_string(),
+        })?;
+    Ok(grant)
+}
+
+fn resolve_capability_decision<'a>(
+    request: &CapabilityRequest,
+    policies: &'a [CapabilityPolicyCandidate],
+    config: &'a EffectiveCompileConfig,
+) -> (CapabilityPolicyDecision, &'a str, String) {
+    if let Some(decision) = config
+        .execution_capabilities
+        .defaults
+        .get(&request.capability_id)
+    {
+        return (
+            *decision,
+            "runtime_config",
+            format!(
+                "runtime config default for capability {} resolved to {}",
+                request.capability_id,
+                decision.as_str()
+            ),
+        );
+    }
+    for source in ["graph_node", "mode", "stage_kind"] {
+        if let Some(candidate) = policies.iter().rev().find(|candidate| {
+            candidate.source == source
+                && candidate.override_.capability_id == request.capability_id
+                && scope_override_matches_request(&candidate.override_, request)
+        }) {
+            let reason = if candidate.override_.reason.trim().is_empty() {
+                format!(
+                    "{source} override for capability {} resolved to {}",
+                    request.capability_id,
+                    candidate.override_.decision.as_str()
+                )
+            } else {
+                candidate.override_.reason.clone()
+            };
+            return (candidate.override_.decision, candidate.source, reason);
+        }
+    }
+    if is_default_framework_request(request) {
+        return (
+            CapabilityPolicyDecision::Allow,
+            "stage_kind_default",
+            "default framework grants are allowed by compiler policy".to_owned(),
+        );
+    }
+    (
+        config.execution_capabilities.default_unknown_capability,
+        "runtime_config",
+        format!(
+            "runtime config default_unknown_capability resolved capability {} to {}",
+            request.capability_id,
+            config
+                .execution_capabilities
+                .default_unknown_capability
+                .as_str()
+        ),
+    )
+}
+
+fn scope_override_matches_request(
+    override_: &CapabilityPolicyOverride,
+    request: &CapabilityRequest,
+) -> bool {
+    match &override_.scope {
+        Some(scope) => scope.kind == request.scope.kind && scope.value == request.scope.value,
+        None => true,
+    }
+}
+
+fn evidence_requirements_for_grant(
+    request: &CapabilityRequest,
+    enforcement_mode: CapabilityEnforcementMode,
+) -> Vec<String> {
+    if enforcement_mode == CapabilityEnforcementMode::NotApplicable {
+        return Vec::new();
+    }
+    let mut requirements = vec![
+        "runner_invocation".to_owned(),
+        "runner_completion".to_owned(),
+    ];
+    if request.requires_enforcement {
+        requirements.push("capability_evidence".to_owned());
+    }
+    requirements
+}
+
+fn warnings_for_grant(
+    node: &super::contracts::GraphLoopNodeDefinition,
+    request: &CapabilityRequest,
+    grant: &ExecutionCapabilityGrant,
+) -> Vec<ExecutionCapabilityWarning> {
+    let mut warnings = Vec::new();
+    match grant.decision_state {
+        CapabilityDecisionState::Granted
+            if grant.enforcement_mode == CapabilityEnforcementMode::AdvisoryOnly =>
+        {
+            warnings.push(capability_warning(
+                node,
+                &grant.capability_id,
+                "advisory",
+                format!(
+                    "capability {} is granted as advisory-only",
+                    grant.capability_id
+                ),
+            ));
+        }
+        CapabilityDecisionState::Denied => warnings.push(capability_warning(
+            node,
+            &grant.capability_id,
+            "denied",
+            format!("capability {} is denied", grant.capability_id),
+        )),
+        CapabilityDecisionState::ApprovalRequired => warnings.push(capability_warning(
+            node,
+            &grant.capability_id,
+            "approval_required",
+            format!("capability {} requires approval", grant.capability_id),
+        )),
+        CapabilityDecisionState::Unsupported => warnings.push(capability_warning(
+            node,
+            &grant.capability_id,
+            "unsupported",
+            format!(
+                "capability {} cannot satisfy required enforcement without advisory grants",
+                grant.capability_id
+            ),
+        )),
+        _ => {}
+    }
+    if request.required && grant.enforcement_mode == CapabilityEnforcementMode::AdvisoryOnly {
+        warnings.push(capability_warning(
+            node,
+            &grant.capability_id,
+            "required_advisory",
+            format!(
+                "required capability {} resolved to advisory-only",
+                grant.capability_id
+            ),
+        ));
+    }
+    warnings
+}
+
+fn capability_warning(
+    node: &super::contracts::GraphLoopNodeDefinition,
+    capability_id: &str,
+    severity: &str,
+    message: String,
+) -> ExecutionCapabilityWarning {
+    ExecutionCapabilityWarning {
+        warning_id: format!(
+            "{}.{}.{}",
+            node.node_id,
+            capability_id.replace('.', "_"),
+            severity
+        ),
+        capability_id: capability_id.to_owned(),
+        severity: severity.to_owned(),
+        message,
+    }
+}
+
+fn is_default_framework_request(request: &CapabilityRequest) -> bool {
+    request.policy_source.as_deref() == Some("stage_kind_default")
+        && matches!(
+            request.capability_id.as_str(),
+            "runner.invoke" | "workspace.read" | "artifact.write"
+        )
+}
+
+fn is_runtime_enforced_capability(capability_id: &str) -> bool {
+    matches!(
+        capability_id,
+        "runner.invoke" | "artifact.read" | "artifact.write" | "evidence.emit" | "runtime.control"
+    )
+}
+
+fn capability_policy_fingerprint(
+    node: &super::contracts::GraphLoopNodeDefinition,
+    requests: &[CapabilityRequest],
+    policies: &[CapabilityPolicyCandidate],
+    config: &EffectiveCompileConfig,
+) -> String {
+    let mut payload = Map::new();
+    payload.insert("node_id".to_owned(), Value::String(node.node_id.clone()));
+    payload.insert(
+        "requests".to_owned(),
+        serde_json::to_value(requests).expect("capability requests are serializable"),
+    );
+    payload.insert(
+        "policy_overrides".to_owned(),
+        serde_json::to_value(
+            policies
+                .iter()
+                .map(|policy| {
+                    let mut value = Map::new();
+                    value.insert("source".to_owned(), Value::String(policy.source.to_owned()));
+                    value.insert(
+                        "override".to_owned(),
+                        serde_json::to_value(&policy.override_)
+                            .expect("capability policy override is serializable"),
+                    );
+                    Value::Object(value)
+                })
+                .collect::<Vec<_>>(),
+        )
+        .expect("capability policies are serializable"),
+    );
+    payload.insert(
+        "execution_capabilities".to_owned(),
+        serde_json::to_value(&config.execution_capabilities)
+            .expect("execution capability config is serializable"),
+    );
+    let encoded =
+        serde_json::to_vec(&Value::Object(payload)).expect("capability policy payload serializes");
+    format!("cap-pol-{}", hex_prefix(Sha256::digest(encoded), 12))
+}
+
+fn execution_capability_summary_from_nodes(
+    nodes: &[MaterializedGraphNodePlan],
+) -> ExecutionCapabilitySummary {
+    let grants = nodes
+        .iter()
+        .flat_map(|node| node.execution_capability_grants.iter());
+    execution_capability_summary_from_grants(grants)
+}
+
+fn execution_capability_summary_from_graphs<'a>(
+    graphs: impl IntoIterator<Item = &'a FrozenGraphPlanePlan>,
+) -> ExecutionCapabilitySummary {
+    let grants = graphs
+        .into_iter()
+        .flat_map(|graph| graph.nodes.iter())
+        .flat_map(|node| node.execution_capability_grants.iter());
+    execution_capability_summary_from_grants(grants)
+}
+
+fn execution_capability_summaries_by_plane(
+    graphs_by_plane: &HashMap<Plane, FrozenGraphPlanePlan>,
+) -> HashMap<Plane, ExecutionCapabilitySummary> {
+    sorted_plane_entries(graphs_by_plane)
+        .into_iter()
+        .map(|(plane, graph)| (plane, graph.execution_capability_summary.clone()))
+        .collect()
+}
+
+fn execution_capability_summary_from_grants<'a>(
+    grants: impl IntoIterator<Item = &'a ExecutionCapabilityGrant>,
+) -> ExecutionCapabilitySummary {
+    let mut summary = ExecutionCapabilitySummary::default();
+    for grant in grants {
+        summary.total_grants += 1;
+        *summary
+            .by_decision
+            .entry(grant.decision_state.as_str().to_owned())
+            .or_insert(0) += 1;
+        *summary
+            .by_enforcement
+            .entry(grant.enforcement_mode.as_str().to_owned())
+            .or_insert(0) += 1;
+    }
+    summary
 }
 
 /// Return known stage names selected by graph-loop node stage kind ids.

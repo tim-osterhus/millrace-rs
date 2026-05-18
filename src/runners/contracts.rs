@@ -4,7 +4,10 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
-use crate::contracts::{StageName, Timestamp, TokenUsage};
+use crate::contracts::{
+    CapabilityDecisionState, CapabilityEnforcementMode, CapabilitySupportDecision,
+    CapabilitySupportState, ExecutionCapabilityGrant, StageName, Timestamp, TokenUsage,
+};
 use crate::runtime::StageRunRequest;
 
 /// Runner exit categories captured before stage-result normalization.
@@ -59,6 +62,10 @@ pub struct RunnerRawResult {
     pub terminal_result_path: Option<String>,
     pub event_log_path: Option<String>,
     pub token_usage: Option<TokenUsage>,
+    pub failure_capability_class: Option<String>,
+    pub capability_support_decisions: Vec<CapabilitySupportDecision>,
+    pub capability_evidence_refs: Vec<String>,
+    pub missing_capability_evidence_refs: Vec<String>,
 
     pub started_at: Timestamp,
     pub ended_at: Timestamp,
@@ -97,6 +104,27 @@ impl RunnerRawResult {
         require_non_blank("request_id", &self.request_id)?;
         require_non_blank("run_id", &self.run_id)?;
         require_non_blank("runner_name", &self.runner_name)?;
+        if self
+            .failure_capability_class
+            .as_deref()
+            .is_some_and(|value| value.trim().is_empty())
+        {
+            return Err(RunnerError::InvalidRawResult {
+                message: "failure_capability_class must not be blank".to_owned(),
+            });
+        }
+        for decision in &self.capability_support_decisions {
+            decision
+                .validate()
+                .map_err(|error| RunnerError::InvalidRawResult {
+                    message: error.to_string(),
+                })?;
+        }
+        validate_non_blank_values("capability_evidence_refs", &self.capability_evidence_refs)?;
+        validate_non_blank_values(
+            "missing_capability_evidence_refs",
+            &self.missing_capability_evidence_refs,
+        )?;
         if self.ended_time()? < self.started_time()? {
             return Err(RunnerError::InvalidRawResult {
                 message: "ended_at cannot precede started_at".to_owned(),
@@ -140,6 +168,14 @@ struct RunnerRawResultRaw {
     terminal_result_path: Option<String>,
     event_log_path: Option<String>,
     token_usage: Option<TokenUsage>,
+    #[serde(default)]
+    failure_capability_class: Option<String>,
+    #[serde(default)]
+    capability_support_decisions: Vec<CapabilitySupportDecision>,
+    #[serde(default)]
+    capability_evidence_refs: Vec<String>,
+    #[serde(default)]
+    missing_capability_evidence_refs: Vec<String>,
 
     started_at: Timestamp,
     ended_at: Timestamp,
@@ -164,6 +200,10 @@ impl RunnerRawResultRaw {
             terminal_result_path: self.terminal_result_path,
             event_log_path: self.event_log_path,
             token_usage: self.token_usage,
+            failure_capability_class: self.failure_capability_class,
+            capability_support_decisions: self.capability_support_decisions,
+            capability_evidence_refs: self.capability_evidence_refs,
+            missing_capability_evidence_refs: self.missing_capability_evidence_refs,
             started_at: self.started_at,
             ended_at: self.ended_at,
         };
@@ -179,6 +219,91 @@ pub type RunnerResult<T> = Result<T, RunnerError>;
 pub trait StageRunnerAdapter {
     /// Runs one stage request and returns raw runner output.
     fn run(&self, request: &StageRunRequest) -> RunnerResult<RunnerRawResult>;
+
+    /// Reports runner support for one compiled execution capability grant.
+    fn evaluate_capability_grant(
+        &self,
+        grant: &ExecutionCapabilityGrant,
+        request: &StageRunRequest,
+    ) -> CapabilitySupportDecision {
+        let runner_id = request
+            .runner_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or("unknown_runner")
+            .to_owned();
+        if grant.decision_state != CapabilityDecisionState::Granted {
+            return CapabilitySupportDecision {
+                runner_id,
+                invocation_context_ref: request.stage.as_str().to_owned(),
+                grant_id: grant.grant_id.clone(),
+                support_state: CapabilitySupportState::Unsupported,
+                enforcement_mode: CapabilityEnforcementMode::NotApplicable,
+                limitations: Vec::new(),
+                evidence_available: Vec::new(),
+                reason: format!("grant decision is {}", grant.decision_state.as_str()),
+            };
+        }
+        if matches!(
+            grant.capability_id.as_str(),
+            "runner.invoke" | "artifact.read" | "artifact.write" | "evidence.emit"
+        ) {
+            return CapabilitySupportDecision {
+                runner_id,
+                invocation_context_ref: request.stage.as_str().to_owned(),
+                grant_id: grant.grant_id.clone(),
+                support_state: CapabilitySupportState::Supported,
+                enforcement_mode: grant.enforcement_mode,
+                limitations: Vec::new(),
+                evidence_available: vec![
+                    "runner_invocation".to_owned(),
+                    "runner_completion".to_owned(),
+                ],
+                reason: "Millrace runtime records runner invocation and artifact evidence"
+                    .to_owned(),
+            };
+        }
+        CapabilitySupportDecision {
+            runner_id,
+            invocation_context_ref: request.stage.as_str().to_owned(),
+            grant_id: grant.grant_id.clone(),
+            support_state: CapabilitySupportState::PartiallySupported,
+            enforcement_mode: CapabilityEnforcementMode::AdvisoryOnly,
+            limitations: vec![
+                "runner support could not prove narrow enforcement boundaries".to_owned(),
+            ],
+            evidence_available: vec![
+                "runner_invocation".to_owned(),
+                "runner_completion".to_owned(),
+            ],
+            reason: "runner support is advisory by default".to_owned(),
+        }
+    }
+
+    /// Reports support decisions for all execution capability grants on the request.
+    fn capability_support_decisions(
+        &self,
+        request: &StageRunRequest,
+    ) -> Vec<CapabilitySupportDecision> {
+        request
+            .execution_capability_grants
+            .iter()
+            .map(|grant| self.evaluate_capability_grant(grant, request))
+            .collect()
+    }
+
+    /// Returns a request clone populated with runner support decisions when needed.
+    fn request_with_capability_support(&self, request: &StageRunRequest) -> StageRunRequest {
+        if request.execution_capability_grants.is_empty()
+            || !request.capability_support_decisions.is_empty()
+        {
+            return request.clone();
+        }
+        let mut request = request.clone();
+        request.capability_support_decisions = self.capability_support_decisions(&request);
+        request
+    }
 }
 
 /// Typed failures emitted by runner contracts and normalization.
@@ -302,6 +427,15 @@ pub(crate) fn require_non_blank(field_name: &'static str, value: &str) -> Runner
     } else {
         Ok(())
     }
+}
+
+fn validate_non_blank_values(field_name: &'static str, values: &[String]) -> RunnerResult<()> {
+    if values.iter().any(|value| value.trim().is_empty()) {
+        return Err(RunnerError::InvalidRawResult {
+            message: format!("{field_name} values must not be blank"),
+        });
+    }
+    Ok(())
 }
 
 fn parse_time(field_name: &'static str, timestamp: &Timestamp) -> RunnerResult<OffsetDateTime> {

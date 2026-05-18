@@ -21,7 +21,10 @@ use crate::{
         SubscriptionQuotaTelemetryState, Timestamp, TokenUsage, UsageGovernanceBlockerSource,
         WorkDocument, WorkItemKind, validate_safe_identifier,
     },
-    runtime::{StageRunRequest, inspect_run_trace_id, load_runtime_startup_config},
+    runtime::{
+        ExecutionCapabilityApproval, StageRunRequest, inspect_run_trace_id,
+        list_execution_capability_approvals, load_runtime_startup_config,
+    },
     work_documents::read_work_document,
     workspace::{
         QueueInspectionEntry, QueueStore, WorkspacePaths, inspect_runtime_ownership_lock,
@@ -259,6 +262,58 @@ pub fn queue_show_lines(paths: &WorkspacePaths, work_item_id: &str) -> Result<Ve
     ];
     lines.extend(render_queue_document_fields(&document));
     Ok(lines)
+}
+
+pub fn approvals_ls_lines(paths: &WorkspacePaths) -> Result<Vec<String>, String> {
+    let listing = list_execution_capability_approvals(paths).map_err(|error| error.to_string())?;
+    let approvals = listing
+        .pending
+        .iter()
+        .chain(listing.resolved.iter())
+        .collect::<Vec<_>>();
+    if approvals.is_empty() {
+        return Ok(vec!["approvals: none".to_owned()]);
+    }
+
+    let mut lines = Vec::new();
+    for approval in approvals {
+        lines.extend(approval_summary_lines(approval));
+        lines.push(String::new());
+    }
+    Ok(lines)
+}
+
+pub fn approvals_show_lines(
+    paths: &WorkspacePaths,
+    approval_id: &str,
+) -> Result<Vec<String>, String> {
+    let listing = list_execution_capability_approvals(paths).map_err(|error| error.to_string())?;
+    let Some(approval) = listing
+        .pending
+        .into_iter()
+        .chain(listing.resolved)
+        .find(|candidate| candidate.approval_id == approval_id)
+    else {
+        return Err(format!("approval not found: {approval_id}"));
+    };
+    serde_json::to_string_pretty(&approval)
+        .map(|rendered| vec![rendered])
+        .map_err(|error| format!("failed to render approval JSON: {error}"))
+}
+
+fn approval_summary_lines(approval: &ExecutionCapabilityApproval) -> Vec<String> {
+    vec![
+        format!("approval_id: {}", approval.approval_id),
+        format!("status: {}", approval.status.as_str()),
+        format!("capability_id: {}", approval.capability_id),
+        format!("grant_id: {}", approval.grant_id),
+        format!("run_id: {}", approval.run_id),
+        format!("request_id: {}", approval.request_id),
+        format!(
+            "work_item_id: {}",
+            option_str(approval.work_item_id.as_deref())
+        ),
+    ]
 }
 
 pub fn status_lines(paths: &WorkspacePaths) -> Result<Vec<String>, String> {
@@ -550,6 +605,18 @@ pub fn config_show_lines(
                 .subscription_quota_rules
                 .degraded_policy
                 .as_str()
+        ),
+        format!(
+            "execution_capabilities.enabled: {}",
+            bool_text(config.execution_capabilities.enabled)
+        ),
+        format!(
+            "execution_capabilities.allow_advisory_grants: {}",
+            bool_text(config.execution_capabilities.allow_advisory_grants)
+        ),
+        format!(
+            "execution_capabilities.fail_required_advisory: {}",
+            bool_text(config.execution_capabilities.fail_required_advisory)
         ),
         format!("config_version: {}", snapshot.config_version),
         format!(
@@ -1690,8 +1757,74 @@ fn render_run_show_lines(summary: &InspectedRunSummary) -> Vec<String> {
         for artifact_path in &stage.artifact_paths {
             lines.push(format!("artifact_path: {artifact_path}"));
         }
+        lines.extend(render_stage_capability_metadata_lines(stage));
     }
     lines
+}
+
+fn render_stage_capability_metadata_lines(stage: &InspectedStageResult) -> Vec<String> {
+    let mut lines = Vec::new();
+    if let Some(grants) = stage
+        .envelope
+        .metadata
+        .get("execution_capability_grants")
+        .and_then(Value::as_array)
+    {
+        for grant in grants {
+            lines.push(format!(
+                "capability_grant: grant_id={} capability_id={} decision={} enforcement={} evidence_status={} fingerprint={}",
+                json_string_field(grant, "grant_id"),
+                json_string_field(grant, "capability_id"),
+                json_string_field(grant, "decision_state"),
+                json_string_field(grant, "enforcement_mode"),
+                json_string_field(grant, "evidence_status"),
+                json_string_field(grant, "fingerprint")
+            ));
+        }
+    }
+    if let Some(decisions) = stage
+        .envelope
+        .metadata
+        .get("capability_support_decisions")
+        .and_then(Value::as_array)
+    {
+        for decision in decisions {
+            lines.push(format!(
+                "capability_support: grant_id={} runner_id={} support={} enforcement={} evidence={}",
+                json_string_field(decision, "grant_id"),
+                json_string_field(decision, "runner_id"),
+                json_string_field(decision, "support_state"),
+                json_string_field(decision, "enforcement_mode"),
+                json_string_array_field(decision, "evidence_available")
+            ));
+        }
+    }
+    lines
+}
+
+fn json_string_field(value: &Value, key: &str) -> String {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("none")
+        .to_owned()
+}
+
+fn json_string_array_field(value: &Value, key: &str) -> String {
+    let Some(values) = value.get(key).and_then(Value::as_array) else {
+        return "none".to_owned();
+    };
+    let rendered = values
+        .iter()
+        .filter_map(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    if rendered.is_empty() {
+        "none".to_owned()
+    } else {
+        rendered.join(",")
+    }
 }
 
 fn render_token_usage_lines(token_usage: Option<&TokenUsage>) -> Vec<String> {

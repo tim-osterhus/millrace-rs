@@ -13,7 +13,13 @@ use std::{
 
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
-use crate::{contracts::Timestamp, runtime::StageRunRequest};
+use crate::{
+    contracts::{
+        CapabilityDecisionState, CapabilityEnforcementMode, CapabilitySupportDecision,
+        CapabilitySupportState, ExecutionCapabilityGrant, Timestamp,
+    },
+    runtime::StageRunRequest,
+};
 
 use super::{
     ProcessExecutionResult, ProcessExitKind, RunnerEnvironmentDelta, RunnerError, RunnerExitKind,
@@ -22,11 +28,13 @@ use super::{
         RunnerCompletionArtifactContext, completion_artifact_from_raw_result,
         invocation_artifact_from_request, write_runner_completion, write_runner_invocation,
     },
+    capability_evidence_refs_for_request,
     codex_cli_artifacts::{
         codex_cli_artifact_paths, materialize_stdout_artifact, persist_event_log,
         reconciled_timeout_terminal_marker,
     },
     codex_cli_tokens::extract_token_usage,
+    missing_capability_evidence_refs_for_request,
     process::duration_seconds_between,
     prompting::build_stage_prompt,
 };
@@ -207,10 +215,30 @@ impl CodexCliRunnerAdapter {
             output_last_message_path,
         )
     }
+
+    /// Reports Codex CLI support for one execution capability grant.
+    #[must_use]
+    pub fn evaluate_capability_grant(
+        &self,
+        grant: &ExecutionCapabilityGrant,
+        request: &StageRunRequest,
+    ) -> CapabilitySupportDecision {
+        codex_capability_support_decision(self.name(), &self.config, grant, request)
+    }
 }
 
 impl StageRunnerAdapter for CodexCliRunnerAdapter {
+    fn evaluate_capability_grant(
+        &self,
+        grant: &ExecutionCapabilityGrant,
+        request: &StageRunRequest,
+    ) -> CapabilitySupportDecision {
+        self.evaluate_capability_grant(grant, request)
+    }
+
     fn run(&self, request: &StageRunRequest) -> RunnerResult<RunnerRawResult> {
+        let request = self.request_with_capability_support(request);
+        let request = &request;
         let emitted_at = now_timestamp("emitted_at")?;
         let run_dir = Path::new(&request.run_dir);
         fs::create_dir_all(run_dir).map_err(|error| RunnerError::Io {
@@ -278,6 +306,12 @@ impl StageRunnerAdapter for CodexCliRunnerAdapter {
                     terminal_result_path: None,
                     event_log_path: None,
                     token_usage: None,
+                    failure_capability_class: failure_capability_class_for_request(request),
+                    capability_support_decisions: request.capability_support_decisions.clone(),
+                    capability_evidence_refs: capability_evidence_refs_for_request(request),
+                    missing_capability_evidence_refs: missing_capability_evidence_refs_for_request(
+                        request,
+                    ),
                     started_at: emitted_at,
                     ended_at,
                 };
@@ -355,6 +389,10 @@ impl StageRunnerAdapter for CodexCliRunnerAdapter {
                 .as_ref()
                 .map(|path| path.display().to_string()),
             token_usage,
+            failure_capability_class: failure_capability_class_for_request(request),
+            capability_support_decisions: request.capability_support_decisions.clone(),
+            capability_evidence_refs: capability_evidence_refs_for_request(request),
+            missing_capability_evidence_refs: missing_capability_evidence_refs_for_request(request),
             started_at: process_result.started_at.clone(),
             ended_at: process_result.ended_at.clone(),
         };
@@ -452,6 +490,82 @@ pub fn resolve_permission_level(
     config.permission_default
 }
 
+fn codex_capability_support_decision(
+    runner_id: &str,
+    config: &CodexCliConfig,
+    grant: &ExecutionCapabilityGrant,
+    request: &StageRunRequest,
+) -> CapabilitySupportDecision {
+    if grant.decision_state != CapabilityDecisionState::Granted {
+        return CapabilitySupportDecision {
+            runner_id: runner_id.to_owned(),
+            invocation_context_ref: request.stage.as_str().to_owned(),
+            grant_id: grant.grant_id.clone(),
+            support_state: CapabilitySupportState::Unsupported,
+            enforcement_mode: CapabilityEnforcementMode::NotApplicable,
+            limitations: Vec::new(),
+            evidence_available: Vec::new(),
+            reason: format!("grant decision is {}", grant.decision_state.as_str()),
+        };
+    }
+    if matches!(
+        grant.capability_id.as_str(),
+        "runner.invoke" | "artifact.read" | "artifact.write" | "evidence.emit"
+    ) {
+        return CapabilitySupportDecision {
+            runner_id: runner_id.to_owned(),
+            invocation_context_ref: request.stage.as_str().to_owned(),
+            grant_id: grant.grant_id.clone(),
+            support_state: CapabilitySupportState::Supported,
+            enforcement_mode: grant.enforcement_mode,
+            limitations: Vec::new(),
+            evidence_available: vec![
+                "runner_invocation".to_owned(),
+                "runner_completion".to_owned(),
+            ],
+            reason: "Millrace runtime records Codex CLI runner invocation and artifacts".to_owned(),
+        };
+    }
+
+    let permission_level = resolve_permission_level(config, request);
+    if permission_level == CodexPermissionLevel::Maximum {
+        return CapabilitySupportDecision {
+            runner_id: runner_id.to_owned(),
+            invocation_context_ref: request.stage.as_str().to_owned(),
+            grant_id: grant.grant_id.clone(),
+            support_state: CapabilitySupportState::Supported,
+            enforcement_mode: CapabilityEnforcementMode::AdvisoryOnly,
+            limitations: vec![
+                "codex maximum permission can bypass local sandbox limits".to_owned(),
+            ],
+            evidence_available: vec![
+                "runner_invocation".to_owned(),
+                "runner_completion".to_owned(),
+            ],
+            reason: "codex permission level maximum is advisory for this boundary".to_owned(),
+        };
+    }
+
+    CapabilitySupportDecision {
+        runner_id: runner_id.to_owned(),
+        invocation_context_ref: request.stage.as_str().to_owned(),
+        grant_id: grant.grant_id.clone(),
+        support_state: CapabilitySupportState::PartiallySupported,
+        enforcement_mode: grant.enforcement_mode,
+        limitations: vec![
+            "runner support is bounded by Codex CLI sandbox configuration".to_owned(),
+        ],
+        evidence_available: vec![
+            "runner_invocation".to_owned(),
+            "runner_completion".to_owned(),
+        ],
+        reason: format!(
+            "codex permission level {} partially supports this grant",
+            permission_level.as_str()
+        ),
+    }
+}
+
 /// Returns Codex CLI flags for one permission level.
 #[must_use]
 pub const fn permission_flags(level: CodexPermissionLevel) -> &'static [&'static str] {
@@ -512,6 +626,11 @@ fn completion_failure_evidence(
         );
     }
     (None, Vec::new())
+}
+
+fn failure_capability_class_for_request(request: &StageRunRequest) -> Option<String> {
+    (!missing_capability_evidence_refs_for_request(request).is_empty())
+        .then(|| "capability_evidence_missing".to_owned())
 }
 
 #[allow(clippy::too_many_arguments)]

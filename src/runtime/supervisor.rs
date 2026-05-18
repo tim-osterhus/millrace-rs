@@ -18,7 +18,8 @@ use super::{
     RuntimeTickDispatchOutcome, RuntimeTickError, RuntimeTickOptions, RuntimeTickOutcomeKind,
     RuntimeTickResult, StageRunRequest,
     blocked_recovery::attempt_stranded_dependency_auto_recovery,
-    runtime_monitor_events_from_jsonl,
+    capability_gate_failure_result, evaluate_stage_request_capabilities_with_runner,
+    record_capability_gate_result, runtime_monitor_events_from_jsonl,
     tick::{
         self, activate_completion_stage_if_ready, activate_next_claim_for_plane,
         apply_stage_worker_raw_result, build_stage_run_request_for_plane,
@@ -573,6 +574,24 @@ where
             return Ok(false);
         }
         let request = build_stage_run_request_for_plane(session, plane, options, now)?;
+        let gate_result = evaluate_stage_request_capabilities_with_runner(
+            &session.paths,
+            &request,
+            &self.runner,
+            now,
+        )?;
+        let request = gate_result.request.clone();
+        record_capability_gate_result(&session.paths, &request, &gate_result, now)?;
+        let active_run = tick::active_run_for_plane(&session.snapshot, plane)
+            .ok_or_else(|| worker_mismatch("worker start requires active run for plane"))?;
+        if !gate_result.allowed {
+            let raw_result = capability_gate_failure_result(&request, &gate_result, now)?;
+            let outcome = gate_blocked_worker_outcome(active_run, request, raw_result, now)?;
+            outcome.validate()?;
+            self.completed_workers.insert(plane, outcome);
+            return Ok(true);
+        }
+
         mark_stage_running_and_emit_started(session, &request, now)?;
         let active_run = tick::active_run_for_plane(&session.snapshot, plane)
             .ok_or_else(|| worker_mismatch("worker start requires active run for plane"))?;
@@ -951,6 +970,23 @@ pub fn run_stage_worker(
         started_at,
         completed_at,
         result,
+    })
+}
+
+fn gate_blocked_worker_outcome(
+    active_run: ActiveRunState,
+    request: StageRunRequest,
+    raw_result: RunnerRawResult,
+    now: &Timestamp,
+) -> RuntimeTickResult<StageWorkerOutcome> {
+    Ok(StageWorkerOutcome {
+        plane: active_run.plane,
+        run_id: active_run.run_id.clone(),
+        active_run,
+        request,
+        started_at: now.clone(),
+        completed_at: now.clone(),
+        result: StageWorkerResult::RawResult(Box::new(raw_result)),
     })
 }
 

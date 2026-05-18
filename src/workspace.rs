@@ -189,6 +189,13 @@ pub struct WorkspacePaths {
     /// Runtime run artifact directory.
     pub runs_dir: PathBuf,
 
+    /// Execution capability approval root directory.
+    pub approvals_dir: PathBuf,
+    /// Pending execution capability approval directory.
+    pub approvals_pending_dir: PathBuf,
+    /// Resolved execution capability approval directory.
+    pub approvals_resolved_dir: PathBuf,
+
     /// Execution tasks root directory.
     pub tasks_dir: PathBuf,
     /// Queued task directory.
@@ -369,6 +376,9 @@ impl WorkspacePaths {
             &self.mailbox_processed_dir,
             &self.mailbox_failed_dir,
             &self.runs_dir,
+            &self.approvals_dir,
+            &self.approvals_pending_dir,
+            &self.approvals_resolved_dir,
             &self.tasks_dir,
             &self.tasks_queue_dir,
             &self.tasks_active_dir,
@@ -439,6 +449,7 @@ pub fn workspace_paths(root: impl AsRef<Path>) -> WorkspacePaths {
     let runtime_root = root.join("millrace-agents");
     let state_dir = runtime_root.join("state");
     let mailbox_dir = state_dir.join("mailbox");
+    let approvals_dir = runtime_root.join("approvals");
     let tasks_dir = runtime_root.join("tasks");
     let specs_dir = runtime_root.join("specs");
     let incidents_dir = runtime_root.join("incidents");
@@ -463,6 +474,9 @@ pub fn workspace_paths(root: impl AsRef<Path>) -> WorkspacePaths {
         mailbox_processed_dir: mailbox_dir.join("processed"),
         mailbox_failed_dir: mailbox_dir.join("failed"),
         runs_dir: runtime_root.join("runs"),
+        approvals_dir: approvals_dir.clone(),
+        approvals_pending_dir: approvals_dir.join("pending"),
+        approvals_resolved_dir: approvals_dir.join("resolved"),
         tasks_dir: tasks_dir.clone(),
         tasks_queue_dir: tasks_dir.join("queue"),
         tasks_active_dir: tasks_dir.join("active"),

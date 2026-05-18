@@ -16,8 +16,9 @@ pub mod registry;
 
 pub use artifacts::{
     RunnerCompletionArtifact, RunnerCompletionArtifactContext, RunnerInvocationArtifact,
-    completion_artifact_from_raw_result, invocation_artifact_from_request, write_runner_completion,
-    write_runner_invocation,
+    capability_evidence_refs_for_request, completion_artifact_from_raw_result,
+    invocation_artifact_from_request, missing_capability_evidence_refs_for_request,
+    write_runner_completion, write_runner_invocation,
 };
 pub use codex_cli::{
     CodexCliConfig, CodexCliRunnerAdapter, CodexPermissionLevel, CodexProcessError,

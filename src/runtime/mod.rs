@@ -10,12 +10,15 @@ use serde::{
 use serde_json::Value;
 
 use crate::contracts::{
-    ContractError, Plane, ResultClass, StageName, WorkItemKind, allowed_result_classes_by_outcome,
-    allowed_work_item_kinds, legal_terminal_markers, running_status_marker,
-    stage_allows_work_item_kind, stage_plane, terminal_result_for_plane,
+    CapabilitySupportDecision, ContractError, ExecutionCapabilityGrant, Plane, ResultClass,
+    StageName, WorkItemKind, allowed_result_classes_by_outcome, allowed_work_item_kinds,
+    legal_terminal_markers, running_status_marker, stage_allows_work_item_kind, stage_plane,
+    terminal_result_for_plane,
 };
 
+mod approvals;
 mod blocked_recovery;
+mod capability_gates;
 mod monitor;
 mod run_traces;
 mod startup;
@@ -23,10 +26,22 @@ mod supervisor;
 mod tick;
 mod usage_governance;
 
+pub use approvals::{
+    ApprovalStorageError, ApprovalStorageResult, ExecutionCapabilityApproval,
+    ExecutionCapabilityApprovalListing, ExecutionCapabilityApprovalRequest,
+    ExecutionCapabilityApprovalStatus, approve_execution_capability_request,
+    deny_execution_capability_request, ensure_execution_capability_approval,
+    find_approval_for_grant, list_execution_capability_approvals,
+};
 pub use blocked_recovery::{
     BlockedItemMetadataRecord, RetryBlockedTaskRequest, blocked_metadata_allows_auto_requeue,
     blocked_metadata_path, blocked_task_metadata_path, find_stranded_blocked_dependency,
     load_blocked_item_metadata, load_blocked_task_metadata, retry_blocked_task,
+};
+pub use capability_gates::{
+    CapabilityGateBlockedGrant, CapabilityGateResult, CapabilitySupportEvaluator,
+    capability_gate_failure_result, evaluate_stage_request_capabilities,
+    evaluate_stage_request_capabilities_with_runner, record_capability_gate_result,
 };
 pub use monitor::{
     BasicMonitorRenderer, BasicTerminalMonitor, NullRuntimeMonitorSink, RuntimeMonitorEvent,
@@ -38,13 +53,13 @@ pub use run_traces::{
     trace_path_for_run_dir, upsert_stage_result_trace_node,
 };
 pub use startup::{
-    AutoRecoveryConfig, RuntimeConfigApplyBoundary, RuntimeFileFingerprint,
-    RuntimePollWatcherState, RuntimeReconciliationSignal, RuntimeRunnersConfig, RuntimeStageConfig,
-    RuntimeStartupConfig, RuntimeStartupError, RuntimeStartupOptions, RuntimeStartupReconciliation,
-    RuntimeStartupResult, RuntimeStartupSession, RuntimeWatchEvent, RuntimeWatcherSession,
-    RuntimeWatcherTarget, build_runtime_runner_dispatcher,
-    build_runtime_runner_dispatcher_for_paths, build_runtime_watcher_session,
-    compiled_entry_node_for_work_item, load_runtime_startup_config,
+    AutoRecoveryConfig, ExecutionCapabilitiesConfig, RuntimeConfigApplyBoundary,
+    RuntimeFileFingerprint, RuntimePollWatcherState, RuntimeReconciliationSignal,
+    RuntimeRunnersConfig, RuntimeStageConfig, RuntimeStartupConfig, RuntimeStartupError,
+    RuntimeStartupOptions, RuntimeStartupReconciliation, RuntimeStartupResult,
+    RuntimeStartupSession, RuntimeWatchEvent, RuntimeWatcherSession, RuntimeWatcherTarget,
+    build_runtime_runner_dispatcher, build_runtime_runner_dispatcher_for_paths,
+    build_runtime_watcher_session, compiled_entry_node_for_work_item, load_runtime_startup_config,
     runtime_config_apply_boundary_for_field, startup_runtime_daemon,
     startup_runtime_daemon_for_paths, startup_runtime_once, startup_runtime_once_for_paths,
 };
@@ -56,6 +71,7 @@ pub use supervisor::{
     run_runtime_daemon_loop_with_monitor, run_runtime_daemon_supervisor_loop_with_sleeper,
     run_runtime_daemon_supervisor_loop_with_sleeper_and_monitor, run_stage_worker,
 };
+pub(crate) use tick::write_runtime_event;
 pub use tick::{
     RouterAction, RouterDecision, RuntimeTickDispatchOutcome, RuntimeTickError, RuntimeTickOptions,
     RuntimeTickOutcome, RuntimeTickOutcomeKind, RuntimeTickResult, run_serial_runtime_tick,
@@ -384,6 +400,10 @@ pub struct StageRunRequest {
     pub model_reasoning_effort: Option<String>,
     #[serde(default)]
     pub timeout_seconds: u64,
+    #[serde(default)]
+    pub execution_capability_grants: Vec<ExecutionCapabilityGrant>,
+    #[serde(default)]
+    pub capability_support_decisions: Vec<CapabilitySupportDecision>,
 }
 
 impl<'de> Deserialize<'de> for StageRunRequest {
@@ -423,6 +443,22 @@ impl StageRunRequest {
         require_non_blank("summary_status_path", &self.summary_status_path)?;
         require_non_blank("runtime_snapshot_path", &self.runtime_snapshot_path)?;
         require_non_blank("recovery_counters_path", &self.recovery_counters_path)?;
+        for grant in &self.execution_capability_grants {
+            grant
+                .validate()
+                .map_err(|error| StageRunRequestError::InvalidField {
+                    field_name: "execution_capability_grants",
+                    message: error.to_string(),
+                })?;
+        }
+        for decision in &self.capability_support_decisions {
+            decision
+                .validate()
+                .map_err(|error| StageRunRequestError::InvalidField {
+                    field_name: "capability_support_decisions",
+                    message: error.to_string(),
+                })?;
+        }
 
         if stage_plane(self.stage) != self.plane {
             return Err(StageRunRequestError::InvalidDocument {
@@ -648,6 +684,8 @@ impl StageRunRequest {
             "Attached Skill Paths",
             &self.attached_skill_paths,
         );
+        push_capability_grants(&mut lines, &self.execution_capability_grants);
+        push_capability_support_decisions(&mut lines, &self.capability_support_decisions);
         lines.extend([
             format!("Run Directory: {}", self.run_dir),
             format!("Runtime Snapshot Path: {}", self.runtime_snapshot_path),
@@ -779,6 +817,10 @@ struct StageRunRequestRaw {
     model_reasoning_effort: Option<String>,
     #[serde(default)]
     timeout_seconds: u64,
+    #[serde(default)]
+    execution_capability_grants: Vec<ExecutionCapabilityGrant>,
+    #[serde(default)]
+    capability_support_decisions: Vec<CapabilitySupportDecision>,
 }
 
 impl StageRunRequestRaw {
@@ -825,6 +867,8 @@ impl StageRunRequestRaw {
             thinking_level: self.thinking_level,
             model_reasoning_effort: self.model_reasoning_effort,
             timeout_seconds: self.timeout_seconds,
+            execution_capability_grants: self.execution_capability_grants,
+            capability_support_decisions: self.capability_support_decisions,
         };
         request.validate()?;
         Ok(request)
@@ -864,6 +908,49 @@ fn push_result_class_policy(
             .collect::<Vec<_>>()
             .join(", ");
         lines.push(format!("- {}: {}", entry.outcome, rendered));
+    }
+}
+
+fn push_capability_grants(lines: &mut Vec<String>, grants: &[ExecutionCapabilityGrant]) {
+    if grants.is_empty() {
+        lines.push("Execution Capability Grants: none".to_owned());
+        return;
+    }
+    lines.push("Execution Capability Grants:".to_owned());
+    for grant in grants {
+        let approval = grant
+            .approval_policy_ref
+            .as_ref()
+            .map(|policy| format!(" approval={}", policy.policy_id))
+            .unwrap_or_default();
+        lines.push(format!(
+            "- {} {} decision={} enforcement={}{}",
+            grant.grant_id,
+            grant.capability_id,
+            grant.decision_state.as_str(),
+            grant.enforcement_mode.as_str(),
+            approval
+        ));
+    }
+}
+
+fn push_capability_support_decisions(
+    lines: &mut Vec<String>,
+    decisions: &[CapabilitySupportDecision],
+) {
+    if decisions.is_empty() {
+        lines.push("Capability Support Decisions: none".to_owned());
+        return;
+    }
+    lines.push("Capability Support Decisions:".to_owned());
+    for decision in decisions {
+        lines.push(format!(
+            "- {} support={} enforcement={} runner={}",
+            decision.grant_id,
+            decision.support_state.as_str(),
+            decision.enforcement_mode.as_str(),
+            decision.runner_id
+        ));
     }
 }
 

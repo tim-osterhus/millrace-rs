@@ -1,0 +1,1773 @@
+{
+  "schema_version": "1.0",
+  "kind": "auto_port_v0_19_0_parity_evidence",
+  "summary": "Target-facing scout evidence for the Python v0.18.6..v0.19.0 auto-port. This fixture pins Python v0.18.6 and Rust 0.3.5 as previous baselines, Python v0.19.0 and Rust 0.4.0 as targets, and requires source references, changed-path mappings, execution capability contracts/config, compiled grants, approval and gate behavior, runner support/evidence metadata, inspection surfaces, release checks, and explicit millrace-web package/version unsupported-gap evidence.",
+  "active_guardrail_tests": [
+    {
+      "file": "tests/parity_cli.rs",
+      "name": "committed_auto_port_v0_19_0_parity_fixture_covers_capability_governance_release_guardrails"
+    },
+    {
+      "file": "tests/contracts_runtime_json.rs",
+      "name": "auto_port_v0_19_0_runtime_contract_scout_pins_execution_capability_contracts"
+    },
+    {
+      "file": "tests/contracts_public_exports.rs",
+      "name": "public_exports_v0_19_0_guardrail_fixture_requires_capability_contract_exports"
+    },
+    {
+      "file": "tests/compiler_contracts.rs",
+      "name": "compiler_contracts_v0_19_0_guardrail_fixture_requires_capability_request_policy_fields"
+    },
+    {
+      "file": "tests/compiler_materialization.rs",
+      "name": "compiler_materialization_v0_19_0_guardrail_fixture_requires_compiled_capability_grants"
+    },
+    {
+      "file": "tests/runtime_serial.rs",
+      "name": "serial_runtime_v0_19_0_guardrail_fixture_requires_capability_gate_approval_and_prompt_context"
+    },
+    {
+      "file": "tests/runtime_daemon.rs",
+      "name": "runtime_daemon_v0_19_0_guardrail_fixture_requires_capability_gate_and_approval_mailbox_surfaces"
+    },
+    {
+      "file": "tests/runners_normalization.rs",
+      "name": "runner_normalization_v0_19_0_guardrail_fixture_requires_capability_support_and_evidence_metadata"
+    }
+  ],
+  "python_reference": {
+    "previous_tag": "v0.18.6",
+    "previous_tag_object": "85d91683f3be3dfa6f2983d3e397ed373f12edba",
+    "previous_peeled_commit": "63e623bc6fcfcf74ae0cc2ce5605a12ae4179873",
+    "target_tag": "v0.19.0",
+    "target_tag_object": "11c45b03428226f04f56fe078e083bea2464e6b0",
+    "target_peeled_commit": "efb9c5881f524d23dcb78aecfc96fdf7cda9d26f",
+    "diff_range": "v0.18.6..v0.19.0",
+    "generated_scout": "millrace-agents/auto-port/generated/auto-port-python-v0.18.6-to-v0.19.0-rust-0.4.0.md"
+  },
+  "rust_reference": {
+    "current_repo_crate_version": "0.3.5",
+    "current_repo_version_role": "released_target_for_python_v0.18.6",
+    "planned_crate_version": "0.4.0",
+    "planned_version_role": "target_release_for_python_v0.19.0"
+  },
+  "required_surfaces": [
+    "execution_capability_contracts",
+    "execution_capability_config",
+    "compiled_capability_grants",
+    "runtime_capability_gates",
+    "approval_cli_runtime_control",
+    "runner_support_and_evidence",
+    "inspection_prompt_artifacts",
+    "docs_operator_skill_release_evidence",
+    "web_version_package_evidence",
+    "source_reference_guardrails",
+    "release_validation_guardrails"
+  ],
+  "required_coverage_axes": [
+    "approval_cli_commands",
+    "approval_payload_validation",
+    "approval_storage_pending_resolved",
+    "auto_port_state_currentness",
+    "capability_contract_models",
+    "capability_gate_artifacts",
+    "capability_gate_events",
+    "capability_grant_fingerprints",
+    "capability_id_aliases",
+    "capability_scope_validation",
+    "compile_show_execution_capabilities",
+    "compiled_plan_grants",
+    "config_show_execution_capabilities",
+    "daemon_mailbox_approval_processing",
+    "default_grants",
+    "docs_source_refs",
+    "execution_capability_config_keys",
+    "expected_rust_target_mapping",
+    "gate_failure_classes",
+    "generated_scout_changed_paths",
+    "grant_summaries",
+    "mailbox_approval_command_values",
+    "missing_capability_evidence_normalization",
+    "no_live_external_dependencies",
+    "operator_skill_source_refs",
+    "policy_override_resolution",
+    "prompt_context_capability_context",
+    "python_diff_pin",
+    "recompile_boundary_config_keys",
+    "release_check_evidence",
+    "runner_artifact_capability_metadata",
+    "runner_support_decisions",
+    "runs_show_capability_output",
+    "runtime_control_approval_routing",
+    "rust_version_transition_pin",
+    "stage_request_capability_context",
+    "stale_test_reference_guardrails",
+    "strict_required_advisory_failure",
+    "web_version_package_evidence"
+  ],
+  "required_release_checks": [
+    "git -C ../millrace-py diff --name-only v0.18.6..v0.19.0",
+    "cargo fmt --check",
+    "cargo test --test parity_cli",
+    "cargo test --test contracts_runtime_json",
+    "cargo test --test contracts_public_exports",
+    "cargo test --test compiler_contracts",
+    "cargo test --test compiler_materialization",
+    "cargo test --test runtime_serial",
+    "cargo test --test runtime_daemon",
+    "cargo test --test runners_normalization"
+  ],
+  "execution_capability_contract": {
+    "base_capability_ids": [
+      "workspace.read",
+      "workspace.write",
+      "artifact.read",
+      "artifact.write",
+      "runner.invoke",
+      "shell.run",
+      "git.read",
+      "git.mutate",
+      "package.install",
+      "network.access",
+      "approval.request",
+      "evidence.emit",
+      "runtime.control"
+    ],
+    "capability_key_aliases": {
+      "workspace_read": "workspace.read",
+      "workspace_write": "workspace.write",
+      "artifact_read": "artifact.read",
+      "artifact_write": "artifact.write",
+      "runner_invoke": "runner.invoke",
+      "shell_run": "shell.run",
+      "git_read": "git.read",
+      "git_mutate": "git.mutate",
+      "package_install": "package.install",
+      "network_access": "network.access",
+      "approval_request": "approval.request",
+      "evidence_emit": "evidence.emit",
+      "runtime_control": "runtime.control"
+    },
+    "scope_kinds": [
+      "workspace",
+      "workspace_path",
+      "artifact_kind",
+      "artifact_ref",
+      "runner",
+      "command_class",
+      "git_action",
+      "package_manager",
+      "network_class",
+      "approval_policy_ref",
+      "runtime_action"
+    ],
+    "runtime_action_scope_values": [
+      "enqueue",
+      "pause",
+      "resume",
+      "cancel",
+      "retry",
+      "repair",
+      "approve",
+      "deny",
+      "reload_config"
+    ],
+    "contract_models": [
+      "CapabilityScope",
+      "ApprovalPolicyRef",
+      "CapabilityRequest",
+      "CapabilityPolicyOverride",
+      "ExecutionCapabilityGrant",
+      "CapabilitySupportDecision",
+      "MailboxExecutionCapabilityApprovalPayload"
+    ],
+    "decision_states": [
+      "granted",
+      "denied",
+      "approval_required",
+      "unsupported"
+    ],
+    "enforcement_modes": [
+      "runner_enforced",
+      "runtime_enforced",
+      "adapter_enforced",
+      "external_api_enforced",
+      "advisory_only",
+      "not_applicable"
+    ],
+    "support_states": [
+      "supported",
+      "unsupported",
+      "partially_supported"
+    ],
+    "evidence_statuses": [
+      "not_required",
+      "pending",
+      "satisfied",
+      "missing",
+      "waived",
+      "violated"
+    ],
+    "fingerprint_prefix": "grant-"
+  },
+  "execution_capability_config": {
+    "keys": [
+      "enabled",
+      "default_unknown_capability",
+      "allow_advisory_grants",
+      "fail_required_advisory",
+      "defaults"
+    ],
+    "default_decisions": {
+      "network.access": "deny",
+      "package.install": "approval_required",
+      "git.mutate": "approval_required",
+      "shell.run": "allow",
+      "workspace.write": "allow"
+    },
+    "recompile_boundary_fields": [
+      "execution_capabilities.enabled",
+      "execution_capabilities.default_unknown_capability",
+      "execution_capabilities.allow_advisory_grants",
+      "execution_capabilities.fail_required_advisory",
+      "execution_capabilities.defaults"
+    ],
+    "config_show_keys": [
+      "execution_capabilities.enabled",
+      "execution_capabilities.allow_advisory_grants",
+      "execution_capabilities.fail_required_advisory"
+    ]
+  },
+  "compiler_grant_contract": {
+    "default_framework_grants": [
+      "runner.invoke",
+      "workspace.read",
+      "artifact.write"
+    ],
+    "request_sources": [
+      "stage_kind_default",
+      "stage_kind",
+      "graph_node",
+      "mode",
+      "runtime_config"
+    ],
+    "resolution_precedence": [
+      "mode",
+      "graph_node",
+      "runtime_config"
+    ],
+    "summary_keys": [
+      "total_grants",
+      "by_decision",
+      "by_enforcement"
+    ],
+    "strict_failure": "required advisory grants fail when fail_required_advisory is enabled or requires_enforcement is true",
+    "compiled_plan_fields": [
+      "execution_capability_grants",
+      "execution_capability_warnings",
+      "execution_capability_summary",
+      "execution_capability_summaries_by_plane"
+    ]
+  },
+  "approval_contract": {
+    "mailbox_commands": [
+      "approve_execution_capability",
+      "deny_execution_capability"
+    ],
+    "payload_model": "MailboxExecutionCapabilityApprovalPayload",
+    "storage_dirs": [
+      "millrace-agents/approvals/pending",
+      "millrace-agents/approvals/resolved"
+    ],
+    "approval_statuses": [
+      "pending",
+      "approved",
+      "denied",
+      "expired",
+      "cancelled"
+    ],
+    "cli_commands": [
+      "approvals ls",
+      "approvals show",
+      "approvals approve",
+      "approvals deny"
+    ],
+    "routing_modes": [
+      "direct",
+      "mailbox"
+    ],
+    "idempotency_key_fields": [
+      "run_id",
+      "request_id",
+      "grant_id"
+    ]
+  },
+  "capability_gate_contract": {
+    "gate_artifact_template": "capability_gate.<request_id>.json",
+    "event_type": "capability_gate_evaluated",
+    "failure_classes": [
+      "capability_grant_denied",
+      "capability_approval_required",
+      "capability_grant_unsupported",
+      "capability_evidence_missing"
+    ],
+    "blocked_decisions": [
+      "denied",
+      "approval_required",
+      "unsupported"
+    ],
+    "dispatch_paths": [
+      "serial_tick",
+      "daemon_supervisor"
+    ]
+  },
+  "runner_support_contract": {
+    "support_states": [
+      "supported",
+      "unsupported",
+      "partially_supported"
+    ],
+    "runner_ids": [
+      "codex_cli",
+      "pi_rpc",
+      "fake"
+    ],
+    "artifact_fields": [
+      "execution_capability_grants",
+      "capability_support_decisions",
+      "capability_evidence_refs",
+      "missing_capability_evidence_refs",
+      "failure_capability_class"
+    ],
+    "normalization_failure_class": "capability_evidence_missing",
+    "codex_advisory_permission": "maximum",
+    "pi_rpc_support_note": "conservative advisory support where narrow enforcement cannot be proven"
+  },
+  "inspection_contract": {
+    "compile_show_lines": [
+      "capability_grant",
+      "capability_warning"
+    ],
+    "config_show_lines": [
+      "execution_capabilities.enabled",
+      "execution_capabilities.allow_advisory_grants",
+      "execution_capabilities.fail_required_advisory"
+    ],
+    "runs_show_lines": [
+      "capability_grant",
+      "capability_support"
+    ],
+    "prompt_context_sections": [
+      "Execution Capability Grants",
+      "Capability Support Decisions"
+    ]
+  },
+  "source_reference_surfaces": [
+    {
+      "surface": "execution_capability_contracts",
+      "coverage": [
+        "capability_contract_models",
+        "capability_id_aliases",
+        "capability_scope_validation",
+        "capability_grant_fingerprints",
+        "mailbox_approval_command_values",
+        "approval_payload_validation"
+      ],
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/contracts/__init__.py",
+        "../millrace-py/src/millrace_ai/contracts/capabilities.py",
+        "../millrace-py/src/millrace_ai/contracts/enums.py",
+        "../millrace-py/src/millrace_ai/contracts/mailbox.py",
+        "../millrace-py/tests/contracts/test_capabilities.py"
+      ],
+      "expected_rust_targets": [
+        "src/lib.rs",
+        "src/contracts/mod.rs",
+        "src/contracts/enums.rs",
+        "src/contracts/runtime_json.rs",
+        "src/contracts/capabilities.rs",
+        "tests/contracts_runtime_json.rs",
+        "tests/contracts_public_exports.rs",
+        "tests/contracts_capabilities.rs",
+        "tests/fixtures/runtime_json/auto_port_v0_19_0_runtime_contract_scout.json"
+      ]
+    },
+    {
+      "surface": "execution_capability_config",
+      "coverage": [
+        "execution_capability_config_keys",
+        "recompile_boundary_config_keys",
+        "config_show_execution_capabilities"
+      ],
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/config/__init__.py",
+        "../millrace-py/src/millrace_ai/config/boundaries.py",
+        "../millrace-py/src/millrace_ai/config/models.py",
+        "../millrace-py/tests/config/test_config.py"
+      ],
+      "expected_rust_targets": [
+        "src/runtime/startup.rs",
+        "src/cli/read_only.rs",
+        "tests/runtime_daemon.rs",
+        "tests/parity_cli.rs"
+      ]
+    },
+    {
+      "surface": "compiled_capability_grants",
+      "coverage": [
+        "default_grants",
+        "policy_override_resolution",
+        "grant_summaries",
+        "strict_required_advisory_failure",
+        "compiled_plan_grants",
+        "compile_show_execution_capabilities"
+      ],
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/architecture/loop_graphs.py",
+        "../millrace-py/src/millrace_ai/architecture/materialization.py",
+        "../millrace-py/src/millrace_ai/architecture/stage_kinds.py",
+        "../millrace-py/src/millrace_ai/compilation/capabilities.py",
+        "../millrace-py/src/millrace_ai/compilation/graph_materialization.py",
+        "../millrace-py/src/millrace_ai/compilation/node_materialization.py",
+        "../millrace-py/src/millrace_ai/compilation/workspace_plan.py",
+        "../millrace-py/src/millrace_ai/contracts/modes.py",
+        "../millrace-py/tests/compilation/test_capability_grants.py"
+      ],
+      "expected_rust_targets": [
+        "src/compiler/contracts.rs",
+        "src/compiler/materialization.rs",
+        "src/compiler/graph_exports.rs",
+        "src/compiler/persistence.rs",
+        "tests/compiler_contracts.rs",
+        "tests/compiler_materialization.rs",
+        "tests/compiler_persistence.rs",
+        "tests/compiler_capability_grants.rs"
+      ]
+    },
+    {
+      "surface": "runtime_capability_gates",
+      "coverage": [
+        "capability_gate_artifacts",
+        "capability_gate_events",
+        "gate_failure_classes",
+        "approval_storage_pending_resolved"
+      ],
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/runtime/capability_gates.py",
+        "../millrace-py/src/millrace_ai/runtime/stage_requests.py",
+        "../millrace-py/src/millrace_ai/runtime/supervisor.py",
+        "../millrace-py/src/millrace_ai/runtime/tick_cycle.py",
+        "../millrace-py/tests/runtime/test_capability_gates.py"
+      ],
+      "expected_rust_targets": [
+        "src/runtime/approvals.rs",
+        "src/runtime/capability_gates.rs",
+        "src/runtime/supervisor.rs",
+        "src/runtime/tick.rs",
+        "src/runners/prompting.rs",
+        "tests/runtime_serial.rs",
+        "tests/runtime_daemon.rs",
+        "tests/runtime_capability_gates.rs"
+      ]
+    },
+    {
+      "surface": "approval_cli_runtime_control",
+      "coverage": [
+        "approval_cli_commands",
+        "runtime_control_approval_routing",
+        "daemon_mailbox_approval_processing",
+        "mailbox_approval_command_values",
+        "approval_payload_validation"
+      ],
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/cli/app.py",
+        "../millrace-py/src/millrace_ai/cli/commands/approvals.py",
+        "../millrace-py/src/millrace_ai/runtime/approvals.py",
+        "../millrace-py/src/millrace_ai/runtime/control.py",
+        "../millrace-py/src/millrace_ai/runtime/control_mutations.py",
+        "../millrace-py/src/millrace_ai/runtime/mailbox_intake.py",
+        "../millrace-py/tests/cli/test_cli.py"
+      ],
+      "expected_rust_targets": [
+        "src/cli/mod.rs",
+        "src/cli/parser.rs",
+        "src/cli/render.rs",
+        "src/workspace/runtime_control.rs",
+        "src/runtime/supervisor.rs",
+        "tests/parity_cli.rs",
+        "tests/workspace_runtime_control.rs",
+        "tests/runtime_daemon.rs"
+      ]
+    },
+    {
+      "surface": "runner_support_and_evidence",
+      "coverage": [
+        "runner_support_decisions",
+        "runner_artifact_capability_metadata",
+        "missing_capability_evidence_normalization"
+      ],
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/runners/adapters/codex_cli.py",
+        "../millrace-py/src/millrace_ai/runners/adapters/pi_rpc.py",
+        "../millrace-py/src/millrace_ai/runners/base.py",
+        "../millrace-py/src/millrace_ai/runners/contracts.py",
+        "../millrace-py/src/millrace_ai/runners/dispatcher.py",
+        "../millrace-py/src/millrace_ai/runners/normalization.py",
+        "../millrace-py/src/millrace_ai/runners/requests.py",
+        "../millrace-py/tests/runners/test_capability_support.py",
+        "../millrace-py/tests/runners/test_runner.py"
+      ],
+      "expected_rust_targets": [
+        "src/runners/contracts.rs",
+        "src/runners/dispatcher.rs",
+        "src/runners/normalization.rs",
+        "src/runners/prompting.rs",
+        "src/runners/artifacts.rs",
+        "src/runners/codex_cli.rs",
+        "src/runners/pi_rpc.rs",
+        "tests/runners_normalization.rs",
+        "tests/runners_codex_cli.rs",
+        "tests/runners_pi_rpc.rs",
+        "tests/runners_capability_support.rs"
+      ]
+    },
+    {
+      "surface": "inspection_prompt_artifacts",
+      "coverage": [
+        "stage_request_capability_context",
+        "prompt_context_capability_context",
+        "runs_show_capability_output",
+        "config_show_execution_capabilities",
+        "compile_show_execution_capabilities"
+      ],
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/cli/compile_view.py",
+        "../millrace-py/src/millrace_ai/cli/config_view.py",
+        "../millrace-py/src/millrace_ai/cli/formatting.py",
+        "../millrace-py/src/millrace_ai/runtime/inspection.py",
+        "../millrace-py/tests/runtime/test_run_inspection.py"
+      ],
+      "expected_rust_targets": [
+        "src/cli/read_only.rs",
+        "src/cli/render.rs",
+        "src/runners/prompting.rs",
+        "tests/parity_cli.rs",
+        "tests/runtime_serial.rs"
+      ]
+    },
+    {
+      "surface": "docs_operator_skill_release_evidence",
+      "coverage": [
+        "docs_source_refs",
+        "operator_skill_source_refs",
+        "release_check_evidence"
+      ],
+      "python_sources": [
+        "../millrace-py/CHANGELOG.md",
+        "../millrace-py/README.md",
+        "../millrace-py/ROADMAP.md",
+        "../millrace-py/docs/millrace-technical-overview.md",
+        "../millrace-py/docs/runtime/README.md",
+        "../millrace-py/docs/runtime/millrace-cli-reference.md",
+        "../millrace-py/docs/runtime/millrace-compiler-and-frozen-plans.md",
+        "../millrace-py/docs/runtime/millrace-execution-capabilities.md",
+        "../millrace-py/docs/runtime/millrace-runner-architecture.md",
+        "../millrace-py/docs/runtime/millrace-runtime-architecture.md",
+        "../millrace-py/docs/skills/millrace-ops-agent-manual/SKILL.md",
+        "../millrace-py/docs/source-package-map.md"
+      ],
+      "expected_rust_targets": [
+        "CHANGELOG.md",
+        "README.md",
+        "ROADMAP.md",
+        "docs/rust-port-roadmap.md",
+        "docs/source-package-map.md",
+        "docs/testing.md",
+        "docs/runtime/README.md",
+        "docs/runtime/millrace-cli-reference.md",
+        "docs/runtime/millrace-compiler-and-frozen-plans.md",
+        "docs/runtime/millrace-execution-capabilities.md",
+        "docs/runtime/millrace-runner-architecture.md",
+        "docs/runtime/millrace-runtime-architecture.md",
+        "millrace-agents/outline.md"
+      ]
+    },
+    {
+      "surface": "web_version_package_evidence",
+      "coverage": [
+        "web_version_package_evidence",
+        "expected_rust_target_mapping"
+      ],
+      "python_sources": [
+        "../millrace-py/packages/millrace-web/CHANGELOG.md",
+        "../millrace-py/packages/millrace-web/pyproject.toml",
+        "../millrace-py/packages/millrace-web/src/millrace_web/__init__.py",
+        "../millrace-py/packages/millrace-web/src/millrace_web/app.py"
+      ],
+      "expected_rust_targets": [
+        "docs/source-package-map.md",
+        "tests/fixtures/cli_parity/web_dashboard_parity_decision.json",
+        "tests/fixtures/cli_parity/auto_port_v0_19_0_parity_evidence.json"
+      ]
+    },
+    {
+      "surface": "source_reference_guardrails",
+      "coverage": [
+        "python_diff_pin",
+        "generated_scout_changed_paths",
+        "expected_rust_target_mapping",
+        "stale_test_reference_guardrails",
+        "no_live_external_dependencies"
+      ],
+      "python_sources": [
+        "../millrace-py/CHANGELOG.md",
+        "../millrace-py/README.md",
+        "../millrace-py/ROADMAP.md",
+        "../millrace-py/docs/millrace-technical-overview.md",
+        "../millrace-py/docs/runtime/README.md",
+        "../millrace-py/docs/runtime/millrace-cli-reference.md",
+        "../millrace-py/docs/runtime/millrace-compiler-and-frozen-plans.md",
+        "../millrace-py/docs/runtime/millrace-execution-capabilities.md",
+        "../millrace-py/docs/runtime/millrace-runner-architecture.md",
+        "../millrace-py/docs/runtime/millrace-runtime-architecture.md",
+        "../millrace-py/docs/skills/millrace-ops-agent-manual/SKILL.md",
+        "../millrace-py/docs/source-package-map.md",
+        "../millrace-py/packages/millrace-web/CHANGELOG.md",
+        "../millrace-py/packages/millrace-web/pyproject.toml",
+        "../millrace-py/packages/millrace-web/src/millrace_web/__init__.py",
+        "../millrace-py/packages/millrace-web/src/millrace_web/app.py",
+        "../millrace-py/src/millrace_ai/__init__.py",
+        "../millrace-py/src/millrace_ai/architecture/loop_graphs.py",
+        "../millrace-py/src/millrace_ai/architecture/materialization.py",
+        "../millrace-py/src/millrace_ai/architecture/stage_kinds.py",
+        "../millrace-py/src/millrace_ai/cli/app.py",
+        "../millrace-py/src/millrace_ai/cli/commands/approvals.py",
+        "../millrace-py/src/millrace_ai/cli/compile_view.py",
+        "../millrace-py/src/millrace_ai/cli/config_view.py",
+        "../millrace-py/src/millrace_ai/cli/formatting.py",
+        "../millrace-py/src/millrace_ai/compilation/capabilities.py",
+        "../millrace-py/src/millrace_ai/compilation/graph_materialization.py",
+        "../millrace-py/src/millrace_ai/compilation/node_materialization.py",
+        "../millrace-py/src/millrace_ai/compilation/workspace_plan.py",
+        "../millrace-py/src/millrace_ai/config/__init__.py",
+        "../millrace-py/src/millrace_ai/config/boundaries.py",
+        "../millrace-py/src/millrace_ai/config/models.py",
+        "../millrace-py/src/millrace_ai/contracts/__init__.py",
+        "../millrace-py/src/millrace_ai/contracts/capabilities.py",
+        "../millrace-py/src/millrace_ai/contracts/enums.py",
+        "../millrace-py/src/millrace_ai/contracts/mailbox.py",
+        "../millrace-py/src/millrace_ai/contracts/modes.py",
+        "../millrace-py/src/millrace_ai/runners/adapters/codex_cli.py",
+        "../millrace-py/src/millrace_ai/runners/adapters/pi_rpc.py",
+        "../millrace-py/src/millrace_ai/runners/base.py",
+        "../millrace-py/src/millrace_ai/runners/contracts.py",
+        "../millrace-py/src/millrace_ai/runners/dispatcher.py",
+        "../millrace-py/src/millrace_ai/runners/normalization.py",
+        "../millrace-py/src/millrace_ai/runners/requests.py",
+        "../millrace-py/src/millrace_ai/runtime/approvals.py",
+        "../millrace-py/src/millrace_ai/runtime/capability_gates.py",
+        "../millrace-py/src/millrace_ai/runtime/control.py",
+        "../millrace-py/src/millrace_ai/runtime/control_mutations.py",
+        "../millrace-py/src/millrace_ai/runtime/inspection.py",
+        "../millrace-py/src/millrace_ai/runtime/mailbox_intake.py",
+        "../millrace-py/src/millrace_ai/runtime/stage_requests.py",
+        "../millrace-py/src/millrace_ai/runtime/supervisor.py",
+        "../millrace-py/src/millrace_ai/runtime/tick_cycle.py",
+        "../millrace-py/tests/cli/test_cli.py",
+        "../millrace-py/tests/compilation/test_capability_grants.py",
+        "../millrace-py/tests/config/test_config.py",
+        "../millrace-py/tests/contracts/test_capabilities.py",
+        "../millrace-py/tests/runners/test_capability_support.py",
+        "../millrace-py/tests/runners/test_runner.py",
+        "../millrace-py/tests/runtime/test_capability_gates.py",
+        "../millrace-py/tests/runtime/test_run_inspection.py"
+      ],
+      "expected_rust_targets": [
+        "millrace-agents/auto-port/generated/auto-port-python-v0.18.6-to-v0.19.0-rust-0.4.0.md",
+        "millrace-agents/auto-port/state.json",
+        "tests/fixtures/cli_parity/auto_port_v0_19_0_parity_evidence.json",
+        "tests/fixtures/runtime_json/auto_port_v0_19_0_runtime_contract_scout.json",
+        "tests/parity_cli.rs"
+      ]
+    },
+    {
+      "surface": "release_validation_guardrails",
+      "coverage": [
+        "release_check_evidence",
+        "rust_version_transition_pin",
+        "auto_port_state_currentness"
+      ],
+      "python_sources": [
+        "../millrace-py/src/millrace_ai/__init__.py",
+        "../millrace-py/CHANGELOG.md"
+      ],
+      "expected_rust_targets": [
+        "Cargo.toml",
+        "Cargo.lock",
+        "CHANGELOG.md",
+        "tests/fixtures/cli_parity/auto_port_v0_19_0_parity_evidence.json"
+      ]
+    }
+  ],
+  "changed_path_mappings": [
+    {
+      "python_path": "CHANGELOG.md",
+      "surface": "docs_operator_skill_release_evidence",
+      "change_role": "changelog_md",
+      "rust_targets": [
+        {
+          "kind": "documentation",
+          "path": "CHANGELOG.md"
+        }
+      ]
+    },
+    {
+      "python_path": "README.md",
+      "surface": "docs_operator_skill_release_evidence",
+      "change_role": "readme_md",
+      "rust_targets": [
+        {
+          "kind": "documentation",
+          "path": "README.md"
+        }
+      ]
+    },
+    {
+      "python_path": "ROADMAP.md",
+      "surface": "docs_operator_skill_release_evidence",
+      "change_role": "roadmap_md",
+      "rust_targets": [
+        {
+          "kind": "documentation",
+          "path": "ROADMAP.md"
+        }
+      ]
+    },
+    {
+      "python_path": "docs/millrace-technical-overview.md",
+      "surface": "docs_operator_skill_release_evidence",
+      "change_role": "docs_millrace_technical_overview_md",
+      "rust_targets": [
+        {
+          "kind": "documentation",
+          "path": "CHANGELOG.md"
+        }
+      ]
+    },
+    {
+      "python_path": "docs/runtime/README.md",
+      "surface": "docs_operator_skill_release_evidence",
+      "change_role": "docs_runtime_readme_md",
+      "rust_targets": [
+        {
+          "kind": "documentation",
+          "path": "CHANGELOG.md"
+        }
+      ]
+    },
+    {
+      "python_path": "docs/runtime/millrace-cli-reference.md",
+      "surface": "docs_operator_skill_release_evidence",
+      "change_role": "docs_runtime_millrace_cli_reference_md",
+      "rust_targets": [
+        {
+          "kind": "documentation",
+          "path": "docs/runtime/millrace-cli-reference.md"
+        }
+      ]
+    },
+    {
+      "python_path": "docs/runtime/millrace-compiler-and-frozen-plans.md",
+      "surface": "docs_operator_skill_release_evidence",
+      "change_role": "docs_runtime_millrace_compiler_and_frozen_plans_md",
+      "rust_targets": [
+        {
+          "kind": "documentation",
+          "path": "docs/runtime/millrace-compiler-and-frozen-plans.md"
+        }
+      ]
+    },
+    {
+      "python_path": "docs/runtime/millrace-execution-capabilities.md",
+      "surface": "docs_operator_skill_release_evidence",
+      "change_role": "docs_runtime_millrace_execution_capabilities_md",
+      "rust_targets": [
+        {
+          "kind": "documentation",
+          "path": "docs/runtime/millrace-execution-capabilities.md"
+        }
+      ]
+    },
+    {
+      "python_path": "docs/runtime/millrace-runner-architecture.md",
+      "surface": "docs_operator_skill_release_evidence",
+      "change_role": "docs_runtime_millrace_runner_architecture_md",
+      "rust_targets": [
+        {
+          "kind": "documentation",
+          "path": "docs/runtime/millrace-runner-architecture.md"
+        }
+      ]
+    },
+    {
+      "python_path": "docs/runtime/millrace-runtime-architecture.md",
+      "surface": "docs_operator_skill_release_evidence",
+      "change_role": "docs_runtime_millrace_runtime_architecture_md",
+      "rust_targets": [
+        {
+          "kind": "documentation",
+          "path": "docs/runtime/millrace-runtime-architecture.md"
+        }
+      ]
+    },
+    {
+      "python_path": "docs/skills/millrace-ops-agent-manual/SKILL.md",
+      "surface": "docs_operator_skill_release_evidence",
+      "change_role": "docs_skills_millrace_ops_agent_manual_skill_md",
+      "rust_targets": [
+        {
+          "kind": "documentation",
+          "path": "docs/source-package-map.md"
+        },
+        {
+          "kind": "documentation",
+          "path": "millrace-agents/outline.md"
+        }
+      ]
+    },
+    {
+      "python_path": "docs/source-package-map.md",
+      "surface": "docs_operator_skill_release_evidence",
+      "change_role": "docs_source_package_map_md",
+      "rust_targets": [
+        {
+          "kind": "documentation",
+          "path": "docs/source-package-map.md"
+        }
+      ]
+    },
+    {
+      "python_path": "packages/millrace-web/CHANGELOG.md",
+      "surface": "web_version_package_evidence",
+      "change_role": "packages_millrace_web_changelog_md",
+      "rust_targets": [
+        {
+          "kind": "package_evidence",
+          "path": "tests/fixtures/cli_parity/web_dashboard_parity_decision.json"
+        },
+        {
+          "kind": "unsupported_gap_evidence",
+          "path": "docs/source-package-map.md"
+        }
+      ]
+    },
+    {
+      "python_path": "packages/millrace-web/pyproject.toml",
+      "surface": "web_version_package_evidence",
+      "change_role": "packages_millrace_web_pyproject_toml",
+      "rust_targets": [
+        {
+          "kind": "package_evidence",
+          "path": "tests/fixtures/cli_parity/web_dashboard_parity_decision.json"
+        },
+        {
+          "kind": "unsupported_gap_evidence",
+          "path": "docs/source-package-map.md"
+        }
+      ]
+    },
+    {
+      "python_path": "packages/millrace-web/src/millrace_web/__init__.py",
+      "surface": "web_version_package_evidence",
+      "change_role": "packages_millrace_web_src_millrace_web_init_py",
+      "rust_targets": [
+        {
+          "kind": "package_evidence",
+          "path": "tests/fixtures/cli_parity/web_dashboard_parity_decision.json"
+        },
+        {
+          "kind": "unsupported_gap_evidence",
+          "path": "docs/source-package-map.md"
+        }
+      ]
+    },
+    {
+      "python_path": "packages/millrace-web/src/millrace_web/app.py",
+      "surface": "web_version_package_evidence",
+      "change_role": "packages_millrace_web_src_millrace_web_app_py",
+      "rust_targets": [
+        {
+          "kind": "package_evidence",
+          "path": "tests/fixtures/cli_parity/web_dashboard_parity_decision.json"
+        },
+        {
+          "kind": "unsupported_gap_evidence",
+          "path": "docs/source-package-map.md"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/__init__.py",
+      "surface": "release_validation_guardrails",
+      "change_role": "src_millrace_ai_init_py",
+      "rust_targets": [
+        {
+          "kind": "package_evidence",
+          "path": "Cargo.toml"
+        },
+        {
+          "kind": "package_evidence",
+          "path": "Cargo.lock"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/architecture/loop_graphs.py",
+      "surface": "compiled_capability_grants",
+      "change_role": "src_millrace_ai_architecture_loop_graphs_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/compiler/contracts.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/compiler/materialization.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/compiler/graph_exports.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/architecture/materialization.py",
+      "surface": "compiled_capability_grants",
+      "change_role": "src_millrace_ai_architecture_materialization_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/compiler/contracts.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/compiler/materialization.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/compiler/graph_exports.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/architecture/stage_kinds.py",
+      "surface": "compiled_capability_grants",
+      "change_role": "src_millrace_ai_architecture_stage_kinds_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/compiler/contracts.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/compiler/materialization.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/compiler/graph_exports.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/cli/app.py",
+      "surface": "approval_cli_runtime_control",
+      "change_role": "src_millrace_ai_cli_app_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/cli/mod.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/cli/parser.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/cli/render.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/cli/commands/approvals.py",
+      "surface": "approval_cli_runtime_control",
+      "change_role": "src_millrace_ai_cli_commands_approvals_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/cli/mod.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/cli/parser.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/cli/render.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/cli/compile_view.py",
+      "surface": "inspection_prompt_artifacts",
+      "change_role": "src_millrace_ai_cli_compile_view_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/cli/read_only.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/cli/render.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runners/prompting.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/cli/config_view.py",
+      "surface": "inspection_prompt_artifacts",
+      "change_role": "src_millrace_ai_cli_config_view_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/cli/read_only.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/cli/render.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runners/prompting.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/cli/formatting.py",
+      "surface": "inspection_prompt_artifacts",
+      "change_role": "src_millrace_ai_cli_formatting_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/cli/read_only.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/cli/render.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runners/prompting.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/compilation/capabilities.py",
+      "surface": "compiled_capability_grants",
+      "change_role": "src_millrace_ai_compilation_capabilities_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/compiler/contracts.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/compiler/materialization.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/compiler/graph_exports.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/compilation/graph_materialization.py",
+      "surface": "compiled_capability_grants",
+      "change_role": "src_millrace_ai_compilation_graph_materialization_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/compiler/contracts.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/compiler/materialization.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/compiler/graph_exports.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/compilation/node_materialization.py",
+      "surface": "compiled_capability_grants",
+      "change_role": "src_millrace_ai_compilation_node_materialization_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/compiler/contracts.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/compiler/materialization.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/compiler/graph_exports.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/compilation/workspace_plan.py",
+      "surface": "compiled_capability_grants",
+      "change_role": "src_millrace_ai_compilation_workspace_plan_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/compiler/contracts.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/compiler/materialization.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/compiler/graph_exports.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/config/__init__.py",
+      "surface": "execution_capability_config",
+      "change_role": "src_millrace_ai_config_init_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/runtime/startup.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/cli/read_only.rs"
+        },
+        {
+          "kind": "test",
+          "path": "tests/runtime_daemon.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/config/boundaries.py",
+      "surface": "execution_capability_config",
+      "change_role": "src_millrace_ai_config_boundaries_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/runtime/startup.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/cli/read_only.rs"
+        },
+        {
+          "kind": "test",
+          "path": "tests/runtime_daemon.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/config/models.py",
+      "surface": "execution_capability_config",
+      "change_role": "src_millrace_ai_config_models_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/runtime/startup.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/cli/read_only.rs"
+        },
+        {
+          "kind": "test",
+          "path": "tests/runtime_daemon.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/contracts/__init__.py",
+      "surface": "execution_capability_contracts",
+      "change_role": "src_millrace_ai_contracts_init_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/lib.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/contracts/mod.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/contracts/enums.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/contracts/capabilities.py",
+      "surface": "execution_capability_contracts",
+      "change_role": "src_millrace_ai_contracts_capabilities_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/lib.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/contracts/mod.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/contracts/enums.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/contracts/enums.py",
+      "surface": "execution_capability_contracts",
+      "change_role": "src_millrace_ai_contracts_enums_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/lib.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/contracts/mod.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/contracts/enums.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/contracts/mailbox.py",
+      "surface": "execution_capability_contracts",
+      "change_role": "src_millrace_ai_contracts_mailbox_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/lib.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/contracts/mod.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/contracts/enums.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/contracts/modes.py",
+      "surface": "compiled_capability_grants",
+      "change_role": "src_millrace_ai_contracts_modes_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/compiler/contracts.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/compiler/materialization.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/compiler/graph_exports.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/runners/adapters/codex_cli.py",
+      "surface": "runner_support_and_evidence",
+      "change_role": "src_millrace_ai_runners_adapters_codex_cli_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/runners/contracts.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runners/dispatcher.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runners/normalization.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/runners/adapters/pi_rpc.py",
+      "surface": "runner_support_and_evidence",
+      "change_role": "src_millrace_ai_runners_adapters_pi_rpc_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/runners/contracts.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runners/dispatcher.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runners/normalization.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/runners/base.py",
+      "surface": "runner_support_and_evidence",
+      "change_role": "src_millrace_ai_runners_base_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/runners/contracts.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runners/dispatcher.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runners/normalization.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/runners/contracts.py",
+      "surface": "runner_support_and_evidence",
+      "change_role": "src_millrace_ai_runners_contracts_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/runners/contracts.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runners/dispatcher.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runners/normalization.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/runners/dispatcher.py",
+      "surface": "runner_support_and_evidence",
+      "change_role": "src_millrace_ai_runners_dispatcher_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/runners/contracts.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runners/dispatcher.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runners/normalization.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/runners/normalization.py",
+      "surface": "runner_support_and_evidence",
+      "change_role": "src_millrace_ai_runners_normalization_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/runners/contracts.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runners/dispatcher.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runners/normalization.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/runners/requests.py",
+      "surface": "runner_support_and_evidence",
+      "change_role": "src_millrace_ai_runners_requests_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/runners/contracts.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runners/dispatcher.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runners/normalization.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/runtime/approvals.py",
+      "surface": "approval_cli_runtime_control",
+      "change_role": "src_millrace_ai_runtime_approvals_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/cli/mod.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/cli/parser.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/cli/render.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/runtime/capability_gates.py",
+      "surface": "runtime_capability_gates",
+      "change_role": "src_millrace_ai_runtime_capability_gates_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/runtime/approvals.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runtime/capability_gates.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runtime/supervisor.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/runtime/control.py",
+      "surface": "approval_cli_runtime_control",
+      "change_role": "src_millrace_ai_runtime_control_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/cli/mod.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/cli/parser.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/cli/render.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/runtime/control_mutations.py",
+      "surface": "approval_cli_runtime_control",
+      "change_role": "src_millrace_ai_runtime_control_mutations_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/cli/mod.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/cli/parser.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/cli/render.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/runtime/inspection.py",
+      "surface": "inspection_prompt_artifacts",
+      "change_role": "src_millrace_ai_runtime_inspection_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/cli/read_only.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/cli/render.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runners/prompting.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/runtime/mailbox_intake.py",
+      "surface": "approval_cli_runtime_control",
+      "change_role": "src_millrace_ai_runtime_mailbox_intake_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/cli/mod.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/cli/parser.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/cli/render.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/runtime/stage_requests.py",
+      "surface": "runtime_capability_gates",
+      "change_role": "src_millrace_ai_runtime_stage_requests_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/runtime/approvals.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runtime/capability_gates.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runtime/supervisor.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/runtime/supervisor.py",
+      "surface": "runtime_capability_gates",
+      "change_role": "src_millrace_ai_runtime_supervisor_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/runtime/approvals.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runtime/capability_gates.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runtime/supervisor.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "src/millrace_ai/runtime/tick_cycle.py",
+      "surface": "runtime_capability_gates",
+      "change_role": "src_millrace_ai_runtime_tick_cycle_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/runtime/approvals.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runtime/capability_gates.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runtime/supervisor.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "tests/cli/test_cli.py",
+      "surface": "approval_cli_runtime_control",
+      "change_role": "tests_cli_test_cli_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/cli/mod.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/cli/parser.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/cli/render.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "tests/compilation/test_capability_grants.py",
+      "surface": "compiled_capability_grants",
+      "change_role": "tests_compilation_test_capability_grants_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/compiler/contracts.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/compiler/materialization.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/compiler/graph_exports.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "tests/config/test_config.py",
+      "surface": "execution_capability_config",
+      "change_role": "tests_config_test_config_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/runtime/startup.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/cli/read_only.rs"
+        },
+        {
+          "kind": "test",
+          "path": "tests/runtime_daemon.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "tests/contracts/test_capabilities.py",
+      "surface": "execution_capability_contracts",
+      "change_role": "tests_contracts_test_capabilities_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/lib.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/contracts/mod.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/contracts/enums.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "tests/runners/test_capability_support.py",
+      "surface": "runner_support_and_evidence",
+      "change_role": "tests_runners_test_capability_support_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/runners/contracts.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runners/dispatcher.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runners/normalization.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "tests/runners/test_runner.py",
+      "surface": "runner_support_and_evidence",
+      "change_role": "tests_runners_test_runner_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/runners/contracts.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runners/dispatcher.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runners/normalization.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "tests/runtime/test_capability_gates.py",
+      "surface": "runtime_capability_gates",
+      "change_role": "tests_runtime_test_capability_gates_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/runtime/approvals.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runtime/capability_gates.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runtime/supervisor.rs"
+        }
+      ]
+    },
+    {
+      "python_path": "tests/runtime/test_run_inspection.py",
+      "surface": "inspection_prompt_artifacts",
+      "change_role": "tests_runtime_test_run_inspection_py",
+      "rust_targets": [
+        {
+          "kind": "implementation",
+          "path": "src/cli/read_only.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/cli/render.rs"
+        },
+        {
+          "kind": "implementation",
+          "path": "src/runners/prompting.rs"
+        }
+      ]
+    }
+  ],
+  "non_live_guarantees": [
+    "no live Python execution beyond checked-out ../millrace-py diff inspection",
+    "no live Codex runner",
+    "no live Pi runner",
+    "no network",
+    "no credentials",
+    "no web server",
+    "no remote skill installation",
+    "no release upload",
+    "no publishing"
+  ]
+}

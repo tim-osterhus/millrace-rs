@@ -102,6 +102,14 @@ Rust contract/test targets. It is target-facing guardrail evidence for the
 v0.18.6 operator intervention and durable idea-source auto-port lineage and
 does not require live Python execution, network, credentials, Codex, Pi, a web
 server, or release upload.
+`auto_port_v0_19_0_runtime_contract_scout.json` pins the Python
+`v0.18.6..v0.19.0` execution capability contracts, capability config,
+compiled-grant materialization, approval storage/mailbox commands,
+pre-dispatch capability gates, runner support/evidence metadata, prompt
+context, and inspection output evidence plus expected Rust contract/test
+targets. It is target-facing guardrail evidence for the v0.19.0 capability
+governance auto-port lineage and does not require live Python execution,
+network, credentials, Codex, Pi, a web server, or release upload.
 The Rust `0.3.5` release evidence in
 `tests/fixtures/cli_parity/auto_port_v0_18_6_release_parity_evidence.json`
 uses this runtime scout and `mailbox_intervention_payloads.json` as
@@ -110,6 +118,12 @@ direct and mailbox-routed runtime-control behavior, daemon/read-only status
 surfaces, durable watcher idea-source behavior, closure source preference, and
 missing root idea source recovery evidence are shipped with the crate test
 evidence.
+The Rust `0.4.0` release evidence in
+`tests/fixtures/cli_parity/auto_port_v0_19_0_release_parity_evidence.json`
+uses the v0.19.0 runtime scout as package-readiness proof that capability
+contracts, approval payloads, compiled grants, capability gates, approval
+storage/mailbox decisions, runner support/evidence metadata, prompt context,
+and run-inspection output evidence are shipped with the crate test evidence.
 
 Regenerate them from the repository root with:
 

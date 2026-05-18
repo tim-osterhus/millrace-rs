@@ -132,6 +132,11 @@ fn export_graph(
                 timeout_seconds: node.timeout_seconds,
                 allowed_result_classes_by_outcome: node.allowed_result_classes_by_outcome.clone(),
                 declared_output_artifacts: node.declared_output_artifacts.clone(),
+                execution_capability_grants: node.execution_capability_grants.clone(),
+                execution_capability_warnings: node.execution_capability_warnings.clone(),
+                execution_capability_policy_fingerprint: node
+                    .execution_capability_policy_fingerprint
+                    .clone(),
             })
             .collect(),
         edges: graph

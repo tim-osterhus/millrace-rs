@@ -8,14 +8,19 @@ use std::{
 };
 
 use millrace_ai::contracts::{
-    ActiveRunRequestKind, ActiveRunState, ClosureTargetState, Plane, RuntimeMode, StageName,
-    Timestamp, WorkItemKind,
+    ActiveRunRequestKind, ActiveRunState, ApprovalPolicyRef, CapabilityDecisionState,
+    CapabilityEnforcementMode, CapabilityEvidenceStatus, CapabilityScope, ClosureTargetState,
+    ExecutionCapabilityGrant, Plane, RuntimeMode, StageName, Timestamp, WorkItemKind,
 };
 use millrace_ai::workspace::{
     BaselineManifestEntry, QueueStore, RuntimeOwnershipLockOptions,
     acquire_runtime_ownership_lock_with_options, build_baseline_manifest, load_baseline_manifest,
     load_snapshot, save_closure_target_state, save_snapshot, workspace_paths,
     write_baseline_manifest,
+};
+use millrace_ai::{
+    ExecutionCapabilityApprovalRequest, ensure_execution_capability_approval,
+    list_execution_capability_approvals,
 };
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -63,6 +68,55 @@ fn active_lock_options(session_id: &str) -> RuntimeOwnershipLockOptions {
 
 fn timestamp(value: &str) -> Timestamp {
     Timestamp::parse("test timestamp", value).unwrap()
+}
+
+fn approval_grant() -> ExecutionCapabilityGrant {
+    ExecutionCapabilityGrant {
+        grant_id: "grant-package-install".to_owned(),
+        request_id: "request-package-install".to_owned(),
+        capability_id: "package.install".to_owned(),
+        access: "execute".to_owned(),
+        scope: CapabilityScope {
+            kind: "package_manager".to_owned(),
+            value: "cargo".to_owned(),
+            metadata: Default::default(),
+        },
+        required: true,
+        decision_state: CapabilityDecisionState::ApprovalRequired,
+        enforcement_mode: CapabilityEnforcementMode::NotApplicable,
+        approval_policy_ref: Some(ApprovalPolicyRef {
+            policy_id: "operator.package_install".to_owned(),
+            gate_scope: "stage".to_owned(),
+            expiration_seconds: None,
+            required_decision: "approved".to_owned(),
+        }),
+        evidence_requirements: Vec::new(),
+        evidence_status: CapabilityEvidenceStatus::NotRequired,
+        decision_reason: "package installs require operator approval".to_owned(),
+        resolved_by: "test".to_owned(),
+        fingerprint: String::new(),
+    }
+}
+
+fn create_pending_approval(paths: &millrace_ai::WorkspacePaths, request_id: &str) -> String {
+    let grant = approval_grant();
+    ensure_execution_capability_approval(
+        paths,
+        ExecutionCapabilityApprovalRequest {
+            request_id,
+            run_id: "run-approval",
+            plane: Plane::Execution,
+            node_id: "builder",
+            stage_kind_id: "builder",
+            work_item_kind: Some(WorkItemKind::Task),
+            work_item_id: Some("task-approval"),
+            grant: &grant,
+            now: &timestamp("2026-04-15T00:00:00Z"),
+            requested_by: "runtime",
+        },
+    )
+    .unwrap()
+    .approval_id
 }
 
 fn closure_target_state(root_spec_id: &str, root_idea_id: &str) -> ClosureTargetState {
@@ -399,7 +453,7 @@ fn rust_version_command_has_millrace_shape() {
     let version_line =
         parse_version_line(output.stdout_trimmed()).expect("parse Rust version line");
     assert_eq!(version_line.binary_name, "millrace");
-    assert_eq!(version_line.version, "0.3.5");
+    assert_eq!(version_line.version, "0.4.0");
     assert_eq!(version_line.version, env!("CARGO_PKG_VERSION"));
 }
 
@@ -1922,7 +1976,21 @@ fn rust_crate_release_metadata_and_package_include_rules_are_0_3_4() {
 
 #[test]
 fn rust_crate_release_metadata_and_package_include_rules_are_0_3_5() {
-    assert_eq!(env!("CARGO_PKG_VERSION"), "0.3.5");
+    let fixture: Value = serde_json::from_str(
+        &read_fixture("cli_parity/auto_port_v0_18_6_release_parity_evidence.json")
+            .expect("read v0.18.6 release parity evidence fixture"),
+    )
+    .expect("parse v0.18.6 release parity evidence fixture");
+    assert_eq!(fixture["rust_release"]["crate_version"], "0.3.5");
+    assert_eq!(
+        fixture["rust_release"]["version_command_expectation"],
+        "millrace 0.3.5"
+    );
+}
+
+#[test]
+fn rust_crate_release_metadata_and_package_include_rules_are_0_4_0() {
+    assert_eq!(env!("CARGO_PKG_VERSION"), "0.4.0");
 
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let manifest: toml::Value =
@@ -1934,7 +2002,7 @@ fn rust_crate_release_metadata_and_package_include_rules_are_0_3_5() {
         .expect("package table");
     assert_eq!(
         package.get("version").and_then(toml::Value::as_str),
-        Some("0.3.5")
+        Some("0.4.0")
     );
     let include = package
         .get("include")
@@ -1977,8 +2045,8 @@ fn rust_crate_release_metadata_and_package_include_rules_are_0_3_5() {
 
     let lockfile = fs::read_to_string(repo_root.join("Cargo.lock")).expect("read Cargo.lock");
     assert!(
-        lockfile.contains("[[package]]\nname = \"millrace-ai\"\nversion = \"0.3.5\"\n"),
-        "Cargo.lock package metadata must track the 0.3.5 crate version"
+        lockfile.contains("[[package]]\nname = \"millrace-ai\"\nversion = \"0.4.0\"\n"),
+        "Cargo.lock package metadata must track the 0.4.0 crate version"
     );
 }
 
@@ -5162,18 +5230,18 @@ fn committed_auto_port_v0_18_6_parity_fixture_covers_operator_intervention_durab
         &fs::read_to_string(state_path).expect("read v0.18.6 auto-port state"),
     )
     .expect("parse v0.18.6 auto-port state");
-    assert_eq!(state["last_seen_python_version"], "v0.18.6");
-    assert_eq!(state["active_python_version"], "v0.18.6");
-    assert_eq!(state["last_ported_python_version"], "v0.18.4");
-    assert_eq!(state["last_released_rust_version"], "0.3.4");
-    assert_eq!(state["active_rust_version"], "0.3.5");
+    assert_eq!(state["last_seen_python_version"], "v0.19.0");
+    assert_eq!(state["active_python_version"], "v0.19.0");
+    assert_eq!(state["last_ported_python_version"], "v0.18.6");
+    assert_eq!(state["last_released_rust_version"], "0.3.5");
+    assert_eq!(state["active_rust_version"], "0.4.0");
     assert_ne!(
         state["active_python_version"], state["last_ported_python_version"],
-        "auto-port state still treats Python v0.18.4 as current"
+        "auto-port state still treats Python v0.18.6 as current"
     );
     assert_ne!(
         state["active_rust_version"], state["last_released_rust_version"],
-        "auto-port state still treats Rust 0.3.4 as the target"
+        "auto-port state still treats Rust 0.3.5 as the target"
     );
 
     let required_surface_names: BTreeSet<_> = fixture["required_surfaces"]
@@ -5804,6 +5872,863 @@ fn committed_auto_port_v0_18_6_parity_fixture_covers_operator_intervention_durab
             "missing v0.18.6 non-live guarantee {guarantee}"
         );
     }
+}
+
+#[test]
+fn committed_auto_port_v0_19_0_parity_fixture_covers_capability_governance_release_guardrails() {
+    let fixture: Value = serde_json::from_str(
+        &read_fixture("cli_parity/auto_port_v0_19_0_parity_evidence.json")
+            .expect("read v0.19.0 auto-port parity evidence fixture"),
+    )
+    .expect("parse v0.19.0 auto-port parity evidence fixture");
+    assert_eq!(fixture["kind"], "auto_port_v0_19_0_parity_evidence");
+    assert_eq!(fixture["schema_version"], "1.0");
+    assert_eq!(fixture["python_reference"]["previous_tag"], "v0.18.6");
+    assert_eq!(
+        fixture["python_reference"]["previous_tag_object"],
+        "85d91683f3be3dfa6f2983d3e397ed373f12edba"
+    );
+    assert_eq!(
+        fixture["python_reference"]["previous_peeled_commit"],
+        "63e623bc6fcfcf74ae0cc2ce5605a12ae4179873"
+    );
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.19.0");
+    assert_eq!(
+        fixture["python_reference"]["target_tag_object"],
+        "11c45b03428226f04f56fe078e083bea2464e6b0"
+    );
+    assert_eq!(
+        fixture["python_reference"]["target_peeled_commit"],
+        "efb9c5881f524d23dcb78aecfc96fdf7cda9d26f"
+    );
+    assert_eq!(
+        fixture["python_reference"]["diff_range"],
+        "v0.18.6..v0.19.0"
+    );
+    assert_eq!(
+        fixture["rust_reference"]["current_repo_crate_version"],
+        "0.3.5"
+    );
+    assert_eq!(fixture["rust_reference"]["planned_crate_version"], "0.4.0");
+    assert_ne!(
+        fixture["rust_reference"]["planned_crate_version"],
+        fixture["rust_reference"]["current_repo_crate_version"],
+        "v0.19.0 parity fixture still treats Rust 0.3.5 as the planned target"
+    );
+
+    let state_path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("millrace-agents/auto-port/state.json");
+    let state: Value = serde_json::from_str(
+        &fs::read_to_string(state_path).expect("read v0.19.0 auto-port state"),
+    )
+    .expect("parse v0.19.0 auto-port state");
+    assert_eq!(state["last_seen_python_version"], "v0.19.0");
+    assert_eq!(state["active_python_version"], "v0.19.0");
+    assert_eq!(state["last_ported_python_version"], "v0.18.6");
+    assert_eq!(state["last_released_rust_version"], "0.3.5");
+    assert_eq!(state["active_rust_version"], "0.4.0");
+    assert_ne!(
+        state["active_python_version"], state["last_ported_python_version"],
+        "auto-port state still treats Python v0.18.6 as current"
+    );
+    assert_ne!(
+        state["active_rust_version"], state["last_released_rust_version"],
+        "auto-port state still treats Rust 0.3.5 as the target"
+    );
+
+    let required_surface_names: BTreeSet<_> = fixture["required_surfaces"]
+        .as_array()
+        .expect("required surfaces are present")
+        .iter()
+        .map(|surface| surface.as_str().expect("surface name"))
+        .collect();
+    assert_eq!(
+        required_surface_names,
+        BTreeSet::from([
+            "execution_capability_contracts",
+            "execution_capability_config",
+            "compiled_capability_grants",
+            "runtime_capability_gates",
+            "approval_cli_runtime_control",
+            "runner_support_and_evidence",
+            "inspection_prompt_artifacts",
+            "docs_operator_skill_release_evidence",
+            "web_version_package_evidence",
+            "source_reference_guardrails",
+            "release_validation_guardrails",
+        ])
+    );
+
+    let required_axis_names: BTreeSet<_> = fixture["required_coverage_axes"]
+        .as_array()
+        .expect("required coverage axes are present")
+        .iter()
+        .map(|axis| axis.as_str().expect("coverage axis"))
+        .collect();
+    for axis in [
+        "python_diff_pin",
+        "rust_version_transition_pin",
+        "auto_port_state_currentness",
+        "generated_scout_changed_paths",
+        "capability_contract_models",
+        "capability_id_aliases",
+        "capability_scope_validation",
+        "capability_grant_fingerprints",
+        "mailbox_approval_command_values",
+        "approval_payload_validation",
+        "execution_capability_config_keys",
+        "recompile_boundary_config_keys",
+        "default_grants",
+        "policy_override_resolution",
+        "grant_summaries",
+        "strict_required_advisory_failure",
+        "compiled_plan_grants",
+        "stage_request_capability_context",
+        "prompt_context_capability_context",
+        "capability_gate_artifacts",
+        "capability_gate_events",
+        "gate_failure_classes",
+        "approval_storage_pending_resolved",
+        "approval_cli_commands",
+        "runtime_control_approval_routing",
+        "daemon_mailbox_approval_processing",
+        "runner_support_decisions",
+        "runner_artifact_capability_metadata",
+        "missing_capability_evidence_normalization",
+        "runs_show_capability_output",
+        "config_show_execution_capabilities",
+        "compile_show_execution_capabilities",
+        "docs_source_refs",
+        "operator_skill_source_refs",
+        "web_version_package_evidence",
+        "expected_rust_target_mapping",
+        "stale_test_reference_guardrails",
+        "release_check_evidence",
+        "no_live_external_dependencies",
+    ] {
+        assert!(
+            required_axis_names.contains(axis),
+            "missing v0.19.0 parity coverage axis {axis}"
+        );
+    }
+
+    let allowed_rust_targets = BTreeSet::from([
+        "Cargo.toml",
+        "Cargo.lock",
+        "CHANGELOG.md",
+        "README.md",
+        "ROADMAP.md",
+        "docs/rust-port-roadmap.md",
+        "docs/source-package-map.md",
+        "docs/testing.md",
+        "docs/runtime/README.md",
+        "docs/runtime/millrace-cli-reference.md",
+        "docs/runtime/millrace-compiler-and-frozen-plans.md",
+        "docs/runtime/millrace-execution-capabilities.md",
+        "docs/runtime/millrace-runner-architecture.md",
+        "docs/runtime/millrace-runtime-architecture.md",
+        "millrace-agents/outline.md",
+        "millrace-agents/auto-port/generated/auto-port-python-v0.18.6-to-v0.19.0-rust-0.4.0.md",
+        "millrace-agents/auto-port/state.json",
+        "src/lib.rs",
+        "src/contracts/mod.rs",
+        "src/contracts/enums.rs",
+        "src/contracts/runtime_json.rs",
+        "src/contracts/capabilities.rs",
+        "src/compiler/contracts.rs",
+        "src/compiler/materialization.rs",
+        "src/compiler/graph_exports.rs",
+        "src/compiler/persistence.rs",
+        "src/runtime/startup.rs",
+        "src/runtime/supervisor.rs",
+        "src/runtime/tick.rs",
+        "src/runtime/approvals.rs",
+        "src/runtime/capability_gates.rs",
+        "src/workspace/runtime_control.rs",
+        "src/cli/mod.rs",
+        "src/cli/parser.rs",
+        "src/cli/read_only.rs",
+        "src/cli/render.rs",
+        "src/runners/contracts.rs",
+        "src/runners/dispatcher.rs",
+        "src/runners/normalization.rs",
+        "src/runners/prompting.rs",
+        "src/runners/artifacts.rs",
+        "src/runners/codex_cli.rs",
+        "src/runners/pi_rpc.rs",
+        "tests/contracts_runtime_json.rs",
+        "tests/contracts_public_exports.rs",
+        "tests/contracts_capabilities.rs",
+        "tests/compiler_contracts.rs",
+        "tests/compiler_materialization.rs",
+        "tests/compiler_persistence.rs",
+        "tests/compiler_capability_grants.rs",
+        "tests/runtime_serial.rs",
+        "tests/runtime_daemon.rs",
+        "tests/runtime_capability_gates.rs",
+        "tests/runners_normalization.rs",
+        "tests/runners_codex_cli.rs",
+        "tests/runners_pi_rpc.rs",
+        "tests/runners_capability_support.rs",
+        "tests/parity_cli.rs",
+        "tests/workspace_runtime_control.rs",
+        "tests/fixtures/cli_parity/auto_port_v0_19_0_parity_evidence.json",
+        "tests/fixtures/cli_parity/web_dashboard_parity_decision.json",
+        "tests/fixtures/runtime_json/auto_port_v0_19_0_runtime_contract_scout.json",
+    ]);
+    let planned_new_rust_targets = BTreeSet::from([
+        "docs/runtime/millrace-execution-capabilities.md",
+        "docs/runtime/millrace-runner-architecture.md",
+        "src/contracts/capabilities.rs",
+        "src/runtime/approvals.rs",
+        "src/runtime/capability_gates.rs",
+        "tests/contracts_capabilities.rs",
+        "tests/compiler_capability_grants.rs",
+        "tests/runtime_capability_gates.rs",
+        "tests/runners_capability_support.rs",
+    ]);
+
+    let mut referenced_sources = BTreeSet::new();
+    let mut referenced_targets = BTreeSet::new();
+    let mut covered_axes = BTreeSet::new();
+    for surface in fixture["source_reference_surfaces"]
+        .as_array()
+        .expect("source reference surfaces are present")
+    {
+        let surface_name = surface["surface"].as_str().expect("source surface");
+        assert!(
+            required_surface_names.contains(surface_name),
+            "v0.19.0 source surface references unknown surface {surface_name}"
+        );
+        for axis in surface["coverage"].as_array().expect("coverage array") {
+            let axis = axis.as_str().expect("coverage axis");
+            assert!(
+                required_axis_names.contains(axis),
+                "v0.19.0 source surface references unknown coverage axis {axis}"
+            );
+            covered_axes.insert(axis);
+        }
+        for source in surface["python_sources"]
+            .as_array()
+            .expect("python_sources array")
+        {
+            referenced_sources.insert(source.as_str().expect("Python source path").to_owned());
+        }
+        for target in surface["expected_rust_targets"]
+            .as_array()
+            .expect("expected_rust_targets array")
+        {
+            let target_path = target.as_str().expect("Rust target path");
+            assert!(
+                allowed_rust_targets.contains(target_path),
+                "v0.19.0 source surface references unknown Rust target path {target_path}"
+            );
+            if !planned_new_rust_targets.contains(target_path) {
+                assert_repo_relative_target_exists(target_path, "v0.19.0 source-reference surface");
+            }
+            referenced_targets.insert(target_path.to_owned());
+        }
+    }
+    for axis in &required_axis_names {
+        assert!(
+            covered_axes.contains(axis),
+            "source-reference surfaces do not cover v0.19.0 axis {axis}"
+        );
+    }
+
+    let generated_scout_path = Path::new(env!("CARGO_MANIFEST_DIR")).join(
+        fixture["python_reference"]["generated_scout"]
+            .as_str()
+            .expect("generated scout path"),
+    );
+    let generated_scout =
+        fs::read_to_string(generated_scout_path).expect("read v0.19.0 generated scout");
+    let mut generated_changed_paths = BTreeSet::new();
+    let mut in_changed_paths = false;
+    for line in generated_scout.lines() {
+        if line == "Changed Python paths:" {
+            in_changed_paths = true;
+            continue;
+        }
+        if !in_changed_paths {
+            continue;
+        }
+        if line == "Diff stat:" {
+            break;
+        }
+        if let Some(path) = line
+            .trim()
+            .strip_prefix("- `")
+            .and_then(|rest| rest.strip_suffix('`'))
+        {
+            generated_changed_paths.insert(path);
+        }
+    }
+    assert_eq!(
+        generated_changed_paths.len(),
+        61,
+        "v0.19.0 generated scout should pin the 61-path Python diff"
+    );
+
+    for source_path in generated_changed_paths
+        .iter()
+        .map(|path| format!("../millrace-py/{path}"))
+    {
+        assert!(
+            referenced_sources.contains(&source_path),
+            "missing v0.19.0 Python source reference {source_path}"
+        );
+    }
+    for target_path in [
+        "src/contracts/capabilities.rs",
+        "src/contracts/runtime_json.rs",
+        "src/compiler/materialization.rs",
+        "src/runtime/capability_gates.rs",
+        "src/runtime/approvals.rs",
+        "src/workspace/runtime_control.rs",
+        "src/runners/normalization.rs",
+        "src/runners/artifacts.rs",
+        "src/cli/read_only.rs",
+        "tests/contracts_runtime_json.rs",
+        "tests/contracts_public_exports.rs",
+        "tests/compiler_contracts.rs",
+        "tests/compiler_materialization.rs",
+        "tests/runtime_serial.rs",
+        "tests/runtime_daemon.rs",
+        "tests/runners_normalization.rs",
+        "tests/fixtures/runtime_json/auto_port_v0_19_0_runtime_contract_scout.json",
+        "tests/fixtures/cli_parity/web_dashboard_parity_decision.json",
+    ] {
+        assert!(
+            referenced_targets.contains(target_path),
+            "missing v0.19.0 expected Rust target {target_path}"
+        );
+    }
+
+    let changed_mappings = fixture["changed_path_mappings"]
+        .as_array()
+        .expect("changed path mappings are present");
+    let mapped_changed_paths: BTreeSet<_> = changed_mappings
+        .iter()
+        .map(|mapping| mapping["python_path"].as_str().expect("Python path"))
+        .collect();
+    assert_eq!(
+        mapped_changed_paths.len(),
+        changed_mappings.len(),
+        "v0.19.0 path mappings must not contain duplicate Python paths"
+    );
+    assert_eq!(
+        mapped_changed_paths, generated_changed_paths,
+        "v0.19.0 parity fixture must map every generated scout path exactly"
+    );
+
+    let allowed_target_kinds = BTreeSet::from([
+        "implementation",
+        "test",
+        "documentation",
+        "fixture",
+        "package_evidence",
+        "unsupported_gap_evidence",
+        "reference_evidence",
+    ]);
+    let mut covered_mapping_surfaces = BTreeSet::new();
+    for mapping in changed_mappings {
+        let python_path = mapping["python_path"].as_str().expect("Python path");
+        let surface_name = mapping["surface"].as_str().expect("mapping surface");
+        assert!(
+            required_surface_names.contains(surface_name),
+            "v0.19.0 path mapping uses unknown surface {surface_name}"
+        );
+        covered_mapping_surfaces.insert(surface_name);
+        assert!(
+            mapping["change_role"]
+                .as_str()
+                .is_some_and(is_snake_case_rust_test_name),
+            "v0.19.0 path mapping has malformed change_role: {mapping:?}"
+        );
+        let rust_targets = mapping["rust_targets"]
+            .as_array()
+            .expect("rust target mappings are present");
+        assert!(
+            !rust_targets.is_empty(),
+            "v0.19.0 path mapping has no Rust target: {mapping:?}"
+        );
+        let mut has_package_or_gap_evidence = false;
+        for target in rust_targets {
+            let kind = target["kind"].as_str().expect("Rust target kind");
+            assert!(
+                allowed_target_kinds.contains(kind),
+                "v0.19.0 path mapping uses unknown Rust target kind {kind}"
+            );
+            let path = target["path"].as_str().expect("Rust target path");
+            assert!(
+                allowed_rust_targets.contains(path),
+                "v0.19.0 path mapping uses unknown Rust target path {path}"
+            );
+            if !is_evidence_only_target_kind(kind) && !planned_new_rust_targets.contains(path) {
+                assert_repo_relative_target_exists(path, "v0.19.0 changed-path mapping");
+            }
+            if python_path.starts_with("packages/millrace-web/") {
+                assert_ne!(
+                    kind, "implementation",
+                    "web package mapping must not authorize Rust web implementation expansion"
+                );
+            }
+            has_package_or_gap_evidence |=
+                kind == "package_evidence" || kind == "unsupported_gap_evidence";
+        }
+        if python_path.starts_with("packages/millrace-web/") {
+            assert!(
+                has_package_or_gap_evidence,
+                "web package mapping must remain explicit package or unsupported-gap evidence"
+            );
+        }
+    }
+    for surface in [
+        "execution_capability_contracts",
+        "execution_capability_config",
+        "compiled_capability_grants",
+        "runtime_capability_gates",
+        "approval_cli_runtime_control",
+        "runner_support_and_evidence",
+        "inspection_prompt_artifacts",
+        "docs_operator_skill_release_evidence",
+        "web_version_package_evidence",
+        "release_validation_guardrails",
+    ] {
+        assert!(
+            covered_mapping_surfaces.contains(surface),
+            "changed-path mappings do not cover v0.19.0 surface {surface}"
+        );
+    }
+
+    let capability_contract = &fixture["execution_capability_contract"];
+    for capability_id in [
+        "runner.invoke",
+        "workspace.read",
+        "workspace.write",
+        "artifact.write",
+        "shell.run",
+        "git.mutate",
+        "package.install",
+        "network.access",
+        "approval.request",
+        "evidence.emit",
+        "runtime.control",
+    ] {
+        assert!(
+            capability_contract["base_capability_ids"]
+                .as_array()
+                .expect("base capability ids are present")
+                .iter()
+                .any(|value| value.as_str() == Some(capability_id)),
+            "missing v0.19.0 base capability id {capability_id}"
+        );
+    }
+    assert_eq!(
+        capability_contract["capability_key_aliases"]["package_install"],
+        "package.install"
+    );
+    assert_eq!(
+        fixture["execution_capability_config"]["default_decisions"]["network.access"],
+        "deny"
+    );
+    assert_eq!(
+        fixture["execution_capability_config"]["default_decisions"]["package.install"],
+        "approval_required"
+    );
+    assert_eq!(
+        fixture["approval_contract"]["mailbox_commands"],
+        json!(["approve_execution_capability", "deny_execution_capability"])
+    );
+    assert_eq!(
+        fixture["capability_gate_contract"]["event_type"],
+        "capability_gate_evaluated"
+    );
+    assert!(
+        fixture["capability_gate_contract"]["failure_classes"]
+            .as_array()
+            .expect("capability gate failure classes are present")
+            .iter()
+            .any(|value| value.as_str() == Some("capability_evidence_missing")),
+        "missing v0.19.0 capability evidence failure class"
+    );
+    assert!(
+        fixture["runner_support_contract"]["artifact_fields"]
+            .as_array()
+            .expect("runner artifact fields are present")
+            .iter()
+            .any(|value| value.as_str() == Some("missing_capability_evidence_refs")),
+        "missing v0.19.0 runner missing evidence metadata field"
+    );
+
+    let available_tests = rust_test_functions_by_file(&[
+        "tests/parity_cli.rs",
+        "tests/contracts_runtime_json.rs",
+        "tests/contracts_public_exports.rs",
+        "tests/compiler_contracts.rs",
+        "tests/compiler_materialization.rs",
+        "tests/runtime_serial.rs",
+        "tests/runtime_daemon.rs",
+        "tests/runners_normalization.rs",
+    ]);
+    for guardrail in fixture["active_guardrail_tests"]
+        .as_array()
+        .expect("active guardrail tests are present")
+    {
+        let test_file = guardrail["file"].as_str().expect("guardrail file");
+        let test_name = guardrail["name"].as_str().expect("guardrail name");
+        assert!(
+            available_tests.contains_key(test_file),
+            "v0.19.0 fixture references unsupported guardrail test file {test_file}"
+        );
+        assert!(
+            is_snake_case_rust_test_name(test_name),
+            "v0.19.0 fixture references malformed guardrail test name {test_name}"
+        );
+        assert!(
+            available_tests[test_file].contains(test_name),
+            "v0.19.0 fixture references stale guardrail test {test_file}::{test_name}"
+        );
+    }
+
+    let required_release_checks = fixture["required_release_checks"]
+        .as_array()
+        .expect("required release checks are present");
+    for command in [
+        "git -C ../millrace-py diff --name-only v0.18.6..v0.19.0",
+        "cargo fmt --check",
+        "cargo test --test parity_cli",
+        "cargo test --test contracts_runtime_json",
+        "cargo test --test contracts_public_exports",
+        "cargo test --test compiler_contracts",
+        "cargo test --test compiler_materialization",
+        "cargo test --test runtime_serial",
+        "cargo test --test runtime_daemon",
+        "cargo test --test runners_normalization",
+    ] {
+        assert!(
+            required_release_checks
+                .iter()
+                .any(|value| value.as_str() == Some(command)),
+            "missing v0.19.0 required release check {command}"
+        );
+    }
+
+    let dashboard_fixture: Value = serde_json::from_str(
+        &read_fixture("cli_parity/web_dashboard_parity_decision.json")
+            .expect("read web dashboard parity decision fixture"),
+    )
+    .expect("parse web dashboard parity decision fixture");
+    assert_eq!(
+        dashboard_fixture["v0_19_0_version_package_evidence"]["python_target_tag"],
+        "v0.19.0"
+    );
+    assert_eq!(
+        dashboard_fixture["v0_19_0_version_package_evidence"]["diff_range"],
+        "v0.18.6..v0.19.0"
+    );
+    assert_eq!(
+        dashboard_fixture["v0_19_0_version_package_evidence"]["rust_release_handling"],
+        "Recorded as v0.19.0 package/version evidence for the existing unsupported dashboard gap; no Rust web server, static shell, SSE stream, dashboard HTTP API, or separate dashboard package is added."
+    );
+
+    let non_live_guarantees = fixture["non_live_guarantees"]
+        .as_array()
+        .expect("non-live guarantees are present");
+    for guarantee in [
+        "no live Python execution beyond checked-out ../millrace-py diff inspection",
+        "no live Codex runner",
+        "no live Pi runner",
+        "no network",
+        "no credentials",
+        "no web server",
+        "no remote skill installation",
+        "no release upload",
+        "no publishing",
+    ] {
+        assert!(
+            non_live_guarantees
+                .iter()
+                .any(|value| value.as_str() == Some(guarantee)),
+            "missing v0.19.0 non-live guarantee {guarantee}"
+        );
+    }
+}
+
+#[test]
+fn committed_auto_port_v0_19_0_release_parity_evidence_covers_version_docs_package_capabilities_and_web_gap()
+ {
+    let fixture: Value = serde_json::from_str(
+        &read_fixture("cli_parity/auto_port_v0_19_0_release_parity_evidence.json")
+            .expect("read v0.19.0 release parity evidence fixture"),
+    )
+    .expect("parse v0.19.0 release parity evidence fixture");
+    assert_eq!(fixture["kind"], "auto_port_v0_19_0_release_parity_evidence");
+    assert_eq!(fixture["schema_version"], "1.0");
+    assert_eq!(fixture["python_reference"]["previous_tag"], "v0.18.6");
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.19.0");
+    assert_eq!(
+        fixture["python_reference"]["target_peeled_commit"],
+        "efb9c5881f524d23dcb78aecfc96fdf7cda9d26f"
+    );
+    assert_eq!(
+        fixture["python_reference"]["diff_range"],
+        "v0.18.6..v0.19.0"
+    );
+    assert_eq!(fixture["python_reference"]["changed_path_count"], 61);
+    assert_eq!(fixture["rust_release"]["crate_version"], "0.4.0");
+    assert_eq!(fixture["rust_release"]["previous_crate_version"], "0.3.5");
+    assert_eq!(
+        fixture["rust_release"]["version_command_expectation"],
+        "millrace 0.4.0"
+    );
+
+    let include = fixture["rust_release"]["package_include_surfaces"]
+        .as_array()
+        .expect("package include surfaces are present");
+    for expected in [
+        "Cargo.lock",
+        "CHANGELOG.md",
+        "README.md",
+        "ROADMAP.md",
+        "docs/**/*.md",
+        "src/assets/**/*",
+        "src/**/*.rs",
+        "tests/**/*.rs",
+        "tests/fixtures/**/*",
+        "tests/support/**/*",
+        "!**/__pycache__/**",
+        "!**/*.pyc",
+        "!**/*.pyo",
+    ] {
+        assert!(
+            include.iter().any(|value| value.as_str() == Some(expected)),
+            "missing v0.19.0 release package include surface {expected}"
+        );
+    }
+
+    let readiness = fixture["rust_release"]["package_readiness_evidence"]
+        .as_array()
+        .expect("package readiness evidence is present");
+    for expected in [
+        "v0.19.0 parity fixture included under tests/fixtures/cli_parity/auto_port_v0_19_0_parity_evidence.json",
+        "v0.19.0 runtime scout included under tests/fixtures/runtime_json/auto_port_v0_19_0_runtime_contract_scout.json",
+        "runtime execution capability docs included under docs/runtime/millrace-execution-capabilities.md",
+        "runner architecture docs included under docs/runtime/millrace-runner-architecture.md",
+        "run-inspection capability output included under src/cli/read_only.rs and tests/parity_cli.rs",
+        "web-dashboard unsupported-gap evidence included under tests/fixtures/cli_parity/web_dashboard_parity_decision.json",
+        "full clippy checked by cargo clippy --all-targets --all-features -- -D warnings",
+        "full suite checked by cargo test --all",
+        "version-visible CLI output checked by cargo run --quiet -- --version",
+        "Cargo metadata checked by cargo metadata --no-deps --format-version 1",
+        "dry-run publish verification checked by cargo publish --dry-run --allow-dirty",
+        "package content checked by cargo package --allow-dirty --offline",
+    ] {
+        assert!(
+            readiness
+                .iter()
+                .any(|value| value.as_str() == Some(expected)),
+            "missing v0.19.0 package readiness evidence {expected}"
+        );
+    }
+
+    let required_surface_names: BTreeSet<_> = fixture["required_surfaces"]
+        .as_array()
+        .expect("required surfaces are present")
+        .iter()
+        .map(|surface| surface.as_str().expect("surface name"))
+        .collect();
+    let expected_surfaces = BTreeSet::from([
+        "capability_governance_release_docs",
+        "capability_runtime_release_evidence",
+        "package_release_evidence",
+        "web_dashboard_v0_19_0_package_gap",
+        "final_release_validation",
+    ]);
+    assert_eq!(required_surface_names, expected_surfaces);
+
+    let available_tests = rust_test_functions_by_file(&[
+        "tests/parity_cli.rs",
+        "tests/contracts_runtime_json.rs",
+        "tests/contracts_capabilities.rs",
+        "tests/contracts_public_exports.rs",
+        "tests/compiler_capability_grants.rs",
+        "tests/runtime_capability_gates.rs",
+        "tests/runtime_serial.rs",
+        "tests/runtime_daemon.rs",
+        "tests/runners_capability_support.rs",
+    ]);
+    let mut covered_surfaces = BTreeSet::new();
+    let mut referenced_paths = BTreeSet::new();
+    for surface in fixture["surfaces"]
+        .as_array()
+        .expect("surface entries are present")
+    {
+        let surface_name = surface["surface"].as_str().expect("surface name");
+        assert!(
+            required_surface_names.contains(surface_name),
+            "v0.19.0 release fixture references unknown surface {surface_name}"
+        );
+        covered_surfaces.insert(surface_name);
+        for source in surface["python_sources"]
+            .as_array()
+            .expect("python_sources array")
+        {
+            referenced_paths.insert(source.as_str().expect("Python source path"));
+        }
+        for rust_test in surface["rust_tests"].as_array().expect("rust_tests array") {
+            let test_file = rust_test["file"].as_str().expect("Rust test file");
+            let test_name = rust_test["name"].as_str().expect("Rust test name");
+            assert!(
+                available_tests.contains_key(test_file),
+                "v0.19.0 release fixture references unsupported Rust test file {test_file}"
+            );
+            assert!(
+                available_tests[test_file].contains(test_name),
+                "v0.19.0 release fixture references stale Rust test {test_file}::{test_name}"
+            );
+        }
+    }
+    assert_eq!(covered_surfaces, expected_surfaces);
+    for source_path in [
+        "../millrace-py/docs/runtime/millrace-execution-capabilities.md",
+        "../millrace-py/docs/runtime/millrace-runner-architecture.md",
+        "../millrace-py/src/millrace_ai/runtime/capability_gates.py",
+        "../millrace-py/src/millrace_ai/runtime/inspection.py",
+        "../millrace-py/packages/millrace-web/pyproject.toml",
+    ] {
+        assert!(
+            referenced_paths.contains(source_path),
+            "missing v0.19.0 release Python source reference {source_path}"
+        );
+    }
+
+    let local_docs = fixture["local_docs"]
+        .as_array()
+        .expect("local docs list is present");
+    for doc_path in [
+        "README.md",
+        "CHANGELOG.md",
+        "ROADMAP.md",
+        "docs/rust-port-roadmap.md",
+        "docs/source-package-map.md",
+        "docs/testing.md",
+        "docs/runtime/README.md",
+        "docs/runtime/millrace-cli-reference.md",
+        "docs/runtime/millrace-compiler-and-frozen-plans.md",
+        "docs/runtime/millrace-execution-capabilities.md",
+        "docs/runtime/millrace-runner-architecture.md",
+        "docs/runtime/millrace-runtime-architecture.md",
+        "docs/millrace-technical-overview.md",
+        "millrace-agents/outline.md",
+        "tests/fixtures/cli_parity/README.md",
+        "tests/fixtures/runtime_json/README.md",
+    ] {
+        assert!(
+            local_docs
+                .iter()
+                .any(|value| value.as_str() == Some(doc_path)),
+            "missing v0.19.0 release local doc reference {doc_path}"
+        );
+        assert_repo_relative_target_exists(doc_path, "v0.19.0 release local docs");
+    }
+
+    let mapping_evidence = &fixture["changed_path_mapping_evidence"];
+    assert_eq!(
+        mapping_evidence["generated_scout"],
+        "millrace-agents/auto-port/generated/auto-port-python-v0.18.6-to-v0.19.0-rust-0.4.0.md"
+    );
+    assert_eq!(
+        mapping_evidence["evidence_fixture"],
+        "tests/fixtures/cli_parity/auto_port_v0_19_0_parity_evidence.json"
+    );
+    assert_eq!(mapping_evidence["mapped_python_paths"], 61);
+
+    let validation = fixture["release_readiness_commands"]
+        .as_array()
+        .expect("release-readiness commands are present");
+    for command in [
+        "git -C ../millrace-py diff --name-only v0.18.6..v0.19.0",
+        "cargo fmt --check",
+        "cargo clippy --all-targets --all-features -- -D warnings",
+        "cargo test --all",
+        "cargo test --test parity_cli",
+        "cargo test --test contracts_runtime_json",
+        "cargo test --test runtime_daemon",
+        "cargo test --test runtime_serial",
+        "cargo metadata --no-deps --format-version 1",
+        "cargo run --quiet -- --version",
+        "cargo publish --dry-run",
+        "cargo publish --dry-run --allow-dirty",
+        "cargo package --allow-dirty --offline",
+        "cargo package --allow-dirty --offline --list | rg \"__pycache__|\\.pyc|\\.pyo\"",
+        "git diff --check",
+    ] {
+        assert!(
+            validation
+                .iter()
+                .any(|value| value.as_str() == Some(command)),
+            "missing v0.19.0 release validation command {command}"
+        );
+    }
+
+    let forbidden = fixture["forbidden_release_actions"]
+        .as_array()
+        .expect("forbidden release actions are present");
+    for command in validation {
+        let command = command.as_str().expect("release command");
+        assert!(
+            !forbidden
+                .iter()
+                .any(|value| value.as_str() == Some(command)),
+            "release-readiness command must not be a forbidden release action: {command}"
+        );
+    }
+
+    let results = fixture["release_readiness_results"]
+        .as_array()
+        .expect("release-readiness results are present");
+    let results_by_command: BTreeMap<_, _> = results
+        .iter()
+        .map(|result| (result["command"].as_str().expect("result command"), result))
+        .collect();
+    for command in validation {
+        let command = command.as_str().expect("release command");
+        assert!(
+            results_by_command.contains_key(command),
+            "missing v0.19.0 release result for {command}"
+        );
+    }
+    assert_eq!(
+        results_by_command["cargo metadata --no-deps --format-version 1"]["observed_package_version"],
+        "0.4.0"
+    );
+    assert_eq!(
+        results_by_command["cargo run --quiet -- --version"]["observed_stdout"],
+        "millrace 0.4.0"
+    );
+    assert_eq!(
+        results_by_command["cargo publish --dry-run"]["status"],
+        "blocked_dirty_worktree"
+    );
+    assert_eq!(
+        results_by_command["cargo publish --dry-run --allow-dirty"]["status"],
+        "passed"
+    );
+
+    let closure_guard = &fixture["arbiter_closure_guard"];
+    assert_eq!(closure_guard["crate_version_gate"], "0.4.0");
+    let gaps = fixture["explicit_gaps"]
+        .as_array()
+        .expect("explicit gaps are present");
+    assert!(gaps.iter().any(|gap| {
+        gap["surface"].as_str() == Some("python_packages_millrace_web")
+            && gap["status"].as_str() == Some("deferred_unsupported_gap")
+            && gap["v0_19_0_version_package_gap"].as_bool() == Some(true)
+            && gap["evidence_fixture"].as_str()
+                == Some("tests/fixtures/cli_parity/web_dashboard_parity_decision.json")
+    }));
 }
 
 #[test]
@@ -8330,6 +9255,9 @@ fn rust_compile_show_renders_representative_inspection_fields() {
         "baseline_manifest_id: ",
         "compile_input.config_fingerprint: cfg-",
         "persisted_compile_input.assets_fingerprint: assets-",
+        "execution_capabilities.total_grants: ",
+        "execution_capabilities.by_decision.granted: ",
+        "execution_capabilities.execution.total_grants: ",
         "entry: execution.task -> builder\n",
         "entry: learning.learning_request -> analyst\n",
         "completion: closure_target -> arbiter\n",
@@ -8351,6 +9279,11 @@ fn rust_compile_show_renders_representative_inspection_fields() {
         "thinking_level: none\n",
         "model_reasoning_effort: none\n",
         "timeout_seconds: 3600\n",
+        "execution_capability_policy_fingerprint: cap-pol-",
+        "execution_capability_grant: builder runner.invoke granted runtime_enforced grant-",
+        "execution_capability_grant: builder workspace.read granted advisory_only grant-",
+        "execution_capability_grant: builder artifact.write granted runtime_enforced grant-",
+        "execution_capability_warning: builder workspace.read required_advisory required capability workspace.read resolved to advisory-only\n",
     ] {
         assert!(
             output.stdout.contains(expected),
@@ -10714,6 +11647,121 @@ fn rust_control_and_config_reload_route_to_mailbox_when_daemon_lock_is_active() 
 }
 
 #[test]
+fn rust_approvals_cli_lists_shows_and_applies_direct_decisions() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path().join("workspace");
+    run_init_for(&root);
+    let paths = workspace_paths(&root);
+    let approval_id = create_pending_approval(&paths, "request-cli-approval");
+
+    let list = run_rust_millrace(["approvals", "ls", "--workspace", root.to_str().unwrap()])
+        .expect("run Rust millrace approvals ls");
+    list.assert_success();
+    assert_eq!(list.stderr, "");
+    for expected in [
+        format!("approval_id: {approval_id}\n"),
+        "status: pending\n".to_owned(),
+        "capability_id: package.install\n".to_owned(),
+        "grant_id: grant-package-install\n".to_owned(),
+        "run_id: run-approval\n".to_owned(),
+        "request_id: request-cli-approval\n".to_owned(),
+        "work_item_id: task-approval\n".to_owned(),
+    ] {
+        assert!(
+            list.stdout.contains(&expected),
+            "missing approvals ls output fragment: {expected}\nstdout:\n{}",
+            list.stdout
+        );
+    }
+
+    let show = run_rust_millrace([
+        "approvals",
+        "show",
+        &approval_id,
+        "--workspace",
+        root.to_str().unwrap(),
+    ])
+    .expect("run Rust millrace approvals show");
+    show.assert_success();
+    assert_eq!(show.stderr, "");
+    let shown: Value = serde_json::from_str(&show.stdout).unwrap();
+    assert_eq!(shown["approval_id"], approval_id);
+    assert_eq!(shown["status"], "pending");
+    assert_eq!(shown["grant"]["capability_id"], "package.install");
+
+    let approve = run_rust_millrace([
+        "approvals",
+        "approve",
+        &approval_id,
+        "--workspace",
+        root.to_str().unwrap(),
+        "--reason",
+        "operator approved package install",
+    ])
+    .expect("run Rust millrace approvals approve");
+    approve.assert_success();
+    assert_eq!(approve.stderr, "");
+    assert!(
+        approve
+            .stdout
+            .contains("action: approve_execution_capability\n")
+    );
+    assert!(approve.stdout.contains("mode: direct\n"));
+    assert!(approve.stdout.contains("applied: true\n"));
+    assert!(approve.stdout.contains(&format!(
+        "detail: approved execution capability request {approval_id}\n"
+    )));
+    let listing = list_execution_capability_approvals(&paths).unwrap();
+    assert!(listing.pending.is_empty());
+    assert_eq!(listing.resolved[0].status.as_str(), "approved");
+}
+
+#[test]
+fn rust_approvals_cli_routes_daemon_owned_decisions_to_mailbox() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path().join("workspace");
+    run_init_for(&root);
+    let paths = workspace_paths(&root);
+    let approval_id = create_pending_approval(&paths, "request-cli-mailbox-approval");
+    acquire_runtime_ownership_lock_with_options(&paths, active_lock_options("approval-daemon"))
+        .unwrap();
+
+    let deny = run_rust_millrace([
+        "approvals",
+        "deny",
+        &approval_id,
+        "--workspace",
+        root.to_str().unwrap(),
+        "--reason",
+        "operator denied package install",
+    ])
+    .expect("run Rust millrace approvals deny with active lock");
+    deny.assert_success();
+    assert_eq!(deny.stderr, "");
+    assert!(deny.stdout.contains("action: deny_execution_capability\n"));
+    assert!(deny.stdout.contains("mode: mailbox\n"));
+    assert!(deny.stdout.contains("applied: false\n"));
+    assert!(
+        deny.stdout
+            .contains("detail: queued for daemon processing\n")
+    );
+
+    let mailbox_paths = mailbox_json_paths(&paths.mailbox_incoming_dir);
+    assert_eq!(mailbox_paths.len(), 1);
+    let envelope: Value = serde_json::from_str(&fs::read_to_string(&mailbox_paths[0]).unwrap())
+        .expect("mailbox envelope JSON");
+    assert_eq!(envelope["command"], "deny_execution_capability");
+    assert_eq!(envelope["payload"]["approval_id"], approval_id);
+    assert_eq!(
+        envelope["payload"]["reason"],
+        "operator denied package install"
+    );
+    let listing = list_execution_capability_approvals(&paths).unwrap();
+    assert_eq!(listing.pending.len(), 1);
+    assert!(listing.resolved.is_empty());
+}
+
+#[test]
 fn rust_control_treats_invalid_and_stale_locks_as_offline() {
     let temp_dir = TempDir::new().unwrap();
 
@@ -11646,6 +12694,9 @@ fn rust_status_config_and_modes_read_only_commands_render_without_mutation() {
         "watchers.enabled: true\n",
         "auto_recovery.enabled: true\n",
         "usage_governance.enabled: false\n",
+        "execution_capabilities.enabled: true\n",
+        "execution_capabilities.allow_advisory_grants: true\n",
+        "execution_capabilities.fail_required_advisory: false\n",
         "config_version: bootstrap\n",
         "last_reload_outcome: none\n",
     ] {
@@ -11678,6 +12729,11 @@ fn rust_status_config_and_modes_read_only_commands_render_without_mutation() {
             "max_auto_requeues_per_work_item = 0",
             "cooldown_seconds = [0, 300]",
             "",
+            "[execution_capabilities]",
+            "enabled = false",
+            "allow_advisory_grants = false",
+            "fail_required_advisory = true",
+            "",
             "[stages.builder]",
             "runner = \"pi_rpc\"",
             "timeout_seconds = 45",
@@ -11704,6 +12760,9 @@ fn rust_status_config_and_modes_read_only_commands_render_without_mutation() {
         "runners.pi.disable_skills: false\n",
         "runners.pi.event_log_policy: full\n",
         "auto_recovery.enabled: false\n",
+        "execution_capabilities.enabled: false\n",
+        "execution_capabilities.allow_advisory_grants: false\n",
+        "execution_capabilities.fail_required_advisory: true\n",
         "stages.count: 1\n",
     ] {
         assert!(
@@ -12434,7 +13493,36 @@ fn rust_runs_read_only_commands_surface_advanced_inspection_evidence() {
         "preferred_report_path": "arbiter_report.md",
         "skill_revision_evidence_path": "skill_revision_evidence.request-advanced.json",
         "raw_exit_kind": "completed",
-        "raw_exit_code": 0
+        "raw_exit_code": 0,
+        "execution_capability_grants": [
+            {
+                "grant_id": "grant-runner",
+                "request_id": "request-runner",
+                "capability_id": "runner.invoke",
+                "access": "execute",
+                "scope": {"kind": "runner", "value": "fake", "metadata": {}},
+                "required": true,
+                "decision_state": "granted",
+                "enforcement_mode": "runtime_enforced",
+                "evidence_requirements": [],
+                "evidence_status": "not_required",
+                "decision_reason": "default runner grant",
+                "resolved_by": "compiler",
+                "fingerprint": "grant-111111111111"
+            }
+        ],
+        "capability_support_decisions": [
+            {
+                "runner_id": "fake",
+                "invocation_context_ref": "builder",
+                "grant_id": "grant-runner",
+                "support_state": "supported",
+                "enforcement_mode": "runtime_enforced",
+                "limitations": [],
+                "evidence_available": ["runner_invocation", "runner_completion"],
+                "reason": "fake runner provides deterministic capability evidence"
+            }
+        ]
     });
     fs::write(
         stage_results_dir.join("request-advanced.json"),
@@ -12566,6 +13654,8 @@ fn rust_runs_read_only_commands_surface_advanced_inspection_evidence() {
         "remediation_reference_path: millrace-agents/arbiter/verdicts/spec-root-001.json\n",
         "raw_exit_kind: completed\n",
         "raw_exit_code: 0\n",
+        "capability_grant: grant_id=grant-runner capability_id=runner.invoke decision=granted enforcement=runtime_enforced evidence_status=not_required fingerprint=grant-111111111111\n",
+        "capability_support: grant_id=grant-runner runner_id=fake support=supported enforcement=runtime_enforced evidence=runner_invocation,runner_completion\n",
         "total_tokens: 11\n",
         "note: request-malformed.json: invalid stage result payload:",
     ] {
@@ -13163,6 +14253,18 @@ fn rust_cli_framework_rejects_representative_shared_parse_failures() {
         (
             vec!["status", "watch", "--unknown"],
             "error: unknown option `--unknown`\n",
+        ),
+        (
+            vec!["approvals", "approve", "approval-001", "--reason"],
+            "error: missing value for `--reason`\n",
+        ),
+        (
+            vec!["approvals", "deny", "approval-001", "--reason="],
+            "error: `--reason` value must not be empty\n",
+        ),
+        (
+            vec!["approvals", "show"],
+            "error: missing required argument `APPROVAL_ID`\n",
         ),
         (
             vec!["modes", "show", "default_codex", "extra"],

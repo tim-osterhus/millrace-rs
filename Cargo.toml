@@ -1,6 +1,6 @@
 [package]
 name = "millrace-ai"
-version = "0.3.5"
+version = "0.4.0"
 edition = "2024"
 rust-version = "1.85"
 description = "Experimental Rust implementation of the Millrace runtime."

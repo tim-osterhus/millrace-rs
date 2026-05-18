@@ -2,7 +2,7 @@
 
 This document is the high-density Rust system map for the experimental
 `millrace-ai` crate. The Python package remains the production reference; Rust
-`0.3.3` is the crate-local parity target for the Python `v0.18.2..v0.18.3`
+`0.4.0` is the crate-local parity target for the Python `v0.18.6..v0.19.0`
 release delta.
 
 ## Runtime Model
@@ -10,9 +10,9 @@ release delta.
 Millrace is a filesystem-backed runtime for long-running agent work. The stable
 contract is the `millrace` CLI plus the local `millrace-agents/` workspace
 artifact tree. Stage agents do bounded work and emit legal terminal markers;
-the runtime owns claim selection, runner dispatch, routing, queue movement,
-recovery counters, closure-target state, learning request movement, and run
-evidence.
+the runtime owns claim selection, capability gates, approval routing, runner
+dispatch, routing, queue movement, recovery counters, closure-target state,
+learning request movement, and run evidence.
 
 The Rust crate now exposes typed contract, compiler, workspace, runtime,
 runner, and CLI boundaries for the implemented parity surface. It does not
@@ -41,10 +41,10 @@ thinking, timeout, learning-trigger, and completion-behavior inputs into
 `compiled_plan.json`. Runtime startup, reload, stage activation, recovery, and
 routing consume that frozen plan.
 
-The v0.18.3 parity line adds the Librarian learning stage, `librarian-core`
-skill, learning graph/loop terminal states, learning mode trigger bindings, and
-Planner-to-Librarian install request metadata. The compiled graph exports
-preserve that topology for inspection without replacing runtime authority.
+The v0.19.0 parity line adds execution capability requests, policies, grants,
+warnings, policy fingerprints, and summary counts to frozen plans. Compile
+inspection and graph exports expose that evidence, while runtime dispatch
+continues to consume the persisted compiled plan as authority.
 
 ## Learning And Librarian
 
@@ -64,7 +64,7 @@ The Rust crate packages docs, Rust source, managed baseline assets, always-on
 tests, fixtures, and support helpers. It intentionally excludes live
 `millrace-agents/` runtime workspace artifacts.
 
-Python `packages/millrace-web` v0.18.3 syncs the optional web package version,
+Python `packages/millrace-web` v0.19.0 syncs the optional web package version,
 runtime dependency floor, and FastAPI app version. Rust records that as
 unsupported-gap package evidence and does not add a Rust web server, dashboard
 API, static shell, SSE stream, or separate `millrace-web` package.

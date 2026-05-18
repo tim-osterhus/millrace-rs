@@ -6,11 +6,13 @@ use serde_json::{Map, Value, json};
 use tempfile::TempDir;
 
 use millrace_ai::contracts::{
-    ActiveRunRequestKind, ActiveRunState, BlockedDependencyAutoRecoveryDiagnostic,
-    LearningRequestAction, LearningRequestDocument, LearningStageName, LearningTerminalResult,
-    MailboxCommand, MailboxCommandEnvelope, Plane, ProbeDocument, ReloadOutcome, ResultClass,
-    RunTraceGraph, RuntimeJsonContract, RuntimeMode, SpecDocument, SpecSourceType, StageName,
-    TaskDocument, TerminalResult, Timestamp, TokenUsage, WatcherMode, WorkItemKind,
+    ActiveRunRequestKind, ActiveRunState, ApprovalPolicyRef,
+    BlockedDependencyAutoRecoveryDiagnostic, CapabilityDecisionState, CapabilityEnforcementMode,
+    CapabilityEvidenceStatus, CapabilityScope, ExecutionCapabilityGrant, LearningRequestAction,
+    LearningRequestDocument, LearningStageName, LearningTerminalResult, MailboxCommand,
+    MailboxCommandEnvelope, Plane, ProbeDocument, ReloadOutcome, ResultClass, RunTraceGraph,
+    RuntimeJsonContract, RuntimeMode, SpecDocument, SpecSourceType, StageName, TaskDocument,
+    TerminalResult, Timestamp, TokenUsage, WatcherMode, WorkItemKind,
 };
 use millrace_ai::work_documents::{
     parse_learning_request_document, parse_spec_document, parse_task_document, render_task_document,
@@ -22,12 +24,13 @@ use millrace_ai::workspace::{
     load_planning_status, load_snapshot, save_snapshot, write_mailbox_command,
 };
 use millrace_ai::{
-    BasicTerminalMonitor, CodexCliRunnerAdapter, FakeRunner, FakeRunnerConfig, FakeRunnerOutput,
-    FakeRunnerResult, PiRpcRunnerAdapter, RuntimeConfigApplyBoundary, RuntimeDaemonLoopExitReason,
-    RuntimeDaemonLoopOptions, RuntimeDaemonSleeper, RuntimeDaemonSupervisor, RuntimeMonitorEvent,
-    RuntimeMonitorFanout, RuntimeStartupError, RuntimeStartupOptions, RuntimeTickOptions,
-    RuntimeTickResult, apply_stage_worker_outcome, blocked_task_metadata_path,
-    load_runtime_startup_config, run_runtime_daemon_loop,
+    BasicTerminalMonitor, CodexCliRunnerAdapter, ExecutionCapabilityApprovalRequest, FakeRunner,
+    FakeRunnerConfig, FakeRunnerOutput, FakeRunnerResult, PiRpcRunnerAdapter,
+    RuntimeConfigApplyBoundary, RuntimeDaemonLoopExitReason, RuntimeDaemonLoopOptions,
+    RuntimeDaemonSleeper, RuntimeDaemonSupervisor, RuntimeMonitorEvent, RuntimeMonitorFanout,
+    RuntimeStartupError, RuntimeStartupOptions, RuntimeTickOptions, RuntimeTickResult,
+    apply_stage_worker_outcome, blocked_task_metadata_path, ensure_execution_capability_approval,
+    list_execution_capability_approvals, load_runtime_startup_config, run_runtime_daemon_loop,
     run_runtime_daemon_supervisor_loop_with_sleeper,
     run_runtime_daemon_supervisor_loop_with_sleeper_and_monitor, run_serial_runtime_tick,
     run_stage_worker, runtime_config_apply_boundary_for_field, runtime_monitor_events_from_jsonl,
@@ -52,6 +55,55 @@ fn daemon_options(session_id: &str) -> RuntimeStartupOptions {
 
 fn timestamp(value: &str) -> Timestamp {
     Timestamp::parse("created_at", value).unwrap()
+}
+
+fn approval_grant() -> ExecutionCapabilityGrant {
+    ExecutionCapabilityGrant {
+        grant_id: "grant-package-install".to_owned(),
+        request_id: "request-package-install".to_owned(),
+        capability_id: "package.install".to_owned(),
+        access: "execute".to_owned(),
+        scope: CapabilityScope {
+            kind: "package_manager".to_owned(),
+            value: "cargo".to_owned(),
+            metadata: Default::default(),
+        },
+        required: true,
+        decision_state: CapabilityDecisionState::ApprovalRequired,
+        enforcement_mode: CapabilityEnforcementMode::NotApplicable,
+        approval_policy_ref: Some(ApprovalPolicyRef {
+            policy_id: "operator.package_install".to_owned(),
+            gate_scope: "stage".to_owned(),
+            expiration_seconds: None,
+            required_decision: "approved".to_owned(),
+        }),
+        evidence_requirements: Vec::new(),
+        evidence_status: CapabilityEvidenceStatus::NotRequired,
+        decision_reason: "package installs require operator approval".to_owned(),
+        resolved_by: "test".to_owned(),
+        fingerprint: String::new(),
+    }
+}
+
+fn create_pending_approval(paths: &millrace_ai::WorkspacePaths, request_id: &str) -> String {
+    let grant = approval_grant();
+    ensure_execution_capability_approval(
+        paths,
+        ExecutionCapabilityApprovalRequest {
+            request_id,
+            run_id: "run-approval",
+            plane: Plane::Execution,
+            node_id: "builder",
+            stage_kind_id: "builder",
+            work_item_kind: Some(WorkItemKind::Task),
+            work_item_id: Some("task-approval"),
+            grant: &grant,
+            now: &timestamp(STARTUP_NOW),
+            requested_by: "runtime",
+        },
+    )
+    .unwrap()
+    .approval_id
 }
 
 fn task_document(task_id: &str) -> TaskDocument {
@@ -416,6 +468,76 @@ fn runtime_daemon_v0_18_6_guardrail_fixture_requires_intervention_mailbox_and_du
     );
     assert_eq!(durable["missing_source_event"], "root_idea_source_missing");
     assert_eq!(durable["blocked_status_marker"], "### BLOCKED");
+}
+
+#[test]
+fn runtime_daemon_v0_19_0_guardrail_fixture_requires_capability_gate_and_approval_mailbox_surfaces()
+{
+    let fixture = read_json_fixture("runtime_json/auto_port_v0_19_0_runtime_contract_scout.json");
+    assert_eq!(fixture["kind"], "auto_port_v0_19_0_runtime_contract_scout");
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.19.0");
+    assert_eq!(fixture["rust_reference"]["planned_crate_version"], "0.4.0");
+
+    let gate = &fixture["capability_gate_contract"];
+    assert!(
+        gate["dispatch_paths"]
+            .as_array()
+            .expect("dispatch paths are present")
+            .iter()
+            .any(|value| value.as_str() == Some("daemon_supervisor")),
+        "missing v0.19.0 daemon pre-dispatch gate path"
+    );
+    assert_eq!(gate["event_type"], "capability_gate_evaluated");
+    for failure_class in [
+        "capability_grant_denied",
+        "capability_approval_required",
+        "capability_grant_unsupported",
+        "capability_evidence_missing",
+    ] {
+        assert!(
+            gate["failure_classes"]
+                .as_array()
+                .expect("failure classes are present")
+                .iter()
+                .any(|value| value.as_str() == Some(failure_class)),
+            "missing v0.19.0 daemon capability gate failure class {failure_class}"
+        );
+    }
+
+    let daemon = &fixture["daemon_mailbox_contract"];
+    assert_eq!(
+        daemon["applied_commands"],
+        json!(["approve_execution_capability", "deny_execution_capability"])
+    );
+    assert_eq!(
+        daemon["processed_archive"],
+        "millrace-agents/state/mailbox/processed/<COMMAND_ID>.json"
+    );
+    assert_eq!(
+        daemon["failed_archive"],
+        "millrace-agents/state/mailbox/failed/<COMMAND_ID>.json"
+    );
+    assert_eq!(daemon["deterministic_ordering"], true);
+    for event_type in [
+        "execution_capability_approval_decided",
+        "mailbox_operator_intervention_applied",
+    ] {
+        assert!(
+            daemon["applied_events"]
+                .as_array()
+                .expect("applied events are present")
+                .iter()
+                .any(|value| value.as_str() == Some(event_type)),
+            "missing v0.19.0 daemon approval event {event_type}"
+        );
+    }
+
+    let approval = &fixture["approval_contract"];
+    assert_eq!(
+        approval["mailbox_commands"],
+        json!(["approve_execution_capability", "deny_execution_capability"])
+    );
+    assert_eq!(approval["routing_modes"], json!(["direct", "mailbox"]));
 }
 
 #[derive(Debug, Default)]
@@ -2040,6 +2162,83 @@ fn daemon_mailbox_drains_control_and_intake_commands_into_processed_archives() {
             "missing event {event_type}"
         );
     }
+}
+
+#[test]
+fn daemon_mailbox_applies_approval_decisions_and_archives_failures() {
+    let temp = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
+    let approve_id = create_pending_approval(&paths, "request-approval-approve");
+    let deny_id = create_pending_approval(&paths, "request-approval-deny");
+    let mut session =
+        startup_runtime_daemon_for_paths(&paths, daemon_options("mailbox-approval")).unwrap();
+    let mut supervisor = RuntimeDaemonSupervisor::new(supervisor_runner());
+
+    enqueue_mailbox(
+        &paths,
+        "01-approve",
+        MailboxCommand::ApproveExecutionCapability,
+        json!({"approval_id": approve_id, "reason": "operator approved package install"}),
+    );
+    enqueue_mailbox(
+        &paths,
+        "02-deny",
+        MailboxCommand::DenyExecutionCapability,
+        json!({"approval_id": deny_id, "reason": "operator denied package install"}),
+    );
+    enqueue_mailbox(
+        &paths,
+        "03-missing",
+        MailboxCommand::ApproveExecutionCapability,
+        json!({"approval_id": "approval-missing", "reason": "operator tried stale approval"}),
+    );
+
+    supervisor
+        .run_cycle(&mut session, runtime_tick_options())
+        .unwrap();
+
+    assert_eq!(
+        archive_command_ids(&paths.mailbox_processed_dir),
+        vec!["01-approve", "02-deny"]
+    );
+    let failed = archive_values(&paths.mailbox_failed_dir);
+    assert_eq!(failed.len(), 1);
+    assert_eq!(failed[0]["envelope"]["command_id"], "03-missing");
+    assert!(
+        failed[0]["error"]
+            .as_str()
+            .unwrap()
+            .contains("approval not found: approval-missing")
+    );
+    assert_eq!(directory_file_count(&paths.mailbox_incoming_dir), 0);
+
+    let listing = list_execution_capability_approvals(&paths).unwrap();
+    assert!(listing.pending.is_empty());
+    let statuses: BTreeSet<_> = listing
+        .resolved
+        .iter()
+        .map(|approval| approval.status.as_str())
+        .collect();
+    assert_eq!(statuses, BTreeSet::from(["approved", "denied"]));
+    let events = runtime_events(&paths);
+    assert!(events.iter().any(|event| {
+        event["event_type"] == "execution_capability_approval_decided"
+            && event["data"]["command"] == "approve_execution_capability"
+            && event["data"]["status"] == "approved"
+    }));
+    assert!(events.iter().any(|event| {
+        event["event_type"] == "execution_capability_approval_decided"
+            && event["data"]["command"] == "deny_execution_capability"
+            && event["data"]["status"] == "denied"
+    }));
+    assert!(events.iter().any(|event| {
+        event["event_type"] == "mailbox_operator_intervention_applied"
+            && event["data"]["event_type"] == "execution_capability_approval_decided"
+    }));
+    assert!(events.iter().any(|event| {
+        event["event_type"] == "mailbox_command_failed"
+            && event["data"]["command_id"] == "03-missing"
+    }));
 }
 
 #[test]

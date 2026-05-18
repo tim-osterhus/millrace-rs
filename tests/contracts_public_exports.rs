@@ -1,32 +1,38 @@
-use std::any::type_name;
+use std::{any::type_name, collections::BTreeSet};
 
-use serde_json::json;
+use serde_json::{Value, json};
 
 use millrace_ai::contracts::{
-    ActiveRunRequestKind, ActiveRunState, CompileDiagnostics, CompiledStageGraphExport,
-    ContractError, ExecutionStageName, ExecutionTerminalResult, GraphExportContract,
+    ActiveRunRequestKind, ActiveRunState, ApprovalPolicyRef, BASE_EXECUTION_CAPABILITY_IDS,
+    CapabilityContractError, CapabilityDecisionState, CapabilityEnforcementMode,
+    CapabilityEvidenceStatus, CapabilityPolicyDecision, CapabilityPolicyOverride,
+    CapabilityRequest, CapabilityScope, CapabilitySupportDecision, CapabilitySupportState,
+    CompileDiagnostics, CompiledStageGraphExport, ContractError, ExecutionCapabilityGrant,
+    ExecutionCapabilityWarning, ExecutionStageName, ExecutionTerminalResult, GraphExportContract,
     GraphExportContractError, GraphExportEdge, GraphExportEntry, GraphExportNode,
     GraphExportTerminalState, IdentifierErrorReason, IncidentDecision, IncidentDocument,
     IncidentSeverity, LearningRequestAction, LearningRequestDocument, LearningStageName,
     LearningTerminalResult, LoopEdgeKind, MailboxAddIdeaPayload, MailboxAddProbePayload,
     MailboxArchiveBlockedTaskPayload, MailboxArchiveInvalidIncidentPayload,
     MailboxCancelWorkItemPayload, MailboxCommand, MailboxCommandEnvelope,
-    MailboxIncidentInterventionPayload, MailboxRetargetTaskDependencyPayload,
-    MailboxSupersedeCascade, MailboxSupersedeTaskPayload, OutcomeResultClasses, PauseSource, Plane,
-    PlanningStageName, PlanningTerminalResult, ProbeDocument, ProbeStatusHint, ReconConfidence,
-    ReconDecision, ReconHandoffTarget, ReconPacketDocument, ReconPacketError, ReconPathFinding,
-    ReconRiskLevel, ReconVerificationPlan, RecoveryCounterEntry, RecoveryCounters, ReloadOutcome,
-    ResultClass, RootIntakeKind, RuntimeErrorCode, RuntimeErrorContext, RuntimeJsonContract,
-    RuntimeJsonError, RuntimeMode, RuntimeSnapshot, SAFE_ID_PATTERN_DESCRIPTION,
-    STAGE_LEGAL_TERMINAL_RESULTS, STAGE_METADATA_BY_VALUE, STAGE_NAME_BY_VALUE, STAGE_TO_PLANE,
-    SpecDocument, SpecSourceType, StageMetadata, StageName, StageResultEnvelope, TaskDocument,
-    TaskStatusHint, TerminalResult, Timestamp, TokenUsage, WORK_DOCUMENT_SCHEMA_VERSION,
-    WatcherMode, WorkDocument, WorkDocumentError, WorkItemKind, allowed_result_classes_by_outcome,
-    blocked_terminal_for_plane, known_stage_values, known_stage_values_for_plane,
-    legal_terminal_markers, legal_terminal_results, parse_terminal_marker_for_plane,
+    MailboxExecutionCapabilityApprovalPayload, MailboxIncidentInterventionPayload,
+    MailboxRetargetTaskDependencyPayload, MailboxSupersedeCascade, MailboxSupersedeTaskPayload,
+    OutcomeResultClasses, PauseSource, Plane, PlanningStageName, PlanningTerminalResult,
+    ProbeDocument, ProbeStatusHint, ReconConfidence, ReconDecision, ReconHandoffTarget,
+    ReconPacketDocument, ReconPacketError, ReconPathFinding, ReconRiskLevel, ReconVerificationPlan,
+    RecoveryCounterEntry, RecoveryCounters, ReloadOutcome, ResultClass, RootIntakeKind,
+    RuntimeErrorCode, RuntimeErrorContext, RuntimeJsonContract, RuntimeJsonError, RuntimeMode,
+    RuntimeSnapshot, SAFE_ID_PATTERN_DESCRIPTION, STAGE_LEGAL_TERMINAL_RESULTS,
+    STAGE_METADATA_BY_VALUE, STAGE_NAME_BY_VALUE, STAGE_TO_PLANE, SpecDocument, SpecSourceType,
+    StageMetadata, StageName, StageResultEnvelope, TaskDocument, TaskStatusHint, TerminalResult,
+    Timestamp, TokenUsage, WORK_DOCUMENT_SCHEMA_VERSION, WatcherMode, WorkDocument,
+    WorkDocumentError, WorkItemKind, allowed_result_classes_by_outcome, blocked_terminal_for_plane,
+    capability_grant_fingerprint, capability_key_aliases, is_base_execution_capability_id,
+    known_stage_values, known_stage_values_for_plane, legal_terminal_markers,
+    legal_terminal_results, normalize_capability_id, parse_terminal_marker_for_plane,
     running_status_marker, stage_metadata, stage_metadata_for_value, stage_name_for_plane,
-    stage_name_for_value, stage_plane, terminal_result_for_plane, validate_safe_identifier,
-    validate_stage_result_class, validate_terminal_marker_for_stage,
+    stage_name_for_value, stage_plane, terminal_result_for_plane, validate_capability_id,
+    validate_safe_identifier, validate_stage_result_class, validate_terminal_marker_for_stage,
 };
 use millrace_ai::recon_packets::{parse_recon_packet, read_recon_packet, render_recon_packet};
 use millrace_ai::work_documents::{
@@ -36,23 +42,24 @@ use millrace_ai::work_documents::{
 use millrace_ai::{
     AllowedResultClassPolicy, AllowedResultClassesByOutcome, CodexCliArtifactPaths, CodexCliConfig,
     CodexCliRunnerAdapter, CodexPermissionLevel, CodexProcessError, CodexProcessExecutor,
-    CodexProcessRequest, FakeRunner, FakeRunnerConfig, FakeRunnerOutput, FakeRunnerResult,
-    PiEventLogPolicy, PiRpcArtifactPaths, PiRpcClientCreateRequest, PiRpcClientError,
-    PiRpcClientFactory, PiRpcConfig, PiRpcJsonlClient, PiRpcPromptClient, PiRpcRunnerAdapter,
-    PiRpcSessionResult, PiRpcStreamEvent, PiRpcTransport, ProcessExecutionResult, ProcessExitKind,
-    RequestKind, RunnerCompletionArtifact, RunnerCompletionArtifactContext, RunnerEnvironmentDelta,
-    RunnerError, RunnerExitKind, RunnerInvocationArtifact, RunnerRawResult, RunnerRegistry,
-    RunnerResult, RuntimeStartupSession, StageRunRequest, StageRunRequestError, StageRunnerAdapter,
-    StageRunnerDispatcher, SubprocessCodexExecutor, SubprocessPiRpcClientFactory,
-    SubprocessPiRpcTransport, WorkspaceError, WorkspacePaths, WorkspaceResult,
-    build_codex_cli_command, build_pi_rpc_command, build_runtime_runner_dispatcher,
-    build_stage_prompt, codex_cli_artifact_paths, completion_artifact_from_raw_result,
-    extract_token_usage, invocation_artifact_from_request, materialize_stdout_artifact,
-    normalize_stage_result, permission_flags, persist_event_log, persistable_event_lines,
-    pi_rpc_artifact_paths, reconciled_timeout_terminal_marker, render_stage_request_context_lines,
-    resolve_permission_level, runner_prompt_path, should_persist_event_log, token_usage_from_line,
-    token_usage_from_payload, token_usage_from_stats_payload, workspace_paths,
-    write_runner_completion, write_runner_invocation, write_stage_prompt_artifact,
+    CodexProcessRequest, ExecutionCapabilitiesConfig, FakeRunner, FakeRunnerConfig,
+    FakeRunnerOutput, FakeRunnerResult, PiEventLogPolicy, PiRpcArtifactPaths,
+    PiRpcClientCreateRequest, PiRpcClientError, PiRpcClientFactory, PiRpcConfig, PiRpcJsonlClient,
+    PiRpcPromptClient, PiRpcRunnerAdapter, PiRpcSessionResult, PiRpcStreamEvent, PiRpcTransport,
+    ProcessExecutionResult, ProcessExitKind, RequestKind, RunnerCompletionArtifact,
+    RunnerCompletionArtifactContext, RunnerEnvironmentDelta, RunnerError, RunnerExitKind,
+    RunnerInvocationArtifact, RunnerRawResult, RunnerRegistry, RunnerResult, RuntimeStartupSession,
+    StageRunRequest, StageRunRequestError, StageRunnerAdapter, StageRunnerDispatcher,
+    SubprocessCodexExecutor, SubprocessPiRpcClientFactory, SubprocessPiRpcTransport,
+    WorkspaceError, WorkspacePaths, WorkspaceResult, build_codex_cli_command, build_pi_rpc_command,
+    build_runtime_runner_dispatcher, build_stage_prompt, codex_cli_artifact_paths,
+    completion_artifact_from_raw_result, extract_token_usage, invocation_artifact_from_request,
+    materialize_stdout_artifact, normalize_stage_result, permission_flags, persist_event_log,
+    persistable_event_lines, pi_rpc_artifact_paths, reconciled_timeout_terminal_marker,
+    render_stage_request_context_lines, resolve_permission_level, runner_prompt_path,
+    should_persist_event_log, token_usage_from_line, token_usage_from_payload,
+    token_usage_from_stats_payload, workspace_paths, write_runner_completion,
+    write_runner_invocation, write_stage_prompt_artifact,
 };
 
 const NOW: &str = "2026-04-15T00:00:00Z";
@@ -76,9 +83,22 @@ fn public_contract_exports_remain_importable() {
     let public_type_names = [
         type_name::<ActiveRunRequestKind>(),
         type_name::<ActiveRunState>(),
+        type_name::<ApprovalPolicyRef>(),
+        type_name::<CapabilityContractError>(),
+        type_name::<CapabilityDecisionState>(),
+        type_name::<CapabilityEnforcementMode>(),
+        type_name::<CapabilityEvidenceStatus>(),
+        type_name::<CapabilityPolicyDecision>(),
+        type_name::<CapabilityPolicyOverride>(),
+        type_name::<CapabilityRequest>(),
+        type_name::<CapabilityScope>(),
+        type_name::<CapabilitySupportDecision>(),
+        type_name::<CapabilitySupportState>(),
         type_name::<CompileDiagnostics>(),
         type_name::<CompiledStageGraphExport>(),
         type_name::<ContractError>(),
+        type_name::<ExecutionCapabilityGrant>(),
+        type_name::<ExecutionCapabilityWarning>(),
         type_name::<ExecutionStageName>(),
         type_name::<ExecutionTerminalResult>(),
         type_name::<GraphExportContractError>(),
@@ -102,6 +122,7 @@ fn public_contract_exports_remain_importable() {
         type_name::<MailboxCancelWorkItemPayload>(),
         type_name::<MailboxCommand>(),
         type_name::<MailboxCommandEnvelope>(),
+        type_name::<MailboxExecutionCapabilityApprovalPayload>(),
         type_name::<MailboxIncidentInterventionPayload>(),
         type_name::<MailboxRetargetTaskDependencyPayload>(),
         type_name::<MailboxSupersedeCascade>(),
@@ -152,6 +173,7 @@ fn public_contract_exports_remain_importable() {
         type_name::<WorkItemKind>(),
         type_name::<AllowedResultClassPolicy>(),
         type_name::<AllowedResultClassesByOutcome>(),
+        type_name::<ExecutionCapabilitiesConfig>(),
         type_name::<CodexCliArtifactPaths>(),
         type_name::<CodexCliConfig>(),
         type_name::<CodexCliRunnerAdapter>(),
@@ -199,6 +221,7 @@ fn public_contract_exports_remain_importable() {
     assert_runtime_contract::<MailboxArchiveInvalidIncidentPayload>();
     assert_runtime_contract::<MailboxCancelWorkItemPayload>();
     assert_runtime_contract::<MailboxCommandEnvelope>();
+    assert_runtime_contract::<MailboxExecutionCapabilityApprovalPayload>();
     assert_runtime_contract::<MailboxIncidentInterventionPayload>();
     assert_runtime_contract::<MailboxRetargetTaskDependencyPayload>();
     assert_runtime_contract::<MailboxSupersedeTaskPayload>();
@@ -282,6 +305,72 @@ fn public_contract_exports_remain_importable() {
 }
 
 #[test]
+fn public_exports_v0_19_0_guardrail_fixture_requires_capability_contract_exports() {
+    let fixture: Value = serde_json::from_str(include_str!(
+        "fixtures/runtime_json/auto_port_v0_19_0_runtime_contract_scout.json"
+    ))
+    .expect("parse v0.19.0 runtime contract scout");
+    assert_eq!(fixture["kind"], "auto_port_v0_19_0_runtime_contract_scout");
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.19.0");
+    assert_eq!(fixture["rust_reference"]["planned_crate_version"], "0.4.0");
+
+    let contract = &fixture["execution_capability_contract"];
+    let contract_models: BTreeSet<_> = contract["contract_models"]
+        .as_array()
+        .expect("capability contract models are present")
+        .iter()
+        .map(|value| value.as_str().expect("contract model"))
+        .collect();
+    for model in [
+        "CapabilityScope",
+        "ApprovalPolicyRef",
+        "CapabilityRequest",
+        "CapabilityPolicyOverride",
+        "ExecutionCapabilityGrant",
+        "CapabilitySupportDecision",
+        "MailboxExecutionCapabilityApprovalPayload",
+    ] {
+        assert!(
+            contract_models.contains(model),
+            "missing v0.19.0 public capability contract model {model}"
+        );
+    }
+
+    let targets: BTreeSet<_> = fixture["expected_rust_contract_targets"]
+        .as_array()
+        .expect("expected Rust contract targets are present")
+        .iter()
+        .map(|value| value.as_str().expect("expected Rust target"))
+        .collect();
+    for target in [
+        "src/lib.rs",
+        "src/contracts/mod.rs",
+        "src/contracts/capabilities.rs",
+        "src/contracts/runtime_json.rs",
+        "tests/contracts_public_exports.rs",
+        "tests/contracts_runtime_json.rs",
+    ] {
+        assert!(
+            targets.contains(target),
+            "missing v0.19.0 public export target {target}"
+        );
+    }
+
+    assert_eq!(
+        contract["capability_key_aliases"]["git_mutate"],
+        "git.mutate"
+    );
+    assert!(
+        contract["support_states"]
+            .as_array()
+            .expect("support states are present")
+            .iter()
+            .any(|value| value.as_str() == Some("partially_supported")),
+        "missing v0.19.0 partial support state"
+    );
+}
+
+#[test]
 fn public_metadata_helpers_expose_the_stage_contract_boundary() {
     assert_eq!(millrace_ai::PACKAGE_NAME, "millrace-ai");
     assert_eq!(millrace_ai::CRATE_NAME, "millrace_ai");
@@ -294,7 +383,35 @@ fn public_metadata_helpers_expose_the_stage_contract_boundary() {
 
     assert_eq!(SAFE_ID_PATTERN_DESCRIPTION, "^[A-Za-z0-9][A-Za-z0-9._-]*$");
     assert_eq!(WORK_DOCUMENT_SCHEMA_VERSION, "1.0");
+    assert!(BASE_EXECUTION_CAPABILITY_IDS.contains(&"workspace.write"));
+    assert!(is_base_execution_capability_id("package.install"));
+    assert_eq!(
+        normalize_capability_id("package_install"),
+        "package.install"
+    );
+    assert_eq!(
+        capability_key_aliases()["runtime_control"],
+        "runtime.control"
+    );
+    assert!(validate_capability_id("workspace.write").is_ok());
+    let grant: ExecutionCapabilityGrant = serde_json::from_value(json!({
+        "grant_id": "grant-public-export",
+        "request_id": "request-public-export",
+        "capability_id": "evidence.emit",
+        "access": "emit",
+        "scope": {"kind": "artifact_kind", "value": "stage_result"},
+        "decision_state": "granted",
+        "enforcement_mode": "advisory_only",
+        "decision_reason": "public export guard",
+        "resolved_by": "test"
+    }))
+    .unwrap();
+    assert_eq!(grant.fingerprint, capability_grant_fingerprint(&grant));
     assert_eq!(MailboxCommand::CancelWorkItem.as_str(), "cancel_work_item");
+    assert_eq!(
+        MailboxCommand::ApproveExecutionCapability.as_str(),
+        "approve_execution_capability"
+    );
     assert_eq!(
         MailboxCommand::from_value("archive_invalid_incident").unwrap(),
         MailboxCommand::ArchiveInvalidIncident

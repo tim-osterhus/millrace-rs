@@ -5,7 +5,9 @@ use std::{fs, path::Path};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    contracts::{StageName, Timestamp, TokenUsage},
+    contracts::{
+        CapabilitySupportDecision, ExecutionCapabilityGrant, StageName, Timestamp, TokenUsage,
+    },
     runtime::{RequestKind, StageRunRequest},
 };
 
@@ -41,6 +43,15 @@ pub struct RunnerInvocationArtifact {
     pub emitted_at: Timestamp,
     #[serde(default)]
     pub notes: Vec<String>,
+    #[serde(default)]
+    pub execution_capability_grants: Vec<ExecutionCapabilityGrant>,
+    #[serde(default)]
+    pub capability_support_decisions: Vec<CapabilitySupportDecision>,
+    #[serde(default)]
+    pub capability_evidence_refs: Vec<String>,
+    #[serde(default)]
+    pub missing_capability_evidence_refs: Vec<String>,
+    pub failure_capability_class: Option<String>,
 }
 
 impl RunnerInvocationArtifact {
@@ -59,6 +70,12 @@ impl RunnerInvocationArtifact {
         require_non_blank("cwd", &self.cwd, "runner_invocation")?;
         require_non_blank("prompt_path", &self.prompt_path, "runner_invocation")?;
         require_command(&self.command, "runner_invocation")?;
+        validate_capability_artifact_fields(
+            "runner_invocation",
+            &self.capability_evidence_refs,
+            &self.missing_capability_evidence_refs,
+            &self.failure_capability_class,
+        )?;
         Ok(())
     }
 }
@@ -106,6 +123,15 @@ pub struct RunnerCompletionArtifact {
     pub failure_class: Option<String>,
     #[serde(default)]
     pub notes: Vec<String>,
+    pub failure_capability_class: Option<String>,
+    #[serde(default)]
+    pub execution_capability_grants: Vec<ExecutionCapabilityGrant>,
+    #[serde(default)]
+    pub capability_support_decisions: Vec<CapabilitySupportDecision>,
+    #[serde(default)]
+    pub capability_evidence_refs: Vec<String>,
+    #[serde(default)]
+    pub missing_capability_evidence_refs: Vec<String>,
     pub emitted_at: Timestamp,
 }
 
@@ -146,6 +172,12 @@ impl RunnerCompletionArtifact {
                 message: "runner_completion interrupted must match exit evidence".to_owned(),
             });
         }
+        validate_capability_artifact_fields(
+            "runner_completion",
+            &self.capability_evidence_refs,
+            &self.missing_capability_evidence_refs,
+            &self.failure_capability_class,
+        )?;
         Ok(())
     }
 }
@@ -233,6 +265,11 @@ pub fn invocation_artifact_from_request(
         event_log_path: None,
         emitted_at,
         notes: Vec::new(),
+        execution_capability_grants: request.execution_capability_grants.clone(),
+        capability_support_decisions: request.capability_support_decisions.clone(),
+        capability_evidence_refs: capability_evidence_refs_for_request(request),
+        missing_capability_evidence_refs: Vec::new(),
+        failure_capability_class: None,
     };
     artifact.validate()?;
     Ok(artifact)
@@ -292,6 +329,15 @@ pub fn completion_artifact_from_raw_result(
         duration_seconds,
         failure_class,
         notes,
+        failure_capability_class: raw_result.failure_capability_class.clone(),
+        execution_capability_grants: request.execution_capability_grants.clone(),
+        capability_support_decisions: if raw_result.capability_support_decisions.is_empty() {
+            request.capability_support_decisions.clone()
+        } else {
+            raw_result.capability_support_decisions.clone()
+        },
+        capability_evidence_refs: raw_result.capability_evidence_refs.clone(),
+        missing_capability_evidence_refs: raw_result.missing_capability_evidence_refs.clone(),
         emitted_at,
     };
     artifact.validate()?;
@@ -312,6 +358,43 @@ pub fn write_runner_completion(
     artifact: &RunnerCompletionArtifact,
 ) -> RunnerResult<()> {
     write_artifact(path, artifact)
+}
+
+/// Returns the runner-owned capability evidence refs available after completion.
+#[must_use]
+pub fn capability_evidence_refs_for_request(request: &StageRunRequest) -> Vec<String> {
+    if request.execution_capability_grants.is_empty() {
+        return Vec::new();
+    }
+    vec![
+        format!("runner_invocation:{}", request.request_id),
+        format!("runner_completion:{}", request.request_id),
+    ]
+}
+
+/// Returns required evidence refs not produced by normal runner invocation/completion artifacts.
+#[must_use]
+pub fn missing_capability_evidence_refs_for_request(request: &StageRunRequest) -> Vec<String> {
+    if request.execution_capability_grants.is_empty() {
+        return Vec::new();
+    }
+    let available = ["runner_invocation", "runner_completion"];
+    let mut missing = Vec::new();
+    for grant in &request.execution_capability_grants {
+        if !grant.required {
+            continue;
+        }
+        for requirement in &grant.evidence_requirements {
+            if available.contains(&requirement.as_str()) {
+                continue;
+            }
+            let reference = format!("{}:{requirement}", grant.grant_id);
+            if !missing.contains(&reference) {
+                missing.push(reference);
+            }
+        }
+    }
+    missing
 }
 
 fn write_artifact<T: Serialize>(path: &Path, artifact: &T) -> RunnerResult<()> {
@@ -368,4 +451,30 @@ fn require_command(command: &[String], artifact: &'static str) -> RunnerResult<(
     } else {
         Ok(())
     }
+}
+
+fn validate_capability_artifact_fields(
+    artifact: &'static str,
+    capability_evidence_refs: &[String],
+    missing_capability_evidence_refs: &[String],
+    failure_capability_class: &Option<String>,
+) -> RunnerResult<()> {
+    if capability_evidence_refs
+        .iter()
+        .chain(missing_capability_evidence_refs)
+        .any(|value| value.trim().is_empty())
+    {
+        return Err(RunnerError::InvalidRunnerArtifact {
+            message: format!("{artifact} capability evidence refs must not be blank"),
+        });
+    }
+    if failure_capability_class
+        .as_deref()
+        .is_some_and(|value| value.trim().is_empty())
+    {
+        return Err(RunnerError::InvalidRunnerArtifact {
+            message: format!("{artifact}.failure_capability_class must not be blank"),
+        });
+    }
+    Ok(())
 }

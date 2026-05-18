@@ -8,9 +8,9 @@ pub mod persistence;
 
 pub use assets::{
     CompilerAssetError, CompilerAssetResult, DEFAULT_MODE_ID, EffectiveCodexCompileConfig,
-    EffectiveCompileConfig, EffectiveRecoveryCompileConfig, EffectiveRunnersCompileConfig,
-    EffectiveRuntimeCompileConfig, EffectiveStageCompileConfig, MISSING_ASSET_TOKEN,
-    ResolvedCompileAssetSet, ResolvedGraphLoopAsset, ResolvedStageKindAsset,
+    EffectiveCompileConfig, EffectiveExecutionCapabilitiesConfig, EffectiveRecoveryCompileConfig,
+    EffectiveRunnersCompileConfig, EffectiveRuntimeCompileConfig, EffectiveStageCompileConfig,
+    MISSING_ASSET_TOKEN, ResolvedCompileAssetSet, ResolvedGraphLoopAsset, ResolvedStageKindAsset,
     build_compile_input_fingerprint, canonical_mode_id, compile_input_fingerprint_for_workspace,
     fingerprint_effective_compile_config, fingerprint_resolved_assets,
     load_effective_compile_config, load_effective_compile_config_from_path, resolve_compile_assets,
@@ -20,12 +20,12 @@ pub use contracts::{
     CompileInputFingerprint, CompileOutcome, CompiledGraphCompletionEntryPlan,
     CompiledGraphEntryPlan, CompiledGraphResumePolicyPlan, CompiledGraphThresholdPolicyPlan,
     CompiledGraphTransitionPlan, CompiledPlanCurrentness, CompiledPlanCurrentnessState,
-    CompiledRunPlan, CompilerContract, CompilerContractError, FrozenGraphPlanePlan,
-    GraphLoopCompletionBehaviorDefinition, GraphLoopCounterName, GraphLoopDefinition,
-    GraphLoopDynamicPoliciesDefinition, GraphLoopEntryDefinition, GraphLoopEntryKey,
-    GraphLoopNodeDefinition, GraphLoopTerminalClass, GraphLoopTerminalStateDefinition,
-    LearningTriggerRuleDefinition, MaterializedGraphNodePlan, ModeDefinition,
-    PlaneConcurrencyPolicyDefinition, RecoveryRole, RegisteredStageKindDefinition,
+    CompiledRunPlan, CompilerContract, CompilerContractError, ExecutionCapabilitySummary,
+    FrozenGraphPlanePlan, GraphLoopCompletionBehaviorDefinition, GraphLoopCounterName,
+    GraphLoopDefinition, GraphLoopDynamicPoliciesDefinition, GraphLoopEntryDefinition,
+    GraphLoopEntryKey, GraphLoopNodeDefinition, GraphLoopTerminalClass,
+    GraphLoopTerminalStateDefinition, LearningTriggerRuleDefinition, MaterializedGraphNodePlan,
+    ModeDefinition, PlaneConcurrencyPolicyDefinition, RecoveryRole, RegisteredStageKindDefinition,
     ResolvedAssetRef, StageIdempotencePolicy, validate_graph_stage_kind_references,
 };
 pub use graph_exports::{

@@ -209,6 +209,17 @@ durable idea source behavior, closure recovery evidence, required checks, and
 the Python v0.18.5/v0.18.6 `millrace-web` package/version unsupported-gap
 evidence.
 
+`auto_port_v0_19_0_parity_evidence.json` records target-facing guardrails for
+the Python `v0.18.6..v0.19.0` to Rust `0.4.0` auto-port. It maps every
+generated scout path to an expected Rust implementation, test, documentation,
+fixture, package evidence, or unsupported-gap evidence target; pins the
+v0.18.6 and v0.19.0 annotated tag objects and peeled commits, Rust
+`0.3.5 -> 0.4.0` transition, execution capability contracts/config, compiled
+capability grants, approval storage and CLI/runtime-control routing,
+pre-dispatch capability gates, runner support/evidence metadata, inspection
+surfaces, required checks, and the Python v0.19.0 `millrace-web`
+package/version unsupported-gap evidence.
+
 `auto_port_v0_18_6_release_parity_evidence.json` records the Rust `0.3.5`
 final release-parity evidence for Python `v0.18.4..v0.18.6`, including
 version-visible CLI metadata, generated-scout path mapping evidence, package
@@ -220,6 +231,19 @@ verification, generated-cache package exclusion evidence, and the Python
 v0.18.5/v0.18.6 `millrace-web` package/version unsupported gap. It also
 confirms Builder release evidence does not require publish, upload, push, tag,
 or deployment commands.
+
+`auto_port_v0_19_0_release_parity_evidence.json` records the Rust `0.4.0`
+final release-parity evidence for Python `v0.18.6..v0.19.0`, including
+version-visible CLI metadata, generated-scout path mapping evidence, package
+include rules, README/changelog/roadmap/runtime docs, capability
+contracts/config, compiled grants, approval CLI/runtime-control behavior,
+pre-dispatch gates, runner support/evidence metadata, run-inspection
+capability output, required Builder verification command results,
+source-package mapping, dirty-worktree package verification,
+generated-cache package exclusion evidence, and the Python v0.19.0
+`millrace-web` package/version unsupported gap. It also confirms Builder
+release evidence does not require publish, upload, push, tag, or deployment
+commands.
 
 The evidence is intentionally not a byte-for-byte transcript. Paths, generated
 ids, timestamps, package versions, command ids, run ids, compact run handles,

@@ -1,5 +1,6 @@
 //! Typed contracts shared across Millrace runtime artifacts.
 
+mod capabilities;
 mod enums;
 mod error;
 mod graph_exports;
@@ -9,12 +10,21 @@ mod runtime_json;
 mod stage_metadata;
 mod work_documents;
 
+pub use capabilities::{
+    ApprovalPolicyRef, BASE_EXECUTION_CAPABILITY_IDS, CapabilityContractError,
+    CapabilityPolicyOverride, CapabilityRequest, CapabilityScope, CapabilitySupportDecision,
+    ExecutionCapabilityGrant, ExecutionCapabilityWarning, capability_grant_fingerprint,
+    capability_key_aliases, is_base_execution_capability_id, normalize_capability_id,
+    validate_capability_id,
+};
 pub use enums::{
-    ExecutionStageName, ExecutionTerminalResult, IncidentDecision, IncidentSeverity,
-    LearningRequestAction, LearningStageName, LearningTerminalResult, LoopEdgeKind, MailboxCommand,
-    Plane, PlanningStageName, PlanningTerminalResult, ProbeStatusHint, ReloadOutcome, ResultClass,
-    RootIntakeKind, RuntimeErrorCode, RuntimeMode, SpecSourceType, StageName, TaskStatusHint,
-    TerminalResult, WatcherMode, WorkItemKind,
+    CapabilityDecisionState, CapabilityEnforcementMode, CapabilityEvidenceStatus,
+    CapabilityPolicyDecision, CapabilitySupportState, ExecutionStageName, ExecutionTerminalResult,
+    IncidentDecision, IncidentSeverity, LearningRequestAction, LearningStageName,
+    LearningTerminalResult, LoopEdgeKind, MailboxCommand, Plane, PlanningStageName,
+    PlanningTerminalResult, ProbeStatusHint, ReloadOutcome, ResultClass, RootIntakeKind,
+    RuntimeErrorCode, RuntimeMode, SpecSourceType, StageName, TaskStatusHint, TerminalResult,
+    WatcherMode, WorkItemKind,
 };
 pub use error::{ContractError, IdentifierErrorReason};
 pub use graph_exports::{
@@ -36,11 +46,11 @@ pub use runtime_json::{
     LatestOperatorIntervention, MailboxAddIdeaPayload, MailboxAddProbePayload,
     MailboxAddSpecPayload, MailboxAddTaskPayload, MailboxArchiveBlockedTaskPayload,
     MailboxArchiveInvalidIncidentPayload, MailboxCancelWorkItemPayload, MailboxCommandEnvelope,
-    MailboxIncidentInterventionPayload, MailboxRetargetTaskDependencyPayload,
-    MailboxSupersedeCascade, MailboxSupersedeTaskPayload, PauseSource, ReadOnlyStatusPayload,
-    RecoveryCounterEntry, RecoveryCounters, RunnerFailureClass, RunnerFailureMetadata,
-    RuntimeErrorContext, RuntimeJsonContract, RuntimeJsonError, RuntimeSnapshot,
-    StageResultEnvelope, StrandedBlockedDependency, SubscriptionQuotaStatus,
+    MailboxExecutionCapabilityApprovalPayload, MailboxIncidentInterventionPayload,
+    MailboxRetargetTaskDependencyPayload, MailboxSupersedeCascade, MailboxSupersedeTaskPayload,
+    PauseSource, ReadOnlyStatusPayload, RecoveryCounterEntry, RecoveryCounters, RunnerFailureClass,
+    RunnerFailureMetadata, RuntimeErrorContext, RuntimeJsonContract, RuntimeJsonError,
+    RuntimeSnapshot, StageResultEnvelope, StrandedBlockedDependency, SubscriptionQuotaStatus,
     SubscriptionQuotaTelemetryState, SubscriptionQuotaWindowReading, TokenUsage,
     UsageGovernanceBlocker, UsageGovernanceBlockerSource, UsageGovernanceDegradedPolicy,
     UsageGovernanceEvaluationBoundary, UsageGovernanceLedgerEntry,

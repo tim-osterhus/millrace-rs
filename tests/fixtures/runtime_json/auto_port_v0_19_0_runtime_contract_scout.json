@@ -1,0 +1,400 @@
+{
+  "schema_version": "1.0",
+  "kind": "auto_port_v0_19_0_runtime_contract_scout",
+  "python_reference": {
+    "previous_tag": "v0.18.6",
+    "previous_tag_object": "85d91683f3be3dfa6f2983d3e397ed373f12edba",
+    "previous_peeled_commit": "63e623bc6fcfcf74ae0cc2ce5605a12ae4179873",
+    "target_tag": "v0.19.0",
+    "target_tag_object": "11c45b03428226f04f56fe078e083bea2464e6b0",
+    "target_peeled_commit": "efb9c5881f524d23dcb78aecfc96fdf7cda9d26f",
+    "diff_range": "v0.18.6..v0.19.0",
+    "generated_scout": "millrace-agents/auto-port/generated/auto-port-python-v0.18.6-to-v0.19.0-rust-0.4.0.md"
+  },
+  "rust_reference": {
+    "current_repo_crate_version": "0.3.5",
+    "current_repo_version_role": "released_target_for_python_v0.18.6",
+    "planned_crate_version": "0.4.0",
+    "planned_version_role": "target_release_for_python_v0.19.0"
+  },
+  "contract_sources": [
+    "../millrace-py/src/millrace_ai/__init__.py",
+    "../millrace-py/src/millrace_ai/architecture/loop_graphs.py",
+    "../millrace-py/src/millrace_ai/architecture/materialization.py",
+    "../millrace-py/src/millrace_ai/architecture/stage_kinds.py",
+    "../millrace-py/src/millrace_ai/cli/app.py",
+    "../millrace-py/src/millrace_ai/cli/commands/approvals.py",
+    "../millrace-py/src/millrace_ai/cli/compile_view.py",
+    "../millrace-py/src/millrace_ai/cli/config_view.py",
+    "../millrace-py/src/millrace_ai/cli/formatting.py",
+    "../millrace-py/src/millrace_ai/compilation/capabilities.py",
+    "../millrace-py/src/millrace_ai/compilation/graph_materialization.py",
+    "../millrace-py/src/millrace_ai/compilation/node_materialization.py",
+    "../millrace-py/src/millrace_ai/compilation/workspace_plan.py",
+    "../millrace-py/src/millrace_ai/config/__init__.py",
+    "../millrace-py/src/millrace_ai/config/boundaries.py",
+    "../millrace-py/src/millrace_ai/config/models.py",
+    "../millrace-py/src/millrace_ai/contracts/__init__.py",
+    "../millrace-py/src/millrace_ai/contracts/capabilities.py",
+    "../millrace-py/src/millrace_ai/contracts/enums.py",
+    "../millrace-py/src/millrace_ai/contracts/mailbox.py",
+    "../millrace-py/src/millrace_ai/contracts/modes.py",
+    "../millrace-py/src/millrace_ai/runners/adapters/codex_cli.py",
+    "../millrace-py/src/millrace_ai/runners/adapters/pi_rpc.py",
+    "../millrace-py/src/millrace_ai/runners/base.py",
+    "../millrace-py/src/millrace_ai/runners/contracts.py",
+    "../millrace-py/src/millrace_ai/runners/dispatcher.py",
+    "../millrace-py/src/millrace_ai/runners/normalization.py",
+    "../millrace-py/src/millrace_ai/runners/requests.py",
+    "../millrace-py/src/millrace_ai/runtime/approvals.py",
+    "../millrace-py/src/millrace_ai/runtime/capability_gates.py",
+    "../millrace-py/src/millrace_ai/runtime/control.py",
+    "../millrace-py/src/millrace_ai/runtime/control_mutations.py",
+    "../millrace-py/src/millrace_ai/runtime/inspection.py",
+    "../millrace-py/src/millrace_ai/runtime/mailbox_intake.py",
+    "../millrace-py/src/millrace_ai/runtime/stage_requests.py",
+    "../millrace-py/src/millrace_ai/runtime/supervisor.py",
+    "../millrace-py/src/millrace_ai/runtime/tick_cycle.py",
+    "../millrace-py/tests/cli/test_cli.py",
+    "../millrace-py/tests/compilation/test_capability_grants.py",
+    "../millrace-py/tests/config/test_config.py",
+    "../millrace-py/tests/contracts/test_capabilities.py",
+    "../millrace-py/tests/runners/test_capability_support.py",
+    "../millrace-py/tests/runners/test_runner.py",
+    "../millrace-py/tests/runtime/test_capability_gates.py",
+    "../millrace-py/tests/runtime/test_run_inspection.py"
+  ],
+  "expected_rust_contract_targets": [
+    "CHANGELOG.md",
+    "Cargo.lock",
+    "Cargo.toml",
+    "README.md",
+    "ROADMAP.md",
+    "docs/runtime/README.md",
+    "docs/runtime/millrace-cli-reference.md",
+    "docs/runtime/millrace-compiler-and-frozen-plans.md",
+    "docs/runtime/millrace-execution-capabilities.md",
+    "docs/runtime/millrace-runner-architecture.md",
+    "docs/runtime/millrace-runtime-architecture.md",
+    "docs/rust-port-roadmap.md",
+    "docs/source-package-map.md",
+    "docs/testing.md",
+    "millrace-agents/auto-port/generated/auto-port-python-v0.18.6-to-v0.19.0-rust-0.4.0.md",
+    "millrace-agents/auto-port/state.json",
+    "millrace-agents/outline.md",
+    "src/cli/mod.rs",
+    "src/cli/parser.rs",
+    "src/cli/read_only.rs",
+    "src/cli/render.rs",
+    "src/compiler/contracts.rs",
+    "src/compiler/graph_exports.rs",
+    "src/compiler/materialization.rs",
+    "src/compiler/persistence.rs",
+    "src/contracts/capabilities.rs",
+    "src/contracts/enums.rs",
+    "src/contracts/mod.rs",
+    "src/contracts/runtime_json.rs",
+    "src/lib.rs",
+    "src/runners/artifacts.rs",
+    "src/runners/codex_cli.rs",
+    "src/runners/contracts.rs",
+    "src/runners/dispatcher.rs",
+    "src/runners/normalization.rs",
+    "src/runners/pi_rpc.rs",
+    "src/runners/prompting.rs",
+    "src/runtime/approvals.rs",
+    "src/runtime/capability_gates.rs",
+    "src/runtime/startup.rs",
+    "src/runtime/supervisor.rs",
+    "src/runtime/tick.rs",
+    "src/workspace/runtime_control.rs",
+    "tests/compiler_capability_grants.rs",
+    "tests/compiler_contracts.rs",
+    "tests/compiler_materialization.rs",
+    "tests/compiler_persistence.rs",
+    "tests/contracts_capabilities.rs",
+    "tests/contracts_public_exports.rs",
+    "tests/contracts_runtime_json.rs",
+    "tests/fixtures/cli_parity/auto_port_v0_19_0_parity_evidence.json",
+    "tests/fixtures/cli_parity/web_dashboard_parity_decision.json",
+    "tests/fixtures/runtime_json/auto_port_v0_19_0_runtime_contract_scout.json",
+    "tests/parity_cli.rs",
+    "tests/runners_capability_support.rs",
+    "tests/runners_codex_cli.rs",
+    "tests/runners_normalization.rs",
+    "tests/runners_pi_rpc.rs",
+    "tests/runtime_capability_gates.rs",
+    "tests/runtime_daemon.rs",
+    "tests/runtime_serial.rs",
+    "tests/workspace_runtime_control.rs"
+  ],
+  "execution_capability_contract": {
+    "base_capability_ids": [
+      "workspace.read",
+      "workspace.write",
+      "artifact.read",
+      "artifact.write",
+      "runner.invoke",
+      "shell.run",
+      "git.read",
+      "git.mutate",
+      "package.install",
+      "network.access",
+      "approval.request",
+      "evidence.emit",
+      "runtime.control"
+    ],
+    "capability_key_aliases": {
+      "workspace_read": "workspace.read",
+      "workspace_write": "workspace.write",
+      "artifact_read": "artifact.read",
+      "artifact_write": "artifact.write",
+      "runner_invoke": "runner.invoke",
+      "shell_run": "shell.run",
+      "git_read": "git.read",
+      "git_mutate": "git.mutate",
+      "package_install": "package.install",
+      "network_access": "network.access",
+      "approval_request": "approval.request",
+      "evidence_emit": "evidence.emit",
+      "runtime_control": "runtime.control"
+    },
+    "scope_kinds": [
+      "workspace",
+      "workspace_path",
+      "artifact_kind",
+      "artifact_ref",
+      "runner",
+      "command_class",
+      "git_action",
+      "package_manager",
+      "network_class",
+      "approval_policy_ref",
+      "runtime_action"
+    ],
+    "runtime_action_scope_values": [
+      "enqueue",
+      "pause",
+      "resume",
+      "cancel",
+      "retry",
+      "repair",
+      "approve",
+      "deny",
+      "reload_config"
+    ],
+    "contract_models": [
+      "CapabilityScope",
+      "ApprovalPolicyRef",
+      "CapabilityRequest",
+      "CapabilityPolicyOverride",
+      "ExecutionCapabilityGrant",
+      "CapabilitySupportDecision",
+      "MailboxExecutionCapabilityApprovalPayload"
+    ],
+    "decision_states": [
+      "granted",
+      "denied",
+      "approval_required",
+      "unsupported"
+    ],
+    "enforcement_modes": [
+      "runner_enforced",
+      "runtime_enforced",
+      "adapter_enforced",
+      "external_api_enforced",
+      "advisory_only",
+      "not_applicable"
+    ],
+    "support_states": [
+      "supported",
+      "unsupported",
+      "partially_supported"
+    ],
+    "evidence_statuses": [
+      "not_required",
+      "pending",
+      "satisfied",
+      "missing",
+      "waived",
+      "violated"
+    ],
+    "fingerprint_prefix": "grant-"
+  },
+  "execution_capability_config": {
+    "keys": [
+      "enabled",
+      "default_unknown_capability",
+      "allow_advisory_grants",
+      "fail_required_advisory",
+      "defaults"
+    ],
+    "default_decisions": {
+      "network.access": "deny",
+      "package.install": "approval_required",
+      "git.mutate": "approval_required",
+      "shell.run": "allow",
+      "workspace.write": "allow"
+    },
+    "recompile_boundary_fields": [
+      "execution_capabilities.enabled",
+      "execution_capabilities.default_unknown_capability",
+      "execution_capabilities.allow_advisory_grants",
+      "execution_capabilities.fail_required_advisory",
+      "execution_capabilities.defaults"
+    ],
+    "config_show_keys": [
+      "execution_capabilities.enabled",
+      "execution_capabilities.allow_advisory_grants",
+      "execution_capabilities.fail_required_advisory"
+    ]
+  },
+  "compiler_grant_contract": {
+    "default_framework_grants": [
+      "runner.invoke",
+      "workspace.read",
+      "artifact.write"
+    ],
+    "request_sources": [
+      "stage_kind_default",
+      "stage_kind",
+      "graph_node",
+      "mode",
+      "runtime_config"
+    ],
+    "resolution_precedence": [
+      "mode",
+      "graph_node",
+      "runtime_config"
+    ],
+    "summary_keys": [
+      "total_grants",
+      "by_decision",
+      "by_enforcement"
+    ],
+    "strict_failure": "required advisory grants fail when fail_required_advisory is enabled or requires_enforcement is true",
+    "compiled_plan_fields": [
+      "execution_capability_grants",
+      "execution_capability_warnings",
+      "execution_capability_summary",
+      "execution_capability_summaries_by_plane"
+    ]
+  },
+  "approval_contract": {
+    "mailbox_commands": [
+      "approve_execution_capability",
+      "deny_execution_capability"
+    ],
+    "payload_model": "MailboxExecutionCapabilityApprovalPayload",
+    "storage_dirs": [
+      "millrace-agents/approvals/pending",
+      "millrace-agents/approvals/resolved"
+    ],
+    "approval_statuses": [
+      "pending",
+      "approved",
+      "denied",
+      "expired",
+      "cancelled"
+    ],
+    "cli_commands": [
+      "approvals ls",
+      "approvals show",
+      "approvals approve",
+      "approvals deny"
+    ],
+    "routing_modes": [
+      "direct",
+      "mailbox"
+    ],
+    "idempotency_key_fields": [
+      "run_id",
+      "request_id",
+      "grant_id"
+    ]
+  },
+  "capability_gate_contract": {
+    "gate_artifact_template": "capability_gate.<request_id>.json",
+    "event_type": "capability_gate_evaluated",
+    "failure_classes": [
+      "capability_grant_denied",
+      "capability_approval_required",
+      "capability_grant_unsupported",
+      "capability_evidence_missing"
+    ],
+    "blocked_decisions": [
+      "denied",
+      "approval_required",
+      "unsupported"
+    ],
+    "dispatch_paths": [
+      "serial_tick",
+      "daemon_supervisor"
+    ]
+  },
+  "runner_support_contract": {
+    "support_states": [
+      "supported",
+      "unsupported",
+      "partially_supported"
+    ],
+    "runner_ids": [
+      "codex_cli",
+      "pi_rpc",
+      "fake"
+    ],
+    "artifact_fields": [
+      "execution_capability_grants",
+      "capability_support_decisions",
+      "capability_evidence_refs",
+      "missing_capability_evidence_refs",
+      "failure_capability_class"
+    ],
+    "normalization_failure_class": "capability_evidence_missing",
+    "codex_advisory_permission": "maximum",
+    "pi_rpc_support_note": "conservative advisory support where narrow enforcement cannot be proven"
+  },
+  "inspection_contract": {
+    "compile_show_lines": [
+      "capability_grant",
+      "capability_warning"
+    ],
+    "config_show_lines": [
+      "execution_capabilities.enabled",
+      "execution_capabilities.allow_advisory_grants",
+      "execution_capabilities.fail_required_advisory"
+    ],
+    "runs_show_lines": [
+      "capability_grant",
+      "capability_support"
+    ],
+    "prompt_context_sections": [
+      "Execution Capability Grants",
+      "Capability Support Decisions"
+    ]
+  },
+  "daemon_mailbox_contract": {
+    "applied_commands": [
+      "approve_execution_capability",
+      "deny_execution_capability"
+    ],
+    "processed_archive": "millrace-agents/state/mailbox/processed/<COMMAND_ID>.json",
+    "failed_archive": "millrace-agents/state/mailbox/failed/<COMMAND_ID>.json",
+    "applied_events": [
+      "execution_capability_approval_decided",
+      "mailbox_operator_intervention_applied"
+    ],
+    "deterministic_ordering": true
+  },
+  "no_live_guarantees": [
+    "no live Python execution beyond checked-out ../millrace-py diff inspection",
+    "no live Codex runner",
+    "no live Pi runner",
+    "no network",
+    "no credentials",
+    "no web server",
+    "no remote skill installation",
+    "no release upload",
+    "no publishing"
+  ]
+}

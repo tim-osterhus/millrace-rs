@@ -487,6 +487,58 @@ string_enum! {
 }
 
 string_enum! {
+    /// Execution capability grant decision states.
+    pub enum CapabilityDecisionState {
+        Granted => "granted",
+        Denied => "denied",
+        ApprovalRequired => "approval_required",
+        Unsupported => "unsupported",
+    }
+}
+
+string_enum! {
+    /// Execution capability enforcement modes.
+    pub enum CapabilityEnforcementMode {
+        RunnerEnforced => "runner_enforced",
+        RuntimeEnforced => "runtime_enforced",
+        AdapterEnforced => "adapter_enforced",
+        ExternalApiEnforced => "external_api_enforced",
+        AdvisoryOnly => "advisory_only",
+        NotApplicable => "not_applicable",
+    }
+}
+
+string_enum! {
+    /// Execution capability evidence states.
+    pub enum CapabilityEvidenceStatus {
+        NotRequired => "not_required",
+        Pending => "pending",
+        Satisfied => "satisfied",
+        Missing => "missing",
+        Waived => "waived",
+        Violated => "violated",
+    }
+}
+
+string_enum! {
+    /// Execution capability policy override decisions.
+    pub enum CapabilityPolicyDecision {
+        Allow => "allow",
+        Deny => "deny",
+        ApprovalRequired => "approval_required",
+    }
+}
+
+string_enum! {
+    /// Runner support states for execution capabilities.
+    pub enum CapabilitySupportState {
+        Supported => "supported",
+        Unsupported => "unsupported",
+        PartiallySupported => "partially_supported",
+    }
+}
+
+string_enum! {
     /// Mailbox commands accepted by the runtime.
     pub enum MailboxCommand {
         Stop => "stop",
@@ -506,6 +558,8 @@ string_enum! {
         ResolveIncident => "resolve_incident",
         CancelIncident => "cancel_incident",
         ArchiveInvalidIncident => "archive_invalid_incident",
+        ApproveExecutionCapability => "approve_execution_capability",
+        DenyExecutionCapability => "deny_execution_capability",
     }
 }
 

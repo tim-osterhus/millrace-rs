@@ -11,14 +11,14 @@ use millrace_ai::contracts::{
     FailureClassifierCode, FailureScope, LatestOperatorIntervention, LearningTerminalResult,
     MailboxAddProbePayload, MailboxArchiveBlockedTaskPayload, MailboxArchiveInvalidIncidentPayload,
     MailboxCancelWorkItemPayload, MailboxCommand, MailboxCommandEnvelope,
-    MailboxIncidentInterventionPayload, MailboxRetargetTaskDependencyPayload,
-    MailboxSupersedeCascade, MailboxSupersedeTaskPayload, Plane, PlanningTerminalResult,
-    ReadOnlyStatusPayload, ReconDecision, ReconHandoffTarget, ReconPacketDocument,
-    ReconPacketError, RecoveryCounters, ResultClass, RunTraceGraph, RunnerFailureClass,
-    RunnerFailureMetadata, RuntimeErrorContext, RuntimeJsonContract, RuntimeJsonError, RuntimeMode,
-    RuntimeSnapshot, StageName, StageResultEnvelope, StrandedBlockedDependency, TerminalResult,
-    Timestamp, TokenUsage, UsageGovernanceLedgerEntry, UsageGovernanceState,
-    UsageGovernanceSubscriptionWindow, WorkItemKind,
+    MailboxExecutionCapabilityApprovalPayload, MailboxIncidentInterventionPayload,
+    MailboxRetargetTaskDependencyPayload, MailboxSupersedeCascade, MailboxSupersedeTaskPayload,
+    Plane, PlanningTerminalResult, ReadOnlyStatusPayload, ReconDecision, ReconHandoffTarget,
+    ReconPacketDocument, ReconPacketError, RecoveryCounters, ResultClass, RunTraceGraph,
+    RunnerFailureClass, RunnerFailureMetadata, RuntimeErrorContext, RuntimeJsonContract,
+    RuntimeJsonError, RuntimeMode, RuntimeSnapshot, StageName, StageResultEnvelope,
+    StrandedBlockedDependency, TerminalResult, Timestamp, TokenUsage, UsageGovernanceLedgerEntry,
+    UsageGovernanceState, UsageGovernanceSubscriptionWindow, WorkItemKind,
 };
 use millrace_ai::recon_packets::{parse_recon_packet, read_recon_packet, render_recon_packet};
 
@@ -1726,6 +1726,194 @@ fn auto_port_v0_18_6_runtime_contract_scout_pins_operator_intervention_and_durab
 }
 
 #[test]
+fn auto_port_v0_19_0_runtime_contract_scout_pins_execution_capability_contracts() {
+    let fixture: Value = python_model_dump_fixture(include_str!(
+        "fixtures/runtime_json/auto_port_v0_19_0_runtime_contract_scout.json"
+    ));
+    assert_eq!(fixture["schema_version"], "1.0");
+    assert_eq!(fixture["kind"], "auto_port_v0_19_0_runtime_contract_scout");
+    assert_eq!(fixture["python_reference"]["previous_tag"], "v0.18.6");
+    assert_eq!(
+        fixture["python_reference"]["previous_tag_object"],
+        "85d91683f3be3dfa6f2983d3e397ed373f12edba"
+    );
+    assert_eq!(
+        fixture["python_reference"]["previous_peeled_commit"],
+        "63e623bc6fcfcf74ae0cc2ce5605a12ae4179873"
+    );
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.19.0");
+    assert_eq!(
+        fixture["python_reference"]["target_tag_object"],
+        "11c45b03428226f04f56fe078e083bea2464e6b0"
+    );
+    assert_eq!(
+        fixture["python_reference"]["target_peeled_commit"],
+        "efb9c5881f524d23dcb78aecfc96fdf7cda9d26f"
+    );
+    assert_eq!(
+        fixture["python_reference"]["diff_range"],
+        "v0.18.6..v0.19.0"
+    );
+    assert_eq!(
+        fixture["rust_reference"]["current_repo_crate_version"],
+        "0.3.5"
+    );
+    assert_eq!(fixture["rust_reference"]["planned_crate_version"], "0.4.0");
+
+    let sources: BTreeSet<_> = fixture["contract_sources"]
+        .as_array()
+        .expect("contract source references are present")
+        .iter()
+        .map(|value| value.as_str().expect("contract source"))
+        .collect();
+    for source_path in [
+        "../millrace-py/src/millrace_ai/contracts/capabilities.py",
+        "../millrace-py/src/millrace_ai/contracts/mailbox.py",
+        "../millrace-py/src/millrace_ai/config/models.py",
+        "../millrace-py/src/millrace_ai/compilation/capabilities.py",
+        "../millrace-py/src/millrace_ai/runtime/capability_gates.py",
+        "../millrace-py/src/millrace_ai/runtime/approvals.py",
+        "../millrace-py/src/millrace_ai/runners/contracts.py",
+        "../millrace-py/tests/contracts/test_capabilities.py",
+        "../millrace-py/tests/compilation/test_capability_grants.py",
+        "../millrace-py/tests/runtime/test_capability_gates.py",
+        "../millrace-py/tests/runners/test_capability_support.py",
+    ] {
+        assert!(
+            sources.contains(source_path),
+            "missing v0.19.0 capability source {source_path}"
+        );
+    }
+
+    let targets: BTreeSet<_> = fixture["expected_rust_contract_targets"]
+        .as_array()
+        .expect("expected Rust contract targets are present")
+        .iter()
+        .map(|value| value.as_str().expect("expected Rust target"))
+        .collect();
+    for target_path in [
+        "src/contracts/capabilities.rs",
+        "src/contracts/runtime_json.rs",
+        "src/compiler/materialization.rs",
+        "src/runtime/capability_gates.rs",
+        "src/runtime/approvals.rs",
+        "src/runners/artifacts.rs",
+        "src/runners/normalization.rs",
+        "tests/contracts_runtime_json.rs",
+        "tests/contracts_public_exports.rs",
+        "tests/compiler_materialization.rs",
+        "tests/runtime_serial.rs",
+        "tests/runtime_daemon.rs",
+        "tests/runners_normalization.rs",
+    ] {
+        assert!(
+            targets.contains(target_path),
+            "missing v0.19.0 Rust contract target {target_path}"
+        );
+    }
+
+    let capability = &fixture["execution_capability_contract"];
+    for model in [
+        "CapabilityScope",
+        "ApprovalPolicyRef",
+        "CapabilityRequest",
+        "CapabilityPolicyOverride",
+        "ExecutionCapabilityGrant",
+        "CapabilitySupportDecision",
+        "MailboxExecutionCapabilityApprovalPayload",
+    ] {
+        assert!(
+            capability["contract_models"]
+                .as_array()
+                .expect("capability contract models are present")
+                .iter()
+                .any(|value| value.as_str() == Some(model)),
+            "missing v0.19.0 capability contract model {model}"
+        );
+    }
+    for capability_id in [
+        "runner.invoke",
+        "workspace.read",
+        "artifact.write",
+        "shell.run",
+        "git.mutate",
+        "package.install",
+        "network.access",
+        "approval.request",
+        "evidence.emit",
+        "runtime.control",
+    ] {
+        assert!(
+            capability["base_capability_ids"]
+                .as_array()
+                .expect("base capability ids are present")
+                .iter()
+                .any(|value| value.as_str() == Some(capability_id)),
+            "missing v0.19.0 capability id {capability_id}"
+        );
+    }
+    assert_eq!(
+        capability["capability_key_aliases"]["workspace_write"],
+        "workspace.write"
+    );
+    assert_eq!(capability["fingerprint_prefix"], "grant-");
+    assert_eq!(
+        capability["decision_states"],
+        json!(["granted", "denied", "approval_required", "unsupported"])
+    );
+    assert!(
+        capability["scope_kinds"]
+            .as_array()
+            .expect("scope kinds are present")
+            .iter()
+            .any(|value| value.as_str() == Some("workspace_path")),
+        "missing v0.19.0 workspace_path capability scope"
+    );
+    assert!(
+        capability["runtime_action_scope_values"]
+            .as_array()
+            .expect("runtime action scopes are present")
+            .iter()
+            .any(|value| value.as_str() == Some("approve")),
+        "missing v0.19.0 approve runtime action scope"
+    );
+
+    let approval = &fixture["approval_contract"];
+    assert_eq!(
+        approval["mailbox_commands"],
+        json!(["approve_execution_capability", "deny_execution_capability"])
+    );
+    assert_eq!(
+        approval["storage_dirs"],
+        json!([
+            "millrace-agents/approvals/pending",
+            "millrace-agents/approvals/resolved"
+        ])
+    );
+
+    let guarantees = fixture["no_live_guarantees"]
+        .as_array()
+        .expect("non-live guarantees are present");
+    for guarantee in [
+        "no live Python execution beyond checked-out ../millrace-py diff inspection",
+        "no live Codex runner",
+        "no live Pi runner",
+        "no network",
+        "no credentials",
+        "no web server",
+        "no release upload",
+        "no publishing",
+    ] {
+        assert!(
+            guarantees
+                .iter()
+                .any(|value| value.as_str() == Some(guarantee)),
+            "missing v0.19.0 runtime contract scout guarantee {guarantee}"
+        );
+    }
+}
+
+#[test]
 fn python_v0_18_6_mailbox_intervention_payload_contracts_round_trip_and_validate() {
     let fixture = python_model_dump_fixture(include_str!(
         "fixtures/runtime_json/mailbox_intervention_payloads.json"
@@ -1769,6 +1957,14 @@ fn python_v0_18_6_mailbox_intervention_payload_contracts_round_trip_and_validate
         valid["archive_invalid_incident"].clone(),
     );
     assert_eq!(archive_invalid.filename, "incident-invalid.md");
+    let approve = round_trip_contract::<MailboxExecutionCapabilityApprovalPayload>(
+        valid["approve_execution_capability"].clone(),
+    );
+    assert_eq!(approve.approval_id, "approval-run-001");
+    let deny = round_trip_contract::<MailboxExecutionCapabilityApprovalPayload>(
+        valid["deny_execution_capability"].clone(),
+    );
+    assert_eq!(deny.approval_id, "approval-run-002");
 
     for (command, expected) in [
         ("cancel_work_item", MailboxCommand::CancelWorkItem),
@@ -1783,6 +1979,14 @@ fn python_v0_18_6_mailbox_intervention_payload_contracts_round_trip_and_validate
         (
             "archive_invalid_incident",
             MailboxCommand::ArchiveInvalidIncident,
+        ),
+        (
+            "approve_execution_capability",
+            MailboxCommand::ApproveExecutionCapability,
+        ),
+        (
+            "deny_execution_capability",
+            MailboxCommand::DenyExecutionCapability,
         ),
     ] {
         let envelope = round_trip_contract::<MailboxCommandEnvelope>(json!({
@@ -1868,6 +2072,20 @@ fn python_v0_18_6_mailbox_intervention_payload_contracts_round_trip_and_validate
         .unwrap_err()
         .to_string()
         .contains("single relative filename")
+    );
+    assert!(matches!(
+        MailboxExecutionCapabilityApprovalPayload::from_json_value(
+            invalid["unsafe_approval_id"].clone()
+        ),
+        Err(RuntimeJsonError::Contract(_))
+    ));
+    assert!(
+        MailboxExecutionCapabilityApprovalPayload::from_json_value(
+            invalid["empty_approval_reason"].clone()
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("reason")
     );
 }
 

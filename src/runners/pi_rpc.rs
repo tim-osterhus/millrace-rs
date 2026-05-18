@@ -9,7 +9,13 @@ use std::{
 use serde_json::Value;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
-use crate::{contracts::Timestamp, runtime::StageRunRequest};
+use crate::{
+    contracts::{
+        CapabilityDecisionState, CapabilityEnforcementMode, CapabilitySupportDecision,
+        CapabilitySupportState, ExecutionCapabilityGrant, Timestamp,
+    },
+    runtime::StageRunRequest,
+};
 
 use super::{
     RunnerEnvironmentDelta, RunnerError, RunnerExitKind, RunnerRawResult, RunnerResult,
@@ -18,6 +24,7 @@ use super::{
         RunnerCompletionArtifactContext, completion_artifact_from_raw_result,
         invocation_artifact_from_request, write_runner_completion, write_runner_invocation,
     },
+    capability_evidence_refs_for_request, missing_capability_evidence_refs_for_request,
     pi_rpc_client::{
         PiRpcClientCreateRequest, PiRpcClientError, PiRpcClientFactory, PiRpcSessionResult,
         SubprocessPiRpcClientFactory,
@@ -179,10 +186,30 @@ impl PiRpcRunnerAdapter {
     pub fn build_command(&self, request: &StageRunRequest) -> RunnerResult<Vec<String>> {
         build_pi_rpc_command(&self.config, request)
     }
+
+    /// Reports Pi RPC support for one execution capability grant.
+    #[must_use]
+    pub fn evaluate_capability_grant(
+        &self,
+        grant: &ExecutionCapabilityGrant,
+        request: &StageRunRequest,
+    ) -> CapabilitySupportDecision {
+        pi_rpc_capability_support_decision(self.name(), grant, request)
+    }
 }
 
 impl StageRunnerAdapter for PiRpcRunnerAdapter {
+    fn evaluate_capability_grant(
+        &self,
+        grant: &ExecutionCapabilityGrant,
+        request: &StageRunRequest,
+    ) -> CapabilitySupportDecision {
+        self.evaluate_capability_grant(grant, request)
+    }
+
     fn run(&self, request: &StageRunRequest) -> RunnerResult<RunnerRawResult> {
+        let request = self.request_with_capability_support(request);
+        let request = &request;
         self.config.validate()?;
         let emitted_at = now_timestamp("emitted_at")?;
         let run_dir = Path::new(&request.run_dir);
@@ -302,6 +329,10 @@ impl PiRpcRunnerAdapter {
             terminal_result_path: None,
             event_log_path: None,
             token_usage: None,
+            failure_capability_class: failure_capability_class_for_request(request),
+            capability_support_decisions: request.capability_support_decisions.clone(),
+            capability_evidence_refs: capability_evidence_refs_for_request(request),
+            missing_capability_evidence_refs: missing_capability_evidence_refs_for_request(request),
             started_at,
             ended_at: now_timestamp("ended_at")?,
         };
@@ -369,6 +400,10 @@ impl PiRpcRunnerAdapter {
             terminal_result_path: None,
             event_log_path,
             token_usage: session_result.token_usage,
+            failure_capability_class: failure_capability_class_for_request(request),
+            capability_support_decisions: request.capability_support_decisions.clone(),
+            capability_evidence_refs: capability_evidence_refs_for_request(request),
+            missing_capability_evidence_refs: missing_capability_evidence_refs_for_request(request),
             started_at: session_result.started_at,
             ended_at: session_result.ended_at,
         };
@@ -440,6 +475,63 @@ pub fn should_persist_event_log(
         return false;
     }
     policy == PiEventLogPolicy::Full || session_result.exit_kind != RunnerExitKind::Completed
+}
+
+fn pi_rpc_capability_support_decision(
+    runner_id: &str,
+    grant: &ExecutionCapabilityGrant,
+    request: &StageRunRequest,
+) -> CapabilitySupportDecision {
+    if grant.decision_state != CapabilityDecisionState::Granted {
+        return CapabilitySupportDecision {
+            runner_id: runner_id.to_owned(),
+            invocation_context_ref: request.stage.as_str().to_owned(),
+            grant_id: grant.grant_id.clone(),
+            support_state: CapabilitySupportState::Unsupported,
+            enforcement_mode: CapabilityEnforcementMode::NotApplicable,
+            limitations: Vec::new(),
+            evidence_available: Vec::new(),
+            reason: format!("grant decision is {}", grant.decision_state.as_str()),
+        };
+    }
+    if matches!(
+        grant.capability_id.as_str(),
+        "runner.invoke" | "artifact.read" | "artifact.write" | "evidence.emit"
+    ) {
+        return CapabilitySupportDecision {
+            runner_id: runner_id.to_owned(),
+            invocation_context_ref: request.stage.as_str().to_owned(),
+            grant_id: grant.grant_id.clone(),
+            support_state: CapabilitySupportState::Supported,
+            enforcement_mode: grant.enforcement_mode,
+            limitations: Vec::new(),
+            evidence_available: vec![
+                "runner_invocation".to_owned(),
+                "runner_completion".to_owned(),
+            ],
+            reason: "Millrace runtime records Pi RPC invocation and artifacts".to_owned(),
+        };
+    }
+    CapabilitySupportDecision {
+        runner_id: runner_id.to_owned(),
+        invocation_context_ref: request.stage.as_str().to_owned(),
+        grant_id: grant.grant_id.clone(),
+        support_state: CapabilitySupportState::PartiallySupported,
+        enforcement_mode: CapabilityEnforcementMode::AdvisoryOnly,
+        limitations: vec![
+            "Pi RPC cannot prove filesystem or network enforcement boundaries".to_owned(),
+        ],
+        evidence_available: vec![
+            "runner_invocation".to_owned(),
+            "runner_completion".to_owned(),
+        ],
+        reason: "Pi RPC support is advisory for this capability".to_owned(),
+    }
+}
+
+fn failure_capability_class_for_request(request: &StageRunRequest) -> Option<String> {
+    (!missing_capability_evidence_refs_for_request(request).is_empty())
+        .then(|| "capability_evidence_missing".to_owned())
 }
 
 fn is_message_update_event(raw_line: &str) -> bool {

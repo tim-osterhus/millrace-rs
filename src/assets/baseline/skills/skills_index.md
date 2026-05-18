@@ -103,3 +103,4 @@ those optional payloads to the base runtime package.
 - durable-workflow-orchestration: durable-workflow-orchestration/SKILL.md
 - optimize-agentic-cli: optimize-agentic-cli/SKILL.md
 - rust-best-practices: rust-best-practices/SKILL.md
+- cli-tool-creator: cli-tool-creator/SKILL.md

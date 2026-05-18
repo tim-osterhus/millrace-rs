@@ -15,10 +15,13 @@ use crate::contracts::{
     ActiveRunState, MailboxAddIdeaPayload, MailboxAddProbePayload, MailboxAddSpecPayload,
     MailboxAddTaskPayload, MailboxArchiveBlockedTaskPayload, MailboxArchiveInvalidIncidentPayload,
     MailboxCancelWorkItemPayload, MailboxCommand, MailboxCommandEnvelope,
-    MailboxIncidentInterventionPayload, MailboxRetargetTaskDependencyPayload,
-    MailboxSupersedeCascade, MailboxSupersedeTaskPayload, PauseSource, Plane, ProbeDocument,
-    RecoveryCounters, RuntimeJsonContract, RuntimeJsonError, RuntimeSnapshot, SpecDocument,
-    TaskDocument, Timestamp, WorkItemKind,
+    MailboxExecutionCapabilityApprovalPayload, MailboxIncidentInterventionPayload,
+    MailboxRetargetTaskDependencyPayload, MailboxSupersedeCascade, MailboxSupersedeTaskPayload,
+    PauseSource, Plane, ProbeDocument, RecoveryCounters, RuntimeJsonContract, RuntimeJsonError,
+    RuntimeSnapshot, SpecDocument, TaskDocument, Timestamp, WorkItemKind,
+};
+use crate::runtime::{
+    ApprovalStorageError, approve_execution_capability_request, deny_execution_capability_request,
 };
 
 use super::{
@@ -144,6 +147,8 @@ pub enum RuntimeControlError {
     QueueStore(QueueStoreError),
     /// Runtime lock mutation failed.
     RuntimeLock(RuntimeOwnershipLockError),
+    /// Durable approval storage failed.
+    ApprovalStorage(ApprovalStorageError),
     /// Runtime JSON validation failed.
     RuntimeJson {
         /// Path being read or written when available.
@@ -209,6 +214,7 @@ impl fmt::Display for RuntimeControlError {
             Self::StateStore(error) => write!(f, "{error}"),
             Self::QueueStore(error) => write!(f, "{error}"),
             Self::RuntimeLock(error) => write!(f, "{error}"),
+            Self::ApprovalStorage(error) => write!(f, "{error}"),
             Self::RuntimeJson { path, source } => {
                 write!(
                     f,
@@ -250,6 +256,7 @@ impl std::error::Error for RuntimeControlError {
             Self::StateStore(error) => Some(error),
             Self::QueueStore(error) => Some(error),
             Self::RuntimeLock(error) => Some(error),
+            Self::ApprovalStorage(error) => Some(error),
             Self::RuntimeJson { source, .. } => Some(source),
             Self::Io { .. }
             | Self::JsonRender { .. }
@@ -280,6 +287,12 @@ impl From<QueueStoreError> for RuntimeControlError {
 impl From<RuntimeOwnershipLockError> for RuntimeControlError {
     fn from(value: RuntimeOwnershipLockError) -> Self {
         Self::RuntimeLock(value)
+    }
+}
+
+impl From<ApprovalStorageError> for RuntimeControlError {
+    fn from(value: ApprovalStorageError) -> Self {
+        Self::ApprovalStorage(value)
     }
 }
 
@@ -795,6 +808,66 @@ impl RuntimeControl {
         )
     }
 
+    /// Approve a pending execution capability approval directly or through daemon mailbox routing.
+    pub fn approve_execution_capability(
+        &self,
+        approval_id: &str,
+        reason: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        self.approve_execution_capability_with_issuer(approval_id, reason, DEFAULT_ISSUER)
+    }
+
+    /// Approve a pending execution capability approval with a caller-provided issuer.
+    pub fn approve_execution_capability_with_issuer(
+        &self,
+        approval_id: &str,
+        reason: &str,
+        issuer: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        let mut payload_model = MailboxExecutionCapabilityApprovalPayload {
+            approval_id: approval_id.to_owned(),
+            reason: reason.to_owned(),
+        };
+        let payload =
+            intervention_payload_map(&self.paths.mailbox_incoming_dir, &mut payload_model)?;
+        self.dispatch(
+            MailboxCommand::ApproveExecutionCapability,
+            issuer,
+            Some(payload),
+            |snapshot| self.approve_execution_capability_direct(snapshot, &payload_model, issuer),
+        )
+    }
+
+    /// Deny a pending execution capability approval directly or through daemon mailbox routing.
+    pub fn deny_execution_capability(
+        &self,
+        approval_id: &str,
+        reason: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        self.deny_execution_capability_with_issuer(approval_id, reason, DEFAULT_ISSUER)
+    }
+
+    /// Deny a pending execution capability approval with a caller-provided issuer.
+    pub fn deny_execution_capability_with_issuer(
+        &self,
+        approval_id: &str,
+        reason: &str,
+        issuer: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        let mut payload_model = MailboxExecutionCapabilityApprovalPayload {
+            approval_id: approval_id.to_owned(),
+            reason: reason.to_owned(),
+        };
+        let payload =
+            intervention_payload_map(&self.paths.mailbox_incoming_dir, &mut payload_model)?;
+        self.dispatch(
+            MailboxCommand::DenyExecutionCapability,
+            issuer,
+            Some(payload),
+            |snapshot| self.deny_execution_capability_direct(snapshot, &payload_model, issuer),
+        )
+    }
+
     fn dispatch<F>(
         &self,
         command: MailboxCommand,
@@ -1029,6 +1102,58 @@ impl RuntimeControl {
             MailboxCommand::ReloadConfig,
             false,
             "no daemon running; reload request not enqueued",
+        ))
+    }
+
+    fn approve_execution_capability_direct(
+        &self,
+        mut snapshot: RuntimeSnapshot,
+        payload: &MailboxExecutionCapabilityApprovalPayload,
+        issuer: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        let now = now_timestamp("decided_at")?;
+        let approval = approve_execution_capability_request(
+            &self.paths,
+            &payload.approval_id,
+            issuer,
+            &payload.reason,
+            &now,
+        )?;
+        snapshot.updated_at = now_timestamp("updated_at")?;
+        save_snapshot(&self.paths, &snapshot)?;
+        Ok(RuntimeControlActionResult::direct(
+            MailboxCommand::ApproveExecutionCapability,
+            true,
+            format!(
+                "approved execution capability request {}",
+                approval.approval_id
+            ),
+        ))
+    }
+
+    fn deny_execution_capability_direct(
+        &self,
+        mut snapshot: RuntimeSnapshot,
+        payload: &MailboxExecutionCapabilityApprovalPayload,
+        issuer: &str,
+    ) -> RuntimeControlResult<RuntimeControlActionResult> {
+        let now = now_timestamp("decided_at")?;
+        let approval = deny_execution_capability_request(
+            &self.paths,
+            &payload.approval_id,
+            issuer,
+            &payload.reason,
+            &now,
+        )?;
+        snapshot.updated_at = now_timestamp("updated_at")?;
+        save_snapshot(&self.paths, &snapshot)?;
+        Ok(RuntimeControlActionResult::direct(
+            MailboxCommand::DenyExecutionCapability,
+            true,
+            format!(
+                "denied execution capability request {}",
+                approval.approval_id
+            ),
         ))
     }
 

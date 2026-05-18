@@ -176,6 +176,8 @@ fn enum_values_match_python_reference_contracts() {
             "resolve_incident",
             "cancel_incident",
             "archive_invalid_incident",
+            "approve_execution_capability",
+            "deny_execution_capability",
         ]
     );
     assert_eq!(

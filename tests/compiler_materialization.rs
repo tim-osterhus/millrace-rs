@@ -1,4 +1,7 @@
-use std::{collections::HashMap, fs};
+use std::{
+    collections::{BTreeSet, HashMap},
+    fs,
+};
 
 use millrace_ai::{
     compiler::{
@@ -38,6 +41,67 @@ fn threshold<'a>(
         .iter()
         .find(|policy| policy.policy_id == policy_id)
         .unwrap_or_else(|| panic!("missing threshold policy {policy_id}"))
+}
+
+#[test]
+fn compiler_materialization_v0_19_0_guardrail_fixture_requires_compiled_capability_grants() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "fixtures/runtime_json/auto_port_v0_19_0_runtime_contract_scout.json"
+    ))
+    .expect("parse v0.19.0 runtime contract scout");
+    assert_eq!(fixture["kind"], "auto_port_v0_19_0_runtime_contract_scout");
+
+    let sources: BTreeSet<_> = fixture["contract_sources"]
+        .as_array()
+        .expect("contract source references are present")
+        .iter()
+        .map(|value| value.as_str().expect("contract source"))
+        .collect();
+    for source in [
+        "../millrace-py/src/millrace_ai/compilation/capabilities.py",
+        "../millrace-py/src/millrace_ai/compilation/graph_materialization.py",
+        "../millrace-py/src/millrace_ai/compilation/node_materialization.py",
+        "../millrace-py/src/millrace_ai/compilation/workspace_plan.py",
+        "../millrace-py/tests/compilation/test_capability_grants.py",
+    ] {
+        assert!(
+            sources.contains(source),
+            "missing v0.19.0 materialization capability source {source}"
+        );
+    }
+
+    let compiler = &fixture["compiler_grant_contract"];
+    assert_eq!(
+        compiler["default_framework_grants"],
+        serde_json::json!(["runner.invoke", "workspace.read", "artifact.write"])
+    );
+    assert!(
+        compiler["compiled_plan_fields"]
+            .as_array()
+            .expect("compiled plan fields are present")
+            .iter()
+            .any(|value| value.as_str() == Some("execution_capability_grants")),
+        "missing v0.19.0 compiled capability grant field"
+    );
+    assert!(
+        compiler["compiled_plan_fields"]
+            .as_array()
+            .expect("compiled plan fields are present")
+            .iter()
+            .any(|value| value.as_str() == Some("execution_capability_summaries_by_plane")),
+        "missing v0.19.0 compiled capability summary field"
+    );
+    assert_eq!(
+        compiler["summary_keys"],
+        serde_json::json!(["total_grants", "by_decision", "by_enforcement"])
+    );
+    assert!(
+        compiler["strict_failure"]
+            .as_str()
+            .expect("strict advisory failure description")
+            .contains("fail_required_advisory"),
+        "missing v0.19.0 strict advisory compile failure evidence"
+    );
 }
 
 #[test]

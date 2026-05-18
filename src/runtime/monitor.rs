@@ -199,6 +199,10 @@ impl BasicMonitorRenderer {
                 seed_stage_started(&event.payload, &event.occurred_at, &mut self.run_state);
                 vec![render_stage_started(&event.payload, &mut self.display_ids)]
             }
+            "capability_gate_evaluated" => vec![render_capability_gate_evaluated(
+                &event.payload,
+                &mut self.display_ids,
+            )],
             "stage_completed" => {
                 let run_update = record_stage_completed(
                     &event.payload,
@@ -301,6 +305,9 @@ impl BasicMonitorRenderer {
             }
             "mailbox_operator_intervention_applied" => {
                 vec![render_mailbox_operator_intervention_applied(&event.payload)]
+            }
+            "execution_capability_approval_decided" => {
+                vec![render_execution_capability_approval_decided(&event.payload)]
             }
             "operator_intervention_deferred" => {
                 vec![render_operator_intervention_deferred(&event.payload)]
@@ -460,6 +467,26 @@ fn render_stage_started(
     }
     if let Some(status) = nonredundant_running_status(payload) {
         parts.push(format!("status={status}"));
+    }
+    parts.join(" ")
+}
+
+fn render_capability_gate_evaluated(
+    payload: &Map<String, Value>,
+    display_ids: &mut DisplayIdRegistry,
+) -> String {
+    let mut parts = vec![
+        "capability gate".to_owned(),
+        stage_ref_from_payload(payload),
+        format!("run={}", display_ids.run(payload.get("run_id"))),
+        format!("allowed={}", bool_string(payload.get("allowed"))),
+    ];
+    if let Some(failure_class) = optional_string(payload.get("failure_class")) {
+        parts.push(format!("failure={failure_class}"));
+    }
+    let blocked = string_list(payload.get("blocked_grant_ids"));
+    if !blocked.is_empty() {
+        parts.push(format!("blocked={}", blocked.join(",")));
     }
     parts.join(" ")
 }
@@ -662,6 +689,17 @@ fn render_mailbox_operator_intervention_applied(payload: &Map<String, Value>) ->
         string_or_default(payload.get("command_id"), "unknown")
     ));
     parts.join(" ")
+}
+
+fn render_execution_capability_approval_decided(payload: &Map<String, Value>) -> String {
+    format!(
+        "approval decided id={} status={} capability={} grant={} command_id={}",
+        string(payload.get("approval_id")),
+        string(payload.get("status")),
+        string(payload.get("capability_id")),
+        string(payload.get("grant_id")),
+        string_or_default(payload.get("command_id"), "none")
+    )
 }
 
 fn render_operator_intervention_deferred(payload: &Map<String, Value>) -> String {
@@ -1059,6 +1097,25 @@ fn number_string(value: Option<&Value>) -> String {
         Some(value) => value_to_string(value),
         None => "unknown".to_owned(),
     }
+}
+
+fn bool_string(value: Option<&Value>) -> String {
+    match value {
+        Some(Value::Bool(value)) => value.to_string(),
+        Some(value) => value_to_string(value),
+        None => "unknown".to_owned(),
+    }
+}
+
+fn string_list(value: Option<&Value>) -> Vec<String> {
+    value
+        .and_then(Value::as_array)
+        .map(|values| values.iter().filter_map(optional_value_string).collect())
+        .unwrap_or_default()
+}
+
+fn optional_value_string(value: &Value) -> Option<String> {
+    optional_string(Some(value))
 }
 
 fn optional_string(value: Option<&Value>) -> Option<String> {

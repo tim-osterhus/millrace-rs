@@ -11,7 +11,7 @@ millrace --version
 millrace version
 ```
 
-For Rust `0.3.5`, both commands print `millrace 0.3.5`.
+For Rust `0.4.0`, both commands print `millrace 0.4.0`.
 
 ## Probe Intake And Inspection
 
@@ -71,6 +71,25 @@ runtime-event evidence. `queue archive-blocked` is intentionally separate from
 `queue retry-blocked`: archive-blocked retires a blocked task as operator
 cleanup, while retry-blocked requeues a retryable transient blocked task.
 
+## Approval Commands
+
+The v0.19.0 execution capability approval surface exposes durable approval
+inspection and decisions through the same initialized-workspace CLI boundary:
+
+```bash
+millrace approvals ls --workspace <workspace>
+millrace approvals show <APPROVAL_ID> --workspace <workspace>
+millrace approvals approve <APPROVAL_ID> --workspace <workspace> --reason "approved"
+millrace approvals deny <APPROVAL_ID> --workspace <workspace> --reason "denied"
+```
+
+`approvals ls` renders pending and resolved records with stable grant context,
+and `approvals show` prints the full approval JSON without mutating state.
+Approve/deny commands validate safe approval ids and non-empty reasons, render
+the shared control-result fields, resolve the approval directly when no daemon
+owns the workspace, and route through `approve_execution_capability` or
+`deny_execution_capability` mailbox envelopes when a daemon owns it.
+
 ## Status JSON Diagnostics
 
 Rust `0.3.2` adds the Python `v0.18.2` status JSON diagnostics surface.
@@ -113,9 +132,9 @@ artifacts.
 ## Web Boundary
 
 Python `millrace-web` exposes graph and trace data through read-only dashboard
-routes, and Python `v0.18.5`/`v0.18.6` sync that optional package through
-version `0.18.6`.
-Rust `0.3.5` shadows the accepted local inspection behavior through the CLI
+routes, and Python `v0.19.0` syncs that optional package through version
+`0.19.0`.
+Rust `0.4.0` shadows the accepted local inspection behavior through the CLI
 commands above and keeps the optional web dashboard as an explicit unsupported
 gap. No Rust web server, dashboard HTTP API, static shell, SSE stream, separate
 dashboard package, or Rust-managed web asset is part of this crate release.
@@ -161,3 +180,46 @@ execution work. The daemon writes `millrace-agents/diagnostics/auto-recovery/`
 evidence, emits `blocked_dependency_auto_requeued` or
 `blocked_dependency_auto_requeue_skipped`, renders basic monitor lines, and
 does not dispatch the dependent task in the same recovered cycle.
+
+## Execution Capability Config
+
+The v0.19.0 capability contracts/config slice adds Rust config loading for
+`[execution_capabilities]`. Defaults match the Python surface for the
+implemented contract boundary: capability governance is enabled, unknown
+capabilities are denied, advisory grants are allowed, strict required-advisory
+failure is disabled, raw network access is denied, package install and git
+mutation require approval, and shell execution plus workspace writes are
+allowed.
+
+`millrace config show` exposes the three operator-facing keys implemented in
+this slice:
+
+```text
+execution_capabilities.enabled
+execution_capabilities.allow_advisory_grants
+execution_capabilities.fail_required_advisory
+```
+
+All `execution_capabilities.*` config fields are recompile-boundary fields.
+Runtime capability gates now enforce compiled grants before serial or daemon
+runner invocation, write `capability_gate.<request_id>.json`, emit
+`capability_gate_evaluated`, and use durable
+`millrace-agents/approvals/{pending,resolved}` records for approval-required
+grants. `millrace approvals` commands now list/show those records and resolve
+approve/deny decisions directly or through daemon-routed approval mailbox
+commands.
+
+`millrace compile show` now surfaces the compiler-owned grant evidence without
+running any stage. The output includes plan and per-plane
+`execution_capabilities.*` summary counts, each stage's
+`execution_capability_policy_fingerprint`, compact
+`execution_capability_grant` lines, and any `execution_capability_warning`
+lines such as required advisory grants. These lines describe sealed compiled
+plan authority only; the runtime gate consumes that compiled authority during
+dispatch rather than making `compile show` a mutating command.
+
+`millrace runs show` now renders stage-result capability metadata, when present,
+as compact `capability_grant` and `capability_support` lines. The lines are
+read-only evidence from runner artifacts and normalized stage results; they do
+not allow stages to publish, upload, deploy, push, tag, or otherwise perform
+release actions.

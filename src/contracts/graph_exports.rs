@@ -5,7 +5,10 @@ use std::{collections::HashMap, fmt};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
 
-use super::{ContractError, Plane, ResultClass, Timestamp, validate_safe_identifier};
+use super::{
+    ContractError, ExecutionCapabilityGrant, ExecutionCapabilityWarning, Plane, ResultClass,
+    Timestamp, validate_safe_identifier,
+};
 
 const SCHEMA_VERSION: &str = "1.0";
 const COMPILED_STAGE_GRAPH_KIND: &str = "compiled_stage_graph";
@@ -107,7 +110,7 @@ pub trait GraphExportContract: Sized + Serialize + DeserializeOwned {
 }
 
 /// Exported materialized node binding for one compiled stage graph.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GraphExportNode {
     pub node_id: String,
@@ -129,6 +132,12 @@ pub struct GraphExportNode {
     pub allowed_result_classes_by_outcome: HashMap<String, Vec<ResultClass>>,
     #[serde(default)]
     pub declared_output_artifacts: Vec<String>,
+    #[serde(default)]
+    pub execution_capability_grants: Vec<ExecutionCapabilityGrant>,
+    #[serde(default)]
+    pub execution_capability_warnings: Vec<ExecutionCapabilityWarning>,
+    #[serde(default)]
+    pub execution_capability_policy_fingerprint: String,
 }
 
 impl GraphExportNode {
@@ -146,7 +155,31 @@ impl GraphExportNode {
         require_optional_non_blank("thinking_level", &self.thinking_level)?;
         require_optional_non_blank("model_reasoning_effort", &self.model_reasoning_effort)?;
         validate_allowed_result_classes(&self.allowed_result_classes_by_outcome)?;
-        require_non_blank_vec("declared_output_artifacts", &self.declared_output_artifacts)
+        require_non_blank_vec("declared_output_artifacts", &self.declared_output_artifacts)?;
+        for grant in &self.execution_capability_grants {
+            grant
+                .validate()
+                .map_err(|error| GraphExportContractError::InvalidField {
+                    field_name: "execution_capability_grants",
+                    message: error.to_string(),
+                })?;
+        }
+        for warning in &self.execution_capability_warnings {
+            warning
+                .validate()
+                .map_err(|error| GraphExportContractError::InvalidField {
+                    field_name: "execution_capability_warnings",
+                    message: error.to_string(),
+                })?;
+        }
+        if !self.execution_capability_policy_fingerprint.is_empty() {
+            require_prefixed_fingerprint(
+                "execution_capability_policy_fingerprint",
+                &self.execution_capability_policy_fingerprint,
+                "cap-pol-",
+            )?;
+        }
+        Ok(())
     }
 }
 
@@ -227,7 +260,7 @@ impl GraphExportTerminalState {
 }
 
 /// Public compiled-stage-graph export for one selected runtime plane.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CompiledStageGraphExport {
     #[serde(default = "default_schema_version")]
@@ -375,6 +408,26 @@ fn require_non_blank_vec(
 ) -> Result<(), GraphExportContractError> {
     for value in values {
         require_non_blank(field_name, value)?;
+    }
+    Ok(())
+}
+
+fn require_prefixed_fingerprint(
+    field_name: &'static str,
+    value: &str,
+    prefix: &'static str,
+) -> Result<(), GraphExportContractError> {
+    let Some(suffix) = value.strip_prefix(prefix) else {
+        return Err(GraphExportContractError::InvalidField {
+            field_name,
+            message: format!("must use the {prefix}<hex> format"),
+        });
+    };
+    if suffix.len() != 12 || !suffix.chars().all(|ch| ch.is_ascii_hexdigit()) {
+        return Err(GraphExportContractError::InvalidField {
+            field_name,
+            message: format!("must use the {prefix}<hex> format"),
+        });
     }
     Ok(())
 }

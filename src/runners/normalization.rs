@@ -68,6 +68,20 @@ pub fn normalize_stage_result(
             Some(classification),
         );
     }
+    if !raw_result.missing_capability_evidence_refs.is_empty() {
+        return failure_envelope(
+            request,
+            raw_result,
+            RunnerFailureClass::CapabilityEvidenceMissing,
+            vec![format!(
+                "missing required capability evidence: {}",
+                raw_result.missing_capability_evidence_refs.join(", ")
+            )],
+            None,
+            Vec::new(),
+            None,
+        );
+    }
 
     let extraction = extract_terminal_result(request, raw_result);
     if !extraction.ok() {
@@ -451,6 +465,11 @@ fn classify_raw_exit_failure(raw_result: &RunnerRawResult) -> Option<RunnerFailu
             FailureClassifierCode::ExitTimeout,
         ));
     }
+    if let Some(failure_class) =
+        runtime_capability_failure_class(raw_result.failure_capability_class.as_deref())
+    {
+        return Some(classification_for_failure_class(failure_class));
+    }
 
     let evidence = raw_failure_evidence(raw_result);
     if let Some(classification) = classify_failure_evidence(&evidence, BlockedOrigin::RunnerFailure)
@@ -674,6 +693,34 @@ fn classification_for_failure_class(failure_class: RunnerFailureClass) -> Runner
             false,
             FailureClassifierCode::MissingRequiredArtifact,
         ),
+        RunnerFailureClass::CapabilityGrantDenied => RunnerFailureMetadata::new(
+            failure_class,
+            BlockedOrigin::RuntimeCapabilityGate,
+            FailureScope::RuntimePolicy,
+            false,
+            FailureClassifierCode::CapabilityGrantDenied,
+        ),
+        RunnerFailureClass::CapabilityApprovalRequired => RunnerFailureMetadata::new(
+            failure_class,
+            BlockedOrigin::RuntimeCapabilityGate,
+            FailureScope::RuntimePolicy,
+            false,
+            FailureClassifierCode::CapabilityApprovalRequired,
+        ),
+        RunnerFailureClass::CapabilityGrantUnsupported => RunnerFailureMetadata::new(
+            failure_class,
+            BlockedOrigin::RuntimeCapabilityGate,
+            FailureScope::RuntimePolicy,
+            false,
+            FailureClassifierCode::CapabilityGrantUnsupported,
+        ),
+        RunnerFailureClass::CapabilityEvidenceMissing => RunnerFailureMetadata::new(
+            failure_class,
+            BlockedOrigin::RuntimeCapabilityGate,
+            FailureScope::RuntimePolicy,
+            false,
+            FailureClassifierCode::CapabilityEvidenceMissing,
+        ),
         RunnerFailureClass::RunnerTransportFailure => RunnerFailureMetadata::new(
             failure_class,
             BlockedOrigin::RunnerFailure,
@@ -681,6 +728,16 @@ fn classification_for_failure_class(failure_class: RunnerFailureClass) -> Runner
             false,
             FailureClassifierCode::UnclassifiedFailure,
         ),
+    }
+}
+
+fn runtime_capability_failure_class(value: Option<&str>) -> Option<RunnerFailureClass> {
+    match value?.trim() {
+        "capability_grant_denied" => Some(RunnerFailureClass::CapabilityGrantDenied),
+        "capability_approval_required" => Some(RunnerFailureClass::CapabilityApprovalRequired),
+        "capability_grant_unsupported" => Some(RunnerFailureClass::CapabilityGrantUnsupported),
+        "capability_evidence_missing" => Some(RunnerFailureClass::CapabilityEvidenceMissing),
+        _ => None,
     }
 }
 
@@ -975,6 +1032,19 @@ fn request_metadata(
         json!(request.model_reasoning_effort),
     );
     metadata.insert(
+        "execution_capability_grants".to_owned(),
+        json!(request.execution_capability_grants),
+    );
+    let support_decisions = if raw_result.capability_support_decisions.is_empty() {
+        &request.capability_support_decisions
+    } else {
+        &raw_result.capability_support_decisions
+    };
+    metadata.insert(
+        "capability_support_decisions".to_owned(),
+        json!(support_decisions),
+    );
+    metadata.insert(
         "normalization_source".to_owned(),
         json!(normalization_source),
     );
@@ -994,6 +1064,18 @@ fn request_metadata(
     metadata.insert(
         "timeout_reconciled".to_owned(),
         json!(timeout_reconciled(raw_result)),
+    );
+    metadata.insert(
+        "capability_evidence_refs".to_owned(),
+        json!(raw_result.capability_evidence_refs),
+    );
+    metadata.insert(
+        "missing_capability_evidence_refs".to_owned(),
+        json!(raw_result.missing_capability_evidence_refs),
+    );
+    metadata.insert(
+        "failure_capability_class".to_owned(),
+        json!(raw_result.failure_capability_class),
     );
     metadata
 }

@@ -131,6 +131,8 @@ fn sample_request(root: &Path, request_id: &str, runner_name: &str) -> StageRunR
         thinking_level: None,
         model_reasoning_effort: None,
         timeout_seconds: 120,
+        execution_capability_grants: Vec::new(),
+        capability_support_decisions: Vec::new(),
     };
     request.validate().unwrap();
     request
@@ -222,6 +224,10 @@ fn raw_result_for_failure(
         terminal_result_path: None,
         event_log_path: None,
         token_usage: None,
+        failure_capability_class: None,
+        capability_support_decisions: Vec::new(),
+        capability_evidence_refs: Vec::new(),
+        missing_capability_evidence_refs: Vec::new(),
         started_at: timestamp(STARTED_AT),
         ended_at: timestamp(ENDED_AT),
     }
@@ -345,6 +351,69 @@ fn runner_normalization_v0_18_4_guardrail_fixture_requires_failure_classifier_me
             "missing v0.18.4 classifier code {code}"
         );
     }
+}
+
+#[test]
+fn runner_normalization_v0_19_0_guardrail_fixture_requires_capability_support_and_evidence_metadata()
+ {
+    let fixture = read_json_fixture("runtime_json/auto_port_v0_19_0_runtime_contract_scout.json");
+    assert_eq!(fixture["kind"], "auto_port_v0_19_0_runtime_contract_scout");
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.19.0");
+
+    let sources: BTreeSet<_> = fixture["contract_sources"]
+        .as_array()
+        .expect("contract source references are present")
+        .iter()
+        .map(|value| value.as_str().expect("contract source"))
+        .collect();
+    for source in [
+        "../millrace-py/src/millrace_ai/runners/base.py",
+        "../millrace-py/src/millrace_ai/runners/contracts.py",
+        "../millrace-py/src/millrace_ai/runners/normalization.py",
+        "../millrace-py/src/millrace_ai/runners/requests.py",
+        "../millrace-py/src/millrace_ai/runners/adapters/codex_cli.py",
+        "../millrace-py/src/millrace_ai/runners/adapters/pi_rpc.py",
+        "../millrace-py/tests/runners/test_capability_support.py",
+    ] {
+        assert!(
+            sources.contains(source),
+            "missing v0.19.0 runner capability source {source}"
+        );
+    }
+
+    let runner = &fixture["runner_support_contract"];
+    assert_eq!(
+        runner["support_states"],
+        json!(["supported", "unsupported", "partially_supported"])
+    );
+    assert_eq!(
+        runner["normalization_failure_class"],
+        "capability_evidence_missing"
+    );
+    for field in [
+        "execution_capability_grants",
+        "capability_support_decisions",
+        "capability_evidence_refs",
+        "missing_capability_evidence_refs",
+        "failure_capability_class",
+    ] {
+        assert!(
+            runner["artifact_fields"]
+                .as_array()
+                .expect("runner artifact fields are present")
+                .iter()
+                .any(|value| value.as_str() == Some(field)),
+            "missing v0.19.0 runner capability artifact field {field}"
+        );
+    }
+    assert_eq!(runner["codex_advisory_permission"], "maximum");
+    assert!(
+        runner["pi_rpc_support_note"]
+            .as_str()
+            .expect("Pi RPC support note")
+            .contains("advisory support"),
+        "missing v0.19.0 Pi RPC advisory support note"
+    );
 }
 
 #[test]
@@ -593,6 +662,10 @@ fn raw_result_normalization_preserves_active_work_item_source_metadata() {
         terminal_result_path: None,
         event_log_path: None,
         token_usage: None,
+        failure_capability_class: None,
+        capability_support_decisions: Vec::new(),
+        capability_evidence_refs: Vec::new(),
+        missing_capability_evidence_refs: Vec::new(),
         started_at: timestamp(STARTED_AT),
         ended_at: timestamp(ENDED_AT),
     };

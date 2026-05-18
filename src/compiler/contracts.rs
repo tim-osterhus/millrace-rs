@@ -1,7 +1,7 @@
 //! Serde-backed contracts for compiler inputs and frozen compiled plans.
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt,
 };
 
@@ -9,9 +9,10 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer, de::DeserializeOwn
 use serde_json::Value;
 
 use crate::contracts::{
-    CompileDiagnostics, ContractError, LearningRequestAction, LearningStageName, LoopEdgeKind,
-    Plane, ResultClass, StageName, Timestamp, legal_terminal_results, stage_name_for_value,
-    stage_plane, terminal_result_for_plane, validate_safe_identifier,
+    CapabilityPolicyOverride, CapabilityRequest, CompileDiagnostics, ContractError,
+    ExecutionCapabilityGrant, ExecutionCapabilityWarning, LearningRequestAction, LearningStageName,
+    LoopEdgeKind, Plane, ResultClass, StageName, Timestamp, legal_terminal_results,
+    stage_name_for_value, stage_plane, terminal_result_for_plane, validate_safe_identifier,
 };
 
 const SCHEMA_VERSION: &str = "1.0";
@@ -345,7 +346,7 @@ impl PlaneConcurrencyPolicyDefinition {
 }
 
 /// Mode selection and compile binding contract.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ModeDefinition {
     pub schema_version: String,
     pub kind: String,
@@ -361,6 +362,15 @@ pub struct ModeDefinition {
     pub stage_runner_bindings: HashMap<StageName, String>,
     #[serde(default)]
     pub stage_thinking_bindings: HashMap<StageName, Option<String>>,
+    #[serde(default)]
+    pub execution_capability_requests: Vec<CapabilityRequest>,
+    #[serde(default)]
+    pub execution_capability_policies: Vec<CapabilityPolicyOverride>,
+    #[serde(default)]
+    pub stage_execution_capability_requests: HashMap<StageName, Vec<CapabilityRequest>>,
+    #[serde(default)]
+    pub stage_execution_capability_policy_overrides:
+        HashMap<StageName, Vec<CapabilityPolicyOverride>>,
     pub concurrency_policy: Option<PlaneConcurrencyPolicyDefinition>,
     #[serde(default)]
     pub learning_trigger_rules: Vec<LearningTriggerRuleDefinition>,
@@ -418,6 +428,18 @@ impl ModeDefinition {
         normalize_stage_string_map(&mut self.stage_model_bindings)?;
         normalize_stage_string_map(&mut self.stage_runner_bindings)?;
         normalize_stage_optional_string_map(&mut self.stage_thinking_bindings)?;
+        validate_capability_requests(
+            "execution_capability_requests",
+            &self.execution_capability_requests,
+        )?;
+        validate_capability_policy_overrides(
+            "execution_capability_policies",
+            &self.execution_capability_policies,
+        )?;
+        validate_stage_capability_request_map(&self.stage_execution_capability_requests)?;
+        validate_stage_capability_policy_override_map(
+            &self.stage_execution_capability_policy_overrides,
+        )?;
         if let Some(policy) = &self.concurrency_policy {
             policy.validate()?;
         }
@@ -457,6 +479,14 @@ struct ModeDefinitionRaw {
     stage_runner_bindings: HashMap<StageName, String>,
     #[serde(default)]
     stage_thinking_bindings: HashMap<StageName, Option<String>>,
+    #[serde(default)]
+    execution_capability_requests: Vec<CapabilityRequest>,
+    #[serde(default)]
+    execution_capability_policies: Vec<CapabilityPolicyOverride>,
+    #[serde(default)]
+    stage_execution_capability_requests: HashMap<StageName, Vec<CapabilityRequest>>,
+    #[serde(default)]
+    stage_execution_capability_policy_overrides: HashMap<StageName, Vec<CapabilityPolicyOverride>>,
     concurrency_policy: Option<PlaneConcurrencyPolicyDefinition>,
     #[serde(default)]
     learning_trigger_rules: Vec<LearningTriggerRuleDefinition>,
@@ -481,6 +511,11 @@ impl ModeDefinitionRaw {
             stage_model_bindings: self.stage_model_bindings,
             stage_runner_bindings: self.stage_runner_bindings,
             stage_thinking_bindings: self.stage_thinking_bindings,
+            execution_capability_requests: self.execution_capability_requests,
+            execution_capability_policies: self.execution_capability_policies,
+            stage_execution_capability_requests: self.stage_execution_capability_requests,
+            stage_execution_capability_policy_overrides: self
+                .stage_execution_capability_policy_overrides,
             concurrency_policy: self.concurrency_policy,
             learning_trigger_rules: self.learning_trigger_rules,
         };
@@ -490,7 +525,7 @@ impl ModeDefinitionRaw {
 }
 
 /// Graph node declared by an authoritative graph loop.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GraphLoopNodeDefinition {
     pub node_id: String,
@@ -503,6 +538,12 @@ pub struct GraphLoopNodeDefinition {
     #[serde(default)]
     pub thinking_level: Option<String>,
     pub timeout_seconds: Option<u64>,
+    #[serde(default)]
+    pub execution_capability_requests: Vec<CapabilityRequest>,
+    #[serde(default)]
+    pub execution_capability_policies: Vec<CapabilityPolicyOverride>,
+    #[serde(default)]
+    pub execution_capability_policy_overrides: Vec<CapabilityPolicyOverride>,
 }
 
 impl GraphLoopNodeDefinition {
@@ -529,6 +570,18 @@ impl GraphLoopNodeDefinition {
                 message: "must be >= 1 when set".to_owned(),
             });
         }
+        validate_capability_requests(
+            "execution_capability_requests",
+            &self.execution_capability_requests,
+        )?;
+        validate_capability_policy_overrides(
+            "execution_capability_policies",
+            &self.execution_capability_policies,
+        )?;
+        validate_capability_policy_overrides(
+            "execution_capability_policy_overrides",
+            &self.execution_capability_policy_overrides,
+        )?;
         Ok(())
     }
 }
@@ -790,7 +843,7 @@ impl GraphLoopDynamicPoliciesDefinition {
 }
 
 /// Authoritative graph loop asset contract.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GraphLoopDefinition {
     #[serde(default = "default_schema_version")]
@@ -1057,7 +1110,7 @@ pub fn validate_graph_stage_kind_references(
 }
 
 /// Stage-kind registry entry.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RegisteredStageKindDefinition {
     #[serde(default = "default_schema_version")]
@@ -1085,6 +1138,10 @@ pub struct RegisteredStageKindDefinition {
     pub allowed_input_artifacts: Vec<String>,
     #[serde(default)]
     pub declared_output_artifacts: Vec<String>,
+    #[serde(default)]
+    pub execution_capability_requests: Vec<CapabilityRequest>,
+    #[serde(default)]
+    pub execution_capability_policy_overrides: Vec<CapabilityPolicyOverride>,
     #[serde(default = "default_stage_idempotence_policy")]
     pub idempotence_policy: StageIdempotencePolicy,
     #[serde(default)]
@@ -1148,6 +1205,14 @@ impl RegisteredStageKindDefinition {
         normalize_canonical_ids(
             &mut self.declared_output_artifacts,
             "declared_output_artifacts",
+        )?;
+        validate_capability_requests(
+            "execution_capability_requests",
+            &self.execution_capability_requests,
+        )?;
+        validate_capability_policy_overrides(
+            "execution_capability_policy_overrides",
+            &self.execution_capability_policy_overrides,
         )?;
         normalize_override_names(&mut self.allowed_overrides, "allowed_overrides")?;
         normalize_allowed_result_classes(&mut self.allowed_result_classes_by_outcome)?;
@@ -1429,8 +1494,43 @@ impl CompiledGraphThresholdPolicyPlan {
     }
 }
 
+/// Compact summary of execution capability grant decisions for a node, plane, or plan.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct ExecutionCapabilitySummary {
+    #[serde(default)]
+    pub total_grants: u64,
+    #[serde(default)]
+    pub by_decision: BTreeMap<String, u64>,
+    #[serde(default)]
+    pub by_enforcement: BTreeMap<String, u64>,
+}
+
+impl ExecutionCapabilitySummary {
+    /// Validates summary counters.
+    pub fn validate(&self) -> Result<(), CompilerContractError> {
+        validate_summary_map("by_decision", &self.by_decision)?;
+        validate_summary_map("by_enforcement", &self.by_enforcement)?;
+        let decision_total: u64 = self.by_decision.values().sum();
+        if decision_total != self.total_grants {
+            return Err(CompilerContractError::InvalidDocument {
+                message: "execution capability summary decision counts must sum to total_grants"
+                    .to_owned(),
+            });
+        }
+        let enforcement_total: u64 = self.by_enforcement.values().sum();
+        if enforcement_total != self.total_grants {
+            return Err(CompilerContractError::InvalidDocument {
+                message: "execution capability summary enforcement counts must sum to total_grants"
+                    .to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
 /// Materialized graph node frozen into a compiled plan.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MaterializedGraphNodePlan {
     pub node_id: String,
@@ -1453,6 +1553,12 @@ pub struct MaterializedGraphNodePlan {
     pub model_reasoning_effort: Option<String>,
     #[serde(default)]
     pub timeout_seconds: u64,
+    #[serde(default)]
+    pub execution_capability_grants: Vec<ExecutionCapabilityGrant>,
+    #[serde(default)]
+    pub execution_capability_warnings: Vec<ExecutionCapabilityWarning>,
+    #[serde(default)]
+    pub execution_capability_policy_fingerprint: String,
 }
 
 impl MaterializedGraphNodePlan {
@@ -1481,12 +1587,36 @@ impl MaterializedGraphNodePlan {
         require_optional_non_blank("runner_name", &self.runner_name)?;
         require_optional_non_blank("model_name", &self.model_name)?;
         require_optional_non_blank("thinking_level", &self.thinking_level)?;
-        require_optional_non_blank("model_reasoning_effort", &self.model_reasoning_effort)
+        require_optional_non_blank("model_reasoning_effort", &self.model_reasoning_effort)?;
+        for grant in &self.execution_capability_grants {
+            grant
+                .validate()
+                .map_err(|error| CompilerContractError::InvalidField {
+                    field_name: "execution_capability_grants",
+                    message: error.to_string(),
+                })?;
+        }
+        for warning in &self.execution_capability_warnings {
+            warning
+                .validate()
+                .map_err(|error| CompilerContractError::InvalidField {
+                    field_name: "execution_capability_warnings",
+                    message: error.to_string(),
+                })?;
+        }
+        if !self.execution_capability_policy_fingerprint.is_empty() {
+            require_prefixed_fingerprint(
+                "execution_capability_policy_fingerprint",
+                &self.execution_capability_policy_fingerprint,
+                "cap-pol-",
+            )?;
+        }
+        Ok(())
     }
 }
 
 /// Frozen graph plan for one runtime plane.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct FrozenGraphPlanePlan {
     pub loop_id: String,
@@ -1509,6 +1639,8 @@ pub struct FrozenGraphPlanePlan {
     #[serde(default)]
     pub terminal_states: Vec<GraphLoopTerminalStateDefinition>,
     pub completion_behavior: Option<GraphLoopCompletionBehaviorDefinition>,
+    #[serde(default)]
+    pub execution_capability_summary: ExecutionCapabilitySummary,
 }
 
 impl FrozenGraphPlanePlan {
@@ -1564,6 +1696,7 @@ impl FrozenGraphPlanePlan {
         for terminal_state in &mut self.terminal_states {
             terminal_state.validate()?;
         }
+        self.execution_capability_summary.validate()?;
         if let Some(completion) = &mut self.completion_behavior {
             completion.validate()?;
         }
@@ -1634,7 +1767,7 @@ impl ResolvedAssetRef {
 }
 
 /// Runtime-authoritative compiled plan persisted as `compiled_plan.json`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CompiledRunPlan {
     #[serde(default = "default_schema_version")]
@@ -1652,6 +1785,10 @@ pub struct CompiledRunPlan {
     pub execution_graph: FrozenGraphPlanePlan,
     pub planning_graph: FrozenGraphPlanePlan,
     pub learning_graph: Option<FrozenGraphPlanePlan>,
+    #[serde(default)]
+    pub execution_capability_summary: ExecutionCapabilitySummary,
+    #[serde(default)]
+    pub execution_capability_summaries_by_plane: HashMap<Plane, ExecutionCapabilitySummary>,
     pub concurrency_policy: Option<PlaneConcurrencyPolicyDefinition>,
     #[serde(default)]
     pub learning_trigger_rules: Vec<LearningTriggerRuleDefinition>,
@@ -1761,6 +1898,22 @@ impl CompiledRunPlan {
                 message: "learning graph binding requires learning_graph".to_owned(),
             });
         }
+        self.execution_capability_summary.validate()?;
+        for (plane, summary) in &self.execution_capability_summaries_by_plane {
+            let Some(graph) = self.graphs_by_plane.get(plane) else {
+                return Err(CompilerContractError::InvalidDocument {
+                    message: "execution capability summary plane must exist in graphs_by_plane"
+                        .to_owned(),
+                });
+            };
+            summary.validate()?;
+            if summary != &graph.execution_capability_summary {
+                return Err(CompilerContractError::InvalidDocument {
+                    message: "execution capability summary plane must match graph summary"
+                        .to_owned(),
+                });
+            }
+        }
         if let Some(policy) = &self.concurrency_policy {
             policy.validate()?;
         }
@@ -1780,7 +1933,7 @@ impl CompiledRunPlan {
 }
 
 /// Result of one compile attempt.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CompileOutcome {
     pub active_plan: Option<CompiledRunPlan>,
     pub diagnostics: CompileDiagnostics,
@@ -2147,6 +2300,87 @@ fn normalize_stage_vec_map(
             require_non_blank("stage binding", value)?;
         }
         dedupe(values);
+    }
+    Ok(())
+}
+
+fn validate_stage_capability_request_map(
+    mapping: &HashMap<StageName, Vec<CapabilityRequest>>,
+) -> Result<(), CompilerContractError> {
+    for requests in mapping.values() {
+        validate_capability_requests("stage_execution_capability_requests", requests)?;
+    }
+    Ok(())
+}
+
+fn validate_stage_capability_policy_override_map(
+    mapping: &HashMap<StageName, Vec<CapabilityPolicyOverride>>,
+) -> Result<(), CompilerContractError> {
+    for overrides in mapping.values() {
+        validate_capability_policy_overrides(
+            "stage_execution_capability_policy_overrides",
+            overrides,
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_capability_requests(
+    field_name: &'static str,
+    requests: &[CapabilityRequest],
+) -> Result<(), CompilerContractError> {
+    for request in requests {
+        request
+            .validate()
+            .map_err(|error| CompilerContractError::InvalidField {
+                field_name,
+                message: error.to_string(),
+            })?;
+    }
+    Ok(())
+}
+
+fn validate_capability_policy_overrides(
+    field_name: &'static str,
+    overrides: &[CapabilityPolicyOverride],
+) -> Result<(), CompilerContractError> {
+    for override_ in overrides {
+        override_
+            .validate()
+            .map_err(|error| CompilerContractError::InvalidField {
+                field_name,
+                message: error.to_string(),
+            })?;
+    }
+    Ok(())
+}
+
+fn validate_summary_map(
+    field_name: &'static str,
+    values: &BTreeMap<String, u64>,
+) -> Result<(), CompilerContractError> {
+    for key in values.keys() {
+        require_non_blank(field_name, key)?;
+    }
+    Ok(())
+}
+
+fn require_prefixed_fingerprint(
+    field_name: &'static str,
+    value: &str,
+    prefix: &'static str,
+) -> Result<(), CompilerContractError> {
+    let Some(suffix) = value.strip_prefix(prefix) else {
+        return Err(CompilerContractError::InvalidField {
+            field_name,
+            message: format!("must use the {prefix}<hex> format"),
+        });
+    };
+    if suffix.len() != 12 || !suffix.chars().all(|ch| ch.is_ascii_hexdigit()) {
+        return Err(CompilerContractError::InvalidField {
+            field_name,
+            message: format!("must use the {prefix}<hex> format"),
+        });
     }
     Ok(())
 }

@@ -35,6 +35,14 @@
     "archive_invalid_incident": {
       "filename": "incident-invalid.md",
       "reason": "operator archived invalid incident artifact"
+    },
+    "approve_execution_capability": {
+      "approval_id": "approval-run-001",
+      "reason": "operator approved execution capability"
+    },
+    "deny_execution_capability": {
+      "approval_id": "approval-run-002",
+      "reason": "operator denied execution capability"
     }
   },
   "validation_failures": {
@@ -82,6 +90,14 @@
     "unsafe_invalid_incident_filename": {
       "filename": "../incident-invalid.md",
       "reason": "operator archived invalid incident artifact"
+    },
+    "unsafe_approval_id": {
+      "approval_id": "../approval-run-001",
+      "reason": "operator approved execution capability"
+    },
+    "empty_approval_reason": {
+      "approval_id": "approval-run-001",
+      "reason": ""
     }
   }
 }

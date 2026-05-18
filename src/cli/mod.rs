@@ -37,8 +37,22 @@ use parser::{EmptyValue, OptionSpec, ParsedArgs, parse_args};
 use render::CliOutput;
 
 pub const PRIMARY_COMMAND_GROUPS: &[&str] = &[
-    "run", "status", "runs", "queue", "planning", "config", "control", "compile", "modes",
-    "skills", "incident", "doctor", "upgrade", "init", "version",
+    "run",
+    "status",
+    "runs",
+    "queue",
+    "approvals",
+    "planning",
+    "config",
+    "control",
+    "compile",
+    "modes",
+    "skills",
+    "incident",
+    "doctor",
+    "upgrade",
+    "init",
+    "version",
 ];
 
 pub const COMPATIBILITY_ALIASES: &[&str] = &[
@@ -80,6 +94,7 @@ fn dispatch(mut args: Vec<String>) -> CliOutput {
         "status" => run_status_group(args),
         "runs" => run_runs_group(args),
         "queue" => run_queue_group(args),
+        "approvals" => run_approvals_group(args),
         "incident" => run_incident_group(args),
         "planning" => run_planning_group(args),
         "config" => run_config_group(args),
@@ -1419,6 +1434,112 @@ fn run_queue_archive_blocked(
     }
 }
 
+fn run_approvals_group(mut args: Vec<String>) -> CliOutput {
+    if args.is_empty() {
+        return CliOutput::parse_error(
+            "missing approvals command `ls`, `show`, `approve`, or `deny`",
+        );
+    }
+    let command = args.remove(0);
+    if !matches!(command.as_str(), "ls" | "show" | "approve" | "deny") {
+        return CliOutput::parse_error(format!("unknown approvals command `{command}`"));
+    }
+    let specs = match command.as_str() {
+        "approve" | "deny" => vec![
+            workspace_spec(),
+            value_spec("--reason", EmptyValue::NonBlank),
+        ],
+        _ => vec![workspace_spec()],
+    };
+    let parsed = match parse_or_output(args, &specs) {
+        Ok(parsed) => parsed,
+        Err(output) => return output,
+    };
+    match command.as_str() {
+        "ls" => {
+            if let Err(output) = reject_positionals(&parsed) {
+                return output;
+            }
+        }
+        "show" | "approve" | "deny" => {
+            if let Err(output) = require_one_positional(&parsed, "APPROVAL_ID") {
+                return output;
+            }
+            if let Err(output) = reject_extra_positionals(&parsed, 1) {
+                return output;
+            }
+        }
+        _ => unreachable!("approvals command validated above"),
+    }
+    let paths = match require_default_workspace(&parsed) {
+        Ok(paths) => paths,
+        Err(output) => return output,
+    };
+    match command.as_str() {
+        "ls" => read_only::approvals_ls_lines(&paths)
+            .map(CliOutput::success)
+            .unwrap_or_else(CliOutput::stdout_failure),
+        "show" => read_only::approvals_show_lines(
+            &paths,
+            parsed
+                .positionals
+                .first()
+                .expect("approvals show has one positional"),
+        )
+        .map(CliOutput::success)
+        .unwrap_or_else(CliOutput::stdout_failure),
+        "approve" => run_approval_decision(
+            &paths,
+            parsed
+                .positionals
+                .first()
+                .expect("approvals approve has one positional"),
+            parsed.value("--reason").unwrap_or("approved"),
+            true,
+        ),
+        "deny" => run_approval_decision(
+            &paths,
+            parsed
+                .positionals
+                .first()
+                .expect("approvals deny has one positional"),
+            parsed.value("--reason").unwrap_or("denied"),
+            false,
+        ),
+        _ => unreachable!("approvals command validated above"),
+    }
+}
+
+fn run_approval_decision(
+    paths: &WorkspacePaths,
+    approval_id: &str,
+    reason: &str,
+    approve: bool,
+) -> CliOutput {
+    let approval_id = match validate_safe_identifier(approval_id, "approval_id") {
+        Ok(approval_id) => approval_id,
+        Err(error) => {
+            return CliOutput::stdout_failure(format!(
+                "failed to decide approval request: {error}"
+            ));
+        }
+    };
+
+    let result = RuntimeControl::from_paths(paths.clone()).and_then(|control| {
+        if approve {
+            control.approve_execution_capability(approval_id, reason)
+        } else {
+            control.deny_execution_capability(approval_id, reason)
+        }
+    });
+    match result {
+        Ok(result) => CliOutput::success(render_control_result(&result)),
+        Err(error) => {
+            CliOutput::stdout_failure(format!("failed to decide approval request: {error}"))
+        }
+    }
+}
+
 fn run_queue_supersede(
     paths: &WorkspacePaths,
     old_task_id: &str,
@@ -2318,6 +2439,7 @@ fn render_compile_show_lines(paths: &WorkspacePaths, outcome: &CompileOutcome) -
         "persisted_compile_input.assets_fingerprint: {}",
         persisted_fingerprint.assets_fingerprint
     ));
+    lines.extend(render_execution_capability_summary_lines(plan));
 
     for graph in ordered_graphs(plan) {
         for entry in &graph.compiled_entries {
@@ -2392,6 +2514,7 @@ fn render_compile_show_lines(paths: &WorkspacePaths, outcome: &CompileOutcome) -
                 node.node_id
             ));
             lines.extend(render_stage_lines(node));
+            lines.extend(render_stage_capability_lines(node));
         }
     }
 
@@ -2521,6 +2644,52 @@ fn render_stage_lines(stage_plan: &MaterializedGraphNodePlan) -> Vec<String> {
     ]
 }
 
+fn render_execution_capability_summary_lines(plan: &CompiledRunPlan) -> Vec<String> {
+    let summary = &plan.execution_capability_summary;
+    let mut lines = vec![format!(
+        "execution_capabilities.total_grants: {}",
+        summary.total_grants
+    )];
+    for (decision, count) in &summary.by_decision {
+        lines.push(format!(
+            "execution_capabilities.by_decision.{decision}: {count}"
+        ));
+    }
+    for graph in ordered_graphs(plan) {
+        let summary = &graph.execution_capability_summary;
+        lines.push(format!(
+            "execution_capabilities.{}.total_grants: {}",
+            graph.plane.as_str(),
+            summary.total_grants
+        ));
+    }
+    lines
+}
+
+fn render_stage_capability_lines(stage_plan: &MaterializedGraphNodePlan) -> Vec<String> {
+    let mut lines = vec![format!(
+        "execution_capability_policy_fingerprint: {}",
+        empty_text(&stage_plan.execution_capability_policy_fingerprint)
+    )];
+    for grant in &stage_plan.execution_capability_grants {
+        lines.push(format!(
+            "execution_capability_grant: {} {} {} {} {}",
+            stage_plan.node_id,
+            grant.capability_id,
+            grant.decision_state.as_str(),
+            grant.enforcement_mode.as_str(),
+            grant.fingerprint
+        ));
+    }
+    for warning in &stage_plan.execution_capability_warnings {
+        lines.push(format!(
+            "execution_capability_warning: {} {} {} {}",
+            stage_plan.node_id, warning.capability_id, warning.severity, warning.message
+        ));
+    }
+    lines
+}
+
 fn ordered_graphs(plan: &CompiledRunPlan) -> Vec<&FrozenGraphPlanePlan> {
     let mut graphs = vec![&plan.execution_graph, &plan.planning_graph];
     if let Some(learning_graph) = &plan.learning_graph {
@@ -2547,6 +2716,10 @@ fn join_or_none(values: &[String]) -> String {
 
 fn option_text(value: Option<&str>) -> &str {
     value.unwrap_or("none")
+}
+
+fn empty_text(value: &str) -> &str {
+    if value.is_empty() { "none" } else { value }
 }
 
 fn bool_text(value: bool) -> &'static str {

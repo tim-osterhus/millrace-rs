@@ -4,11 +4,12 @@
 governed runtime for long-running agent work.
 
 The production implementation is currently the Python package
-[`millrace-ai`](https://pypi.org/project/millrace-ai/). The Rust `0.3.5`
-release consolidates the Python `v0.18.4..v0.18.6` operator intervention,
-durable idea-source, closure recovery, docs/version, package, and web-gap
-evidence pass on top of the earlier blocked-recovery, Librarian, Integrator,
-probe/Recon, and graph/trace ports while the crate remains experimental.
+[`millrace-ai`](https://pypi.org/project/millrace-ai/). The Rust `0.4.0`
+release consolidates the Python `v0.18.6..v0.19.0` execution capability
+governance, approval, runner evidence, run-inspection, docs/version, package,
+and web-gap evidence pass on top of the earlier operator-intervention,
+blocked-recovery, Librarian, Integrator, probe/Recon, and graph/trace ports
+while the crate remains experimental.
 
 ## Package Names
 
@@ -31,7 +32,8 @@ rendering while recognizing the primary operator command groups and
 compatibility aliases. It implements read-only operator inspection commands for
 `queue ls/show`, `status`/`status show` with text/JSON output, bounded
 text-only `status watch`, `runs ls/show/tail/trace`, `modes list/show`, and
-`config show`, plus queue intake
+`config show` including the v0.19.0 execution-capability config keys, plus
+queue intake
 commands for `queue add-task`, `queue add-probe`, `queue add-spec`, `queue
 add-idea`, and the top-level `add-task`/`add-probe`/`add-spec`/`add-idea`
 aliases, plus `queue retry-blocked <TASK_ID>` manual blocked-task retry,
@@ -41,8 +43,11 @@ v0.18.6 queue intervention commands for `queue cancel`,
 `queue repair-lineage` preview/apply wiring over the workspace repair boundary.
 The intervention commands route through `RuntimeControl` for direct no-daemon
 application or active-daemon mailbox envelopes and render the shared
-control-result output. Read-only queue inspection now reports intervention
-archive counts, `queue show` can inspect cancelled, superseded, and
+control-result output. It also implements
+`millrace approvals ls/show/approve/deny` for durable execution capability
+approval inspection and approve/deny routing through the same direct-or-mailbox
+control boundary. Read-only queue inspection now reports intervention archive
+counts, `queue show` can inspect cancelled, superseded, and
 operator-resolved records, `status` text/JSON includes
 `latest_operator_intervention` when matching runtime event evidence exists, and
 the basic monitor renders direct, mailbox-applied, and deferred intervention
@@ -72,8 +77,9 @@ first Slice 2 workspace substrate library surface through
 `millrace_ai::workspace`, including queue and state stores plus runtime
 ownership lock helpers. It also exposes the first Slice 3 compiler
 contract-model, asset-resolution, compile-input fingerprint, graph
-materialization, compiled-stage-graph export projection, persisted
-compiled-plan authority, and currentness inspection boundary through
+materialization, compiled execution capability grant compilation,
+compiled-stage-graph export projection, persisted compiled-plan authority,
+and currentness inspection boundary through
 `millrace_ai::compiler`, including the Python v0.18.2 Integrator
 contracts/assets/compiler graph subset for the opt-in
 `execution.with_integrator` graph plus the opt-in `default_codex_integrated`
@@ -228,11 +234,14 @@ optional `runner_events.<request_id>.jsonl`, and
 `runner_completion.<request_id>.json` artifacts, explicit
 process-result and environment-delta models, duplicate-aware registry
 registration, dispatcher selection by request runner, caller default, then
-`codex_cli`, `RunnerRawResult`, `StageRunnerAdapter`, deterministic in-process
-`FakeRunner` support, runner-neutral `thinking_level` propagation through raw
-results, invocation/completion artifacts, and normalized stage results, Codex
-CLI adapter command construction that maps request thinking to legacy
-`model_reasoning_effort`, permission precedence,
+`codex_cli`, adapter-specific execution-capability support evaluation,
+`RunnerRawResult`, `StageRunnerAdapter`, deterministic in-process
+`FakeRunner` support, runner-neutral `thinking_level` and compiled execution
+capability grant/support-decision propagation through raw results,
+invocation/completion artifacts, and normalized stage results, capability
+evidence refs, missing evidence refs, and `failure_capability_class` metadata,
+Codex CLI adapter command construction that maps request thinking to legacy
+`model_reasoning_effort`, permission precedence and capability-support reporting,
 prompt/invocation/stdout/stderr/event/completion artifacts, JSONL token
 extraction, timeout/failure evidence, mocked process execution, a real
 subprocess executor, Pi RPC adapter command construction that maps request
@@ -242,18 +251,41 @@ evidence, mocked client/transport coverage, runtime-configured dispatcher
 construction for operator once/daemon paths, and normalization into the existing
 `StageResultEnvelope` contract.
 Runtime startup/config loading exposes `[runners]`, `[runners.codex]`,
-`[runners.pi]`, `[usage_governance]`, `[auto_recovery]`, and
+`[runners.pi]`, `[usage_governance]`, `[auto_recovery]`,
+`[execution_capabilities]`, and
 `[stages.<stage>]` settings for
 adapter construction and stage overrides, validates malformed runner names,
 permissions, runner-neutral thinking levels, Codex legacy reasoning aliases,
 environment maps, Pi event-log policies and reserved flags, timeouts, stage
 override keys, token-window rules, subscription-quota percent thresholds,
 auto-recovery booleans, retry budgets, cooldown arrays, and unknown
-auto-recovery keys,
+auto-recovery keys, execution capability policy decisions, default capability
+ids and aliases, and unknown execution-capability config keys,
 keeps adapter-only command, permission, environment, and event-log fields out of
 compile fingerprints, and builds dispatchers with `codex_cli` and `pi_rpc`
 adapters for runtime operator paths. The auto-recovery apply-boundary helper
 classifies every Python v0.18.4 `auto_recovery.*` field as `next_tick`.
+The execution-capability apply-boundary helper classifies every
+`execution_capabilities.*` field as `recompile`; compiler materialization now
+seals per-node execution capability grants, warnings, policy fingerprints, and
+plan/plane summaries into compiled plans and compile show/graph-export inspection
+surfaces. Runner dispatch now carries compiled grants and adapter support
+decisions through `StageRunRequest` prompt context, runner
+invocation/completion artifacts, raw results, and normalized stage-result
+metadata; Codex CLI support reporting is contextual but advisory for broad
+`maximum` permission posture, Pi RPC support stays conservative/advisory for
+remote boundaries, and missing required capability evidence normalizes as
+`capability_evidence_missing`. Runtime capability gates now evaluate compiled
+grants in serial and daemon paths before runner invocation or `stage_started`
+side effects, write `capability_gate.<request_id>.json`, emit
+`capability_gate_evaluated`, and normalize denied, approval-required,
+unsupported, or missing-evidence required grants as recoverable runtime-policy
+failures. Approval-required grants use durable pending/resolved approval
+storage keyed by run/request/grant. The approvals CLI can list, show, approve,
+and deny those records; direct decisions resolve approvals when no daemon owns
+the workspace, while daemon-owned decisions enqueue and process
+`approve_execution_capability`/`deny_execution_capability` mailbox commands at
+the runtime-owned boundary.
 Daemon idle-cycle recovery now uses that policy to requeue one eligible
 retryable stranded blocked predecessor through the audited queue transition,
 writes `diagnostics/auto-recovery/` diagnostics and runtime/monitor events,
@@ -264,11 +296,16 @@ The contract layer currently covers canonical enum values including planning
 `recon` and learning `librarian`, probe work items/status hints, root-intake
 kinds, stage metadata, legal terminal and running markers including
 `LIBRARIAN_COMPLETE`, `LIBRARIAN_NOOP`, and `LIBRARIAN_RUNNING`,
-result-class validation, and safe identifier validation. It also includes typed
-task, probe, spec, incident, and
+result-class validation, safe identifier validation, v0.19.0 capability
+decision/enforcement/evidence/policy/support enums, and
+`approve_execution_capability`/`deny_execution_capability` mailbox command
+values. It also includes typed task, probe, spec, incident, and
 learning-request work-document contracts with headed markdown parse/render
 helpers, root-intake lineage fields, a typed Arbiter closure-target-state
-contract, typed Recon packet contracts and markdown helpers, plus serde-backed
+contract, typed Recon packet contracts and markdown helpers, v0.19.0 execution
+capability scope, approval policy ref, request, policy override, grant, support
+decision, capability id alias/validation, and grant fingerprint contracts, plus
+serde-backed
 runtime JSON contracts for runtime snapshots, recovery counters, mailbox
 command envelopes and add-task/add-spec/add-idea/add-probe payload wrappers,
 compile diagnostics, stage-result envelopes, runtime error contexts including
@@ -276,7 +313,8 @@ compile diagnostics, stage-result envelopes, runtime error contexts including
 records, read-only status payloads,
 usage-governance state/blockers, usage-governance token ledger entries,
 subscription quota telemetry status/window readings, Python-compatible
-compiled-stage-graph exports, and Python-compatible `run_trace_graph`
+compiled-stage-graph exports including per-node execution capability
+grants/warnings/policy fingerprints, and Python-compatible `run_trace_graph`
 contracts. The v0.18.6 mailbox intervention contract slice is implemented with
 Python-compatible command values for cancel, archive, supersede, dependency
 retarget, resolve/cancel incident, and invalid-incident archive commands; typed
@@ -285,6 +323,9 @@ values, optional cancellation fields, dependency retarget fields, and
 single-filename invalid incident artifacts; the read-only status payload also
 includes typed `latest_operator_intervention` evidence for the new intervention
 event family.
+The approval mailbox payload contract validates safe approval ids and
+non-empty reasons for approve/deny decisions, and the runtime-control/daemon
+mailbox paths use those payloads to resolve durable pending approvals.
 Always-on tests cover the public exports and Python-produced markdown/JSON
 fixtures, including probe documents, add-probe mailbox payloads, and Recon
 packet fixtures, without requiring a live daemon. The compiler parity tests also
@@ -323,7 +364,16 @@ surfaces, durable idea-source behavior, closure recovery evidence, and
 release fixture now reconciles Cargo metadata, runtime docs, source-package
 mapping, parity fixture docs, package include readiness, required Builder
 checks, package verification, generated-cache exclusions, and Python
-`millrace-web` v0.18.5/v0.18.6 package-version unsupported-gap evidence. The
+`millrace-web` v0.18.5/v0.18.6 package-version unsupported-gap evidence, plus
+target-facing Python `v0.18.6..v0.19.0` guardrails for planned Rust `0.4.0`
+execution capability contracts/config, compiled grants, approvals, gates,
+runner support/evidence metadata, inspection surfaces, required checks, and
+`millrace-web` v0.19.0 package evidence. The final Rust `0.4.0`
+release fixture now reconciles Cargo metadata, runtime docs, source-package
+mapping, parity fixture docs, package include readiness, required Builder
+checks, package verification, generated-cache exclusions, run-inspection
+capability output, and Python `millrace-web` v0.19.0 package-version
+unsupported-gap evidence. The
 v0.18.4 runner failure classifier contract, blocked metadata
 persistence, manual public retry CLI, auto-recovery config/status, and daemon
 stranded-dependency recovery slices are now implemented with typed runtime JSON
@@ -337,8 +387,8 @@ config projection, `config show` output for `auto_recovery.enabled`, daemon
 idle-cycle recovery diagnostics under `millrace-agents/diagnostics/auto-recovery/`,
 `blocked_dependency_auto_requeued` and `blocked_dependency_auto_requeue_skipped`
 event/monitor evidence, and same-cycle dependent dispatch suppression.
-Docs/version and final release evidence are reconciled in the Rust `0.3.5`
-release fixture.
+Docs/version and final release evidence are reconciled in the release fixtures
+through Rust `0.4.0`.
 The runner normalization/artifact-metadata target is now implemented
 with focused runtime JSON, runner normalization, serial runtime, and
 daemon runtime coverage, and the shipped skill lint/guidance target is now
@@ -480,7 +530,47 @@ The final Rust `0.3.5` release-parity evidence reconciles Cargo metadata,
 runtime docs, source-package mapping, parity fixture docs, package include
 readiness, required Builder checks, package verification, generated-cache
 exclusions, and Python `millrace-web` v0.18.5/v0.18.6 package/version
+unsupported-gap evidence. The v0.19.0 guardrail fixture maps all 61 generated
+Python scout paths to expected Rust implementation, test, documentation,
+fixture, package-evidence, reference-evidence, unsupported-gap, or planned-new
+targets while keeping Rust `0.3.5` as the previous/current baseline and Rust
+`0.4.0` as the planned target. It pins Python v0.18.6/v0.19.0 annotated tag
+objects and peeled commits, execution capability contracts/config, compiled
+capability grants, approval storage and CLI/runtime-control routing,
+pre-dispatch capability gates, runner support/evidence metadata, inspection
+surfaces, required release checks, repository-relative Rust target guardrails,
+no-live guarantees, and Python `millrace-web` v0.19.0 package/version
 unsupported-gap evidence.
+The v0.19.0 capability contracts/config slice has landed with public
+Rust contract exports, capability id aliases and scope validation,
+approval-required grant invariants, stable grant fingerprints, approval mailbox
+payload validation, `[execution_capabilities]` config defaults and recompile
+boundaries, `config show` output for the three exposed keys, and focused
+contract/runtime JSON/public export/parity tests. The compiled capability
+grants slice has also landed: mode, graph-node, and stage-kind capability
+declarations compile into sealed per-node grants, warnings, summaries, and
+policy fingerprints; disabled capability policy produces zero grants; strict
+required-advisory policy fails on advisory required grants such as
+`workspace.read`; `millrace compile show` and compiled-stage-graph exports
+surface the compiled grant evidence; and focused compiler/parity tests cover
+the behavior. The runner support/evidence slice has also landed: stage request
+context renders compiled grants and support decisions, fake/Codex/Pi runners
+and the dispatcher report adapter-specific support before artifact generation,
+runner invocation/completion/raw-result/stage-result metadata carry grant,
+support, evidence-ref, missing-evidence, and capability-failure fields, and
+focused runner/runtime tests cover conservative support reporting plus
+`capability_evidence_missing` normalization. The runtime capability
+gates/approval-storage slice has also landed: serial once-mode and daemon
+dispatch evaluate compiled grants before runner invocation, persist
+`capability_gate.<request_id>.json`, emit `capability_gate_evaluated`, block
+denied, unsupported, unresolved approval-required, or missing-evidence required
+grants as recoverable runtime-policy failures, and reuse durable pending or
+resolved approval records by run/request/grant. The approval CLI/runtime-control
+slice has also landed: `millrace approvals ls/show/approve/deny` lists and
+inspects durable approval records, resolves approve/deny decisions directly
+when no daemon owns the workspace, routes daemon-owned decisions through
+mailbox envelopes, and covers daemon application/archive/event behavior with
+focused CLI, runtime-control, serial, daemon, and runtime JSON tests.
 Focused
 `run once`
 coverage exercises one-stage mocked Codex dispatcher execution, idle/pause/stop
@@ -616,7 +706,13 @@ records the final Rust `0.3.5` release-parity evidence for version metadata,
 generated-scout path mappings, package include readiness, runtime docs,
 source-package mapping, required Builder verification command results, package
 verification, generated-cache exclusion evidence, and the Python `v0.18.5` and
-`v0.18.6` `millrace-web` package/version unsupported gap. The optional
+`v0.18.6` `millrace-web` package/version unsupported gap; and
+`tests/fixtures/cli_parity/auto_port_v0_19_0_parity_evidence.json` records the
+target-facing Rust `0.4.0` guardrails for Python `v0.18.6..v0.19.0` execution
+capability contracts/config, compiled grants, approvals, pre-dispatch gates,
+runner support/evidence metadata, inspection surfaces, all 61 generated scout
+paths, required checks, `millrace-web` v0.19.0 package evidence, planned-new
+Rust targets, and no-live guarantees. The optional
 Python `millrace-web` dashboard
 remains an explicit unsupported Rust parity gap with source references,
 shadow-CLI graph/trace commands, and non-goal wording; native filesystem
@@ -626,13 +722,16 @@ do not claim broader compiled-plan, queue-state, or stage-machine changes
 beyond the already implemented runtime dispatch boundary.
 
 The compiler layer currently covers serde-backed mode definitions including
-`stage_thinking_bindings`, graph loop definitions including node-level
-`thinking_level` and `no_op` terminal classes, stage-kind registry entries,
+`stage_thinking_bindings`, Python-compatible execution capability request and
+policy fields plus Rust stage-scoped compatibility fields, graph loop
+definitions including node-level `thinking_level`, execution capability
+request/policy fields, and `no_op` terminal classes, stage-kind registry entries,
 learning triggers with `target_skill_id` and normalized
 `preferred_output_paths`, plane concurrency policy definitions, compiled graph
 and compiled run plan shapes, compiled-stage-graph export contracts and
 projection helpers, resolved asset references, compile outcome data, persisted
-compiled-plan authority, and compiled-plan currentness data. It also
+compiled-plan authority, compiled execution capability summary/grant/warning
+fields, and compiled-plan currentness data. It also
 resolves authoritative
 compile assets from initialized workspace `modes/`,
 `graphs/`, `registry/stage_kinds/`, `entrypoints/`, and `skills/` paths,
@@ -645,9 +744,10 @@ compiled run plans for default Codex, Pi, learning, and the `standard_plain`
 alias mode. The plans include graph node bindings, transitions, policies,
 planning completion
 behavior, learning triggers, learning no-op terminal states, direct Curator
-trigger safe-destination validation, and supported config, skill, entrypoint,
-runner, model, thinking-level, Codex legacy reasoning-effort, and timeout
-overrides. It persists compiler-authoritative
+trigger safe-destination validation, sealed execution capability grants,
+warnings, policy fingerprints, and plan/plane summaries, and supported config,
+skill, entrypoint, runner, model, thinking-level, Codex legacy
+reasoning-effort, and timeout overrides. It persists compiler-authoritative
 `compiled_plan.json` and `compile_diagnostics.json`, reports
 missing/current/stale/unknown currentness from compile-input fingerprints,
 preserves last-known-good plans on compile failure, and refuses stale
@@ -657,7 +757,8 @@ graph` commands require an initialized workspace, accept the built-in
 Codex/Pi/learning modes and `standard_plain` alias, persist compiler artifacts,
 and render diagnostics, inspectable compiled-plan fields, or stable
 compiled-stage-graph text/JSON output including selected-plane and output-file
-behavior without invoking runtime execution behavior. The committed compiler
+behavior plus compact execution capability summary/grant/warning lines without
+invoking runtime execution behavior. The committed compiler
 parity fixture is pinned to the Python `v0.18.0..v0.18.1` source range and
 covers `default_codex`, `default_pi`, `learning_codex`, `learning_pi`, and
 `standard_plain`, including learning no-op terminal classes,
@@ -718,7 +819,10 @@ runtime-control intervention helpers now validate the v0.18.6
 cancel/archive/supersede/retarget/incident payload family, apply direct offline
 archive/audit mutations through the shared queue-store boundary with snapshot
 queue-depth refresh, and mailbox-route the same commands when an active daemon
-owns the workspace. The Rust
+owns the workspace. Runtime-control approval helpers validate v0.19.0
+approve/deny payloads, resolve durable pending approvals directly when offline,
+and mailbox-route the same decisions when an active daemon owns the workspace.
+The Rust
 `millrace init --workspace <path>` command routes through the workspace
 initialization helper, and first workspace doctor checks validate the
 initialized layout, status/state parseability, baseline manifest and managed
@@ -774,8 +878,9 @@ sleep, max-tick/no-work/stop/process-stopped/blocked exits, completion draining,
 stopped-state reset, and matching-session lock release. It also has daemon
 mailbox/reload handling for deterministic command drain, processed/failed
 archives, `add_probe` application, idle v0.18.6 operator-intervention
-application with active-stage deferral, retry-active and clear-stale-state,
-reload deferral/application,
+application with active-stage deferral, v0.19.0 approval-decision application
+with processed/failed archive and runtime/monitor event evidence, retry-active
+and clear-stale-state, reload deferral/application,
 watcher-session rebuild, retained-plan diagnostics, and reload failure
 evidence, plus deterministic watcher poll intake for config, task queue,
 optional spec queue, and optional `ideas/inbox` changes before work claims,
@@ -817,8 +922,8 @@ Python runtime.
 The historical public proof package for the v0.1.0 autonomous port campaign
 lives in
 [`tim-osterhus/millrace-rs-port-docs`](https://github.com/tim-osterhus/millrace-rs-port-docs).
-The crate-local `0.3.5` release evidence lives in `CHANGELOG.md` and
-`tests/fixtures/cli_parity/auto_port_v0_18_6_release_parity_evidence.json`.
+The crate-local `0.4.0` release evidence lives in `CHANGELOG.md` and
+`tests/fixtures/cli_parity/auto_port_v0_19_0_release_parity_evidence.json`.
 
 ## License
 

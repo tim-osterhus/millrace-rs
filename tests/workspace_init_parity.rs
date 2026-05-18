@@ -26,7 +26,7 @@ fn fixture() -> Value {
 #[test]
 fn rust_init_matches_python_required_tree_fixture() {
     let fixture = fixture();
-    assert_eq!(fixture["python_package_version"], "0.18.6");
+    assert_eq!(fixture["python_package_version"], "0.19.0");
 
     let temp_dir = TempDir::new().unwrap();
     let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();

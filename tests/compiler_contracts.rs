@@ -1,4 +1,7 @@
-use std::{any::type_name, collections::HashMap};
+use std::{
+    any::type_name,
+    collections::{BTreeSet, HashMap},
+};
 
 use serde_json::{Value, json};
 
@@ -104,6 +107,72 @@ fn public_compiler_contract_exports_remain_importable() {
         CompiledStageGraphExport,
         CompilerGraphExportError,
     > = export_compiled_stage_graph_at;
+}
+
+#[test]
+fn compiler_contracts_v0_19_0_guardrail_fixture_requires_capability_request_policy_fields() {
+    let fixture: Value = fixture_value(include_str!(
+        "fixtures/runtime_json/auto_port_v0_19_0_runtime_contract_scout.json"
+    ));
+    assert_eq!(fixture["kind"], "auto_port_v0_19_0_runtime_contract_scout");
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.19.0");
+
+    let sources: BTreeSet<_> = fixture["contract_sources"]
+        .as_array()
+        .expect("contract source references are present")
+        .iter()
+        .map(|value| value.as_str().expect("contract source"))
+        .collect();
+    for source in [
+        "../millrace-py/src/millrace_ai/architecture/loop_graphs.py",
+        "../millrace-py/src/millrace_ai/architecture/materialization.py",
+        "../millrace-py/src/millrace_ai/architecture/stage_kinds.py",
+        "../millrace-py/src/millrace_ai/contracts/modes.py",
+        "../millrace-py/src/millrace_ai/compilation/capabilities.py",
+    ] {
+        assert!(
+            sources.contains(source),
+            "missing v0.19.0 compiler capability source {source}"
+        );
+    }
+
+    let targets: BTreeSet<_> = fixture["expected_rust_contract_targets"]
+        .as_array()
+        .expect("expected Rust contract targets are present")
+        .iter()
+        .map(|value| value.as_str().expect("expected Rust target"))
+        .collect();
+    for target in [
+        "src/compiler/contracts.rs",
+        "src/compiler/materialization.rs",
+        "tests/compiler_contracts.rs",
+        "tests/compiler_materialization.rs",
+    ] {
+        assert!(
+            targets.contains(target),
+            "missing v0.19.0 compiler capability target {target}"
+        );
+    }
+
+    let compiler = &fixture["compiler_grant_contract"];
+    assert_eq!(
+        compiler["default_framework_grants"],
+        json!(["runner.invoke", "workspace.read", "artifact.write"])
+    );
+    assert_eq!(
+        compiler["request_sources"],
+        json!([
+            "stage_kind_default",
+            "stage_kind",
+            "graph_node",
+            "mode",
+            "runtime_config"
+        ])
+    );
+    assert_eq!(
+        compiler["resolution_precedence"],
+        json!(["mode", "graph_node", "runtime_config"])
+    );
 }
 
 #[test]
@@ -580,6 +649,9 @@ fn compiled_stage_graph_export_contract_matches_python_public_shape() {
                 vec![ResultClass::Success],
             )]),
             declared_output_artifacts: vec!["stage_result".to_owned(), "report".to_owned()],
+            execution_capability_grants: Vec::new(),
+            execution_capability_warnings: Vec::new(),
+            execution_capability_policy_fingerprint: String::new(),
         }],
         edges: vec![GraphExportEdge {
             edge_id: "builder-complete-to-checker".to_owned(),
@@ -640,6 +712,9 @@ fn compiled_stage_graph_export_contract_matches_python_public_shape() {
             "declared_output_artifacts",
             "entrypoint_contract_id",
             "entrypoint_path",
+            "execution_capability_grants",
+            "execution_capability_policy_fingerprint",
+            "execution_capability_warnings",
             "model_name",
             "model_reasoning_effort",
             "node_id",

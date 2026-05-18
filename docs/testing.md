@@ -21,7 +21,7 @@ Run the published-package verification path on a clean release candidate:
 cargo publish --dry-run
 ```
 
-During active Millrace Builder/Checker worktree validation, the `0.3.5`
+During active Millrace Builder/Checker worktree validation, the `0.4.0`
 release fixture records offline package verification as Builder evidence.
 The non-uploading dirty-worktree substitutes are:
 
@@ -48,8 +48,8 @@ The test suite covers:
   metadata, managed live/baseline assets, `execution.with_integrator`
   materialization/export, workspace baseline synchronization, opt-in integrated
   mode resolution, runtime routing, and run-trace evidence
-- release fixtures through Rust `0.3.5` version metadata, docs, package
-  include rules including generated-cache exclusions, Python `v0.18.6` source
+- release fixtures through Rust `0.4.0` version metadata, docs, package
+  include rules including generated-cache exclusions, Python `v0.19.0` source
   references, required release-readiness command results, package verification
   evidence, and explicit web-gap evidence
 - target-facing Python `v0.18.2..v0.18.3` guardrail fixtures for Rust `0.3.3`
@@ -71,6 +71,7 @@ The test suite covers:
   `config show` parity coverage in `tests/parity_cli.rs`, daemon
   auto-requeue diagnostics/event coverage, and same-cycle dependent dispatch
   suppression; docs/version and final release evidence are reconciled in
+  `tests/fixtures/cli_parity/auto_port_v0_18_4_release_parity_evidence.json`
 - target-facing Python `v0.18.4..v0.18.6` guardrail fixtures and final Rust
   `0.3.5` release evidence for operator intervention mailbox payloads,
   archive/audit ledgers, direct and daemon-routed runtime-control behavior,
@@ -81,6 +82,21 @@ The test suite covers:
   queue-store, runtime-control, serial runtime, daemon runtime, and fixture
   tests; docs/version and final release evidence are reconciled in
   `tests/fixtures/cli_parity/auto_port_v0_18_6_release_parity_evidence.json`
+- target-facing Python `v0.18.6..v0.19.0` guardrail fixtures for planned Rust
+  `0.4.0` execution capability contracts/config, compiled grants, approvals,
+  runtime gates, runner support/evidence metadata, inspection surfaces,
+  generated scout mappings, required checks, `millrace-web` v0.19.0 package
+  evidence, and no-live guarantees, with the capability contracts/config slice,
+  compiled capability grant slice, runner support/evidence slice, and runtime
+  capability gate/approval-storage slice now implemented through focused
+  capability contract tests, runtime JSON approval payload tests, public export
+  tests, `tests/compiler_capability_grants.rs`,
+  `tests/runners_capability_support.rs`, `tests/runtime_capability_gates.rs`,
+  runner adapter and normalization tests, serial/daemon pre-dispatch gate
+  coverage, approval CLI/runtime-control direct and daemon-mailbox coverage,
+  runtime prompt/artifact metadata coverage, and `config show`/`compile show`
+  parity coverage; docs/version and final release evidence are reconciled in
+  `tests/fixtures/cli_parity/auto_port_v0_19_0_release_parity_evidence.json`
 - Recon invalid-handoff hardening coverage for handoff-specific emitted-id
   validation, generated task/spec id checks before import, durable
   `recon_handoff_invalid` runtime error evidence, active-probe blocking, and

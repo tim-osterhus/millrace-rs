@@ -211,6 +211,8 @@ fn live_smoke_request(
         thinking_level: model_reasoning_effort.clone(),
         model_reasoning_effort,
         timeout_seconds,
+        execution_capability_grants: Vec::new(),
+        capability_support_decisions: Vec::new(),
     };
     request.validate().unwrap();
     request

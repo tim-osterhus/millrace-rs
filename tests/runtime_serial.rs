@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -54,6 +54,94 @@ const RUN_ID: &str = "run-001";
 const REQUEST_ID: &str = "request-001";
 const STARTUP_NOW: &str = "2026-04-28T20:00:00Z";
 
+#[test]
+fn serial_runtime_v0_19_0_guardrail_fixture_requires_capability_gate_approval_and_prompt_context() {
+    let fixture: Value = serde_json::from_str(include_str!(
+        "fixtures/runtime_json/auto_port_v0_19_0_runtime_contract_scout.json"
+    ))
+    .expect("parse v0.19.0 runtime contract scout");
+    assert_eq!(fixture["kind"], "auto_port_v0_19_0_runtime_contract_scout");
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.19.0");
+
+    let sources: BTreeSet<_> = fixture["contract_sources"]
+        .as_array()
+        .expect("contract source references are present")
+        .iter()
+        .map(|value| value.as_str().expect("contract source"))
+        .collect();
+    for source in [
+        "../millrace-py/src/millrace_ai/runtime/capability_gates.py",
+        "../millrace-py/src/millrace_ai/runtime/approvals.py",
+        "../millrace-py/src/millrace_ai/runtime/stage_requests.py",
+        "../millrace-py/src/millrace_ai/runtime/tick_cycle.py",
+        "../millrace-py/src/millrace_ai/runners/requests.py",
+        "../millrace-py/tests/runtime/test_capability_gates.py",
+    ] {
+        assert!(
+            sources.contains(source),
+            "missing v0.19.0 serial runtime capability source {source}"
+        );
+    }
+
+    let gate = &fixture["capability_gate_contract"];
+    assert_eq!(
+        gate["gate_artifact_template"],
+        "capability_gate.<request_id>.json"
+    );
+    assert_eq!(gate["event_type"], "capability_gate_evaluated");
+    assert!(
+        gate["dispatch_paths"]
+            .as_array()
+            .expect("dispatch paths are present")
+            .iter()
+            .any(|value| value.as_str() == Some("serial_tick")),
+        "missing v0.19.0 serial pre-dispatch gate path"
+    );
+    for failure_class in [
+        "capability_grant_denied",
+        "capability_approval_required",
+        "capability_grant_unsupported",
+        "capability_evidence_missing",
+    ] {
+        assert!(
+            gate["failure_classes"]
+                .as_array()
+                .expect("failure classes are present")
+                .iter()
+                .any(|value| value.as_str() == Some(failure_class)),
+            "missing v0.19.0 capability gate failure class {failure_class}"
+        );
+    }
+
+    let approval = &fixture["approval_contract"];
+    assert_eq!(
+        approval["storage_dirs"],
+        json!([
+            "millrace-agents/approvals/pending",
+            "millrace-agents/approvals/resolved"
+        ])
+    );
+    assert_eq!(
+        approval["idempotency_key_fields"],
+        json!(["run_id", "request_id", "grant_id"])
+    );
+
+    let inspection = &fixture["inspection_contract"];
+    for section in [
+        "Execution Capability Grants",
+        "Capability Support Decisions",
+    ] {
+        assert!(
+            inspection["prompt_context_sections"]
+                .as_array()
+                .expect("prompt context sections are present")
+                .iter()
+                .any(|value| value.as_str() == Some(section)),
+            "missing v0.19.0 prompt context section {section}"
+        );
+    }
+}
+
 fn sample_request(run_dir: &Path) -> StageRunRequest {
     let run_dir = run_dir.display().to_string();
     let mut request = StageRunRequest {
@@ -100,6 +188,8 @@ fn sample_request(run_dir: &Path) -> StageRunRequest {
         thinking_level: Some("medium".to_owned()),
         model_reasoning_effort: Some("medium".to_owned()),
         timeout_seconds: 3600,
+        execution_capability_grants: Vec::new(),
+        capability_support_decisions: Vec::new(),
     };
     request.validate().unwrap();
     request
@@ -1481,6 +1571,10 @@ impl StageRunnerAdapter for StaticTokenRunner {
             terminal_result_path: None,
             event_log_path: None,
             token_usage: None,
+            failure_capability_class: None,
+            capability_support_decisions: Vec::new(),
+            capability_evidence_refs: Vec::new(),
+            missing_capability_evidence_refs: Vec::new(),
             started_at: timestamp("2026-04-28T20:10:00Z"),
             ended_at: timestamp("2026-04-28T20:10:02Z"),
         };
@@ -1531,6 +1625,10 @@ impl StageRunnerAdapter for TokenTerminalRunner {
             terminal_result_path: None,
             event_log_path: None,
             token_usage: Some(self.token_usage.clone()),
+            failure_capability_class: None,
+            capability_support_decisions: Vec::new(),
+            capability_evidence_refs: Vec::new(),
+            missing_capability_evidence_refs: Vec::new(),
             started_at: timestamp(self.completed_at),
             ended_at: timestamp(self.completed_at),
         };
@@ -1680,6 +1778,10 @@ impl StageRunnerAdapter for ReconArtifactRunner {
             terminal_result_path: None,
             event_log_path: None,
             token_usage: None,
+            failure_capability_class: None,
+            capability_support_decisions: Vec::new(),
+            capability_evidence_refs: Vec::new(),
+            missing_capability_evidence_refs: Vec::new(),
             started_at: timestamp("2026-04-28T20:10:00Z"),
             ended_at: timestamp("2026-04-28T20:10:01Z"),
         };
@@ -1730,6 +1832,10 @@ impl StageRunnerAdapter for RawReconPacketRunner {
             terminal_result_path: None,
             event_log_path: None,
             token_usage: None,
+            failure_capability_class: None,
+            capability_support_decisions: Vec::new(),
+            capability_evidence_refs: Vec::new(),
+            missing_capability_evidence_refs: Vec::new(),
             started_at: timestamp("2026-04-28T20:10:00Z"),
             ended_at: timestamp("2026-04-28T20:10:01Z"),
         };
@@ -1919,6 +2025,10 @@ impl StageRunnerAdapter for ScriptedE2eRunner {
             terminal_result_path,
             event_log_path: None,
             token_usage: None,
+            failure_capability_class: None,
+            capability_support_decisions: Vec::new(),
+            capability_evidence_refs: Vec::new(),
+            missing_capability_evidence_refs: Vec::new(),
             started_at: timestamp("2026-04-28T20:10:00Z"),
             ended_at: timestamp("2026-04-28T20:10:01Z"),
         };
@@ -3511,14 +3621,16 @@ fn serial_tick_dispatches_fake_runner_persists_artifacts_and_routes_from_graph()
     assert!(!paths.tasks_done_dir.join("task-dispatch.md").exists());
 
     let events = runtime_events(&paths);
-    assert_eq!(events[0]["event_type"], "stage_started");
-    assert_eq!(events[1]["event_type"], "stage_completed");
+    assert_eq!(events[0]["event_type"], "capability_gate_evaluated");
+    assert_eq!(events[0]["data"]["allowed"], true);
+    assert_eq!(events[1]["event_type"], "stage_started");
+    assert_eq!(events[2]["event_type"], "stage_completed");
     assert_eq!(
-        events[1]["data"]["stage_result_path"],
+        events[2]["data"]["stage_result_path"],
         outcome.stage_result_path.unwrap().display().to_string()
     );
-    assert_eq!(events[2]["event_type"], "router_decision");
-    assert_eq!(events[2]["data"]["next_stage"], "checker");
+    assert_eq!(events[3]["event_type"], "router_decision");
+    assert_eq!(events[3]["data"]["next_stage"], "checker");
 
     let trace_path = paths.runs_dir.join("run-dispatch/run_trace.json");
     assert!(trace_path.is_file());
@@ -3930,7 +4042,7 @@ fn runtime_configured_dispatcher_registers_real_adapters_and_fake_test_adapter()
 }
 
 #[test]
-fn serial_tick_normalizes_dispatcher_unknown_runner_through_recovery_path() {
+fn serial_tick_blocks_dispatcher_unknown_runner_at_capability_gate() {
     let temp = TempDir::new().unwrap();
     let paths = initialize_workspace(temp.path().join("workspace")).unwrap();
     QueueStore::from_paths(paths.clone())
@@ -3983,24 +4095,41 @@ fn serial_tick_normalizes_dispatcher_unknown_runner_through_recovery_path() {
     assert_eq!(stage_result.result_class, ResultClass::RecoverableFailure);
     assert_eq!(
         stage_result.metadata["failure_class"],
-        "runner_transport_failure"
+        "capability_grant_unsupported"
+    );
+    assert_eq!(
+        stage_result.metadata["blocked_origin"],
+        "runtime_capability_gate"
+    );
+    assert_eq!(stage_result.metadata["failure_scope"], "runtime_policy");
+    assert_eq!(
+        outcome
+            .runner_raw_result
+            .as_ref()
+            .unwrap()
+            .failure_capability_class
+            .as_deref(),
+        Some("capability_grant_unsupported")
     );
     let run_dir = paths.runs_dir.join("run-missing-runner");
     assert!(
         run_dir
+            .join("capability_gate.request-missing-runner.json")
+            .is_file()
+    );
+    assert!(
+        !run_dir
             .join("runner_invocation.request-missing-runner.json")
-            .is_file()
+            .exists()
     );
     assert!(
-        run_dir
+        !run_dir
             .join("runner_completion.request-missing-runner.json")
-            .is_file()
+            .exists()
     );
-    assert!(
-        fs::read_to_string(run_dir.join("runner_stderr.request-missing-runner.txt"))
-            .unwrap()
-            .contains("Unknown stage runner: missing_runner")
-    );
+    let events = fs::read_to_string(paths.logs_dir.join("runtime_events.jsonl")).unwrap();
+    assert!(events.contains("\"event_type\":\"capability_gate_evaluated\""));
+    assert!(!events.contains("\"event_type\":\"stage_started\""));
     assert!(
         outcome
             .stage_result_path
@@ -5576,13 +5705,13 @@ fn serial_tick_dispatch_missing_terminal_routes_recovery_and_persists_error_cont
     assert_eq!(counters.entries[0].troubleshoot_attempt_count, 1);
 
     let events = runtime_events(&paths);
-    assert_eq!(events[1]["event_type"], "stage_completed");
+    assert_eq!(events[2]["event_type"], "stage_completed");
     assert_eq!(
-        events[1]["data"]["failure_class"],
+        events[2]["data"]["failure_class"],
         "missing_terminal_result"
     );
-    assert_eq!(events[2]["event_type"], "router_decision");
-    assert_eq!(events[2]["data"]["next_stage"], "troubleshooter");
+    assert_eq!(events[3]["event_type"], "router_decision");
+    assert_eq!(events[3]["data"]["next_stage"], "troubleshooter");
 
     let recovery_request = run_serial_runtime_tick(
         &mut session,
@@ -5700,7 +5829,7 @@ fn serial_tick_applies_consultant_handoff_through_typed_incident_and_blocked_tas
         Some("millrace-agents/runs/run-handoff/stage_results/request-handoff.json")
     );
     let events = runtime_events(&paths);
-    assert_eq!(events[3]["event_type"], "runtime_handoff_incident_enqueued");
+    assert_eq!(events[4]["event_type"], "runtime_handoff_incident_enqueued");
     assert!(events.iter().any(
         |event| event["event_type"] == "blocked_item_metadata_written"
             && event["data"]["metadata_path"]
@@ -5943,17 +6072,17 @@ fn serial_tick_dispatch_illegal_terminal_routes_recovery_and_persists_error_cont
     assert_eq!(load_execution_status(&paths).unwrap(), "### BLOCKED");
 
     let events = runtime_events(&paths);
-    assert_eq!(events[1]["event_type"], "stage_completed");
-    assert_eq!(events[1]["data"]["terminal_result"], "BLOCKED");
-    assert_eq!(events[1]["data"]["result_class"], "recoverable_failure");
-    assert_eq!(
-        events[1]["data"]["failure_class"],
-        "illegal_terminal_result"
-    );
-    assert_eq!(events[2]["event_type"], "router_decision");
-    assert_eq!(events[2]["data"]["next_stage"], "troubleshooter");
+    assert_eq!(events[2]["event_type"], "stage_completed");
+    assert_eq!(events[2]["data"]["terminal_result"], "BLOCKED");
+    assert_eq!(events[2]["data"]["result_class"], "recoverable_failure");
     assert_eq!(
         events[2]["data"]["failure_class"],
+        "illegal_terminal_result"
+    );
+    assert_eq!(events[3]["event_type"], "router_decision");
+    assert_eq!(events[3]["data"]["next_stage"], "troubleshooter");
+    assert_eq!(
+        events[3]["data"]["failure_class"],
         "illegal_terminal_result"
     );
 

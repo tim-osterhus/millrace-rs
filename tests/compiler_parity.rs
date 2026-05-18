@@ -587,6 +587,9 @@ fn normalize_plan_value(value: Value, key: Option<&str>, mode_id: Option<String>
                 .or(mode_id);
             let mut normalized = Map::new();
             for (child_key, child_value) in map {
+                if child_key.starts_with("execution_capability_") {
+                    continue;
+                }
                 let mut child =
                     normalize_plan_value(child_value, Some(&child_key), object_mode_id.clone());
                 if child_key == "compiled_plan_id" {

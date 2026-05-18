@@ -19,12 +19,12 @@ use crate::{
         load_persisted_compiled_plan,
     },
     contracts::{
-        ActiveRunRequestKind, ActiveRunState, Plane, RecoveryCounters, RuntimeMode,
-        RuntimeSnapshot, StageName, Timestamp, UsageGovernanceDegradedPolicy,
+        ActiveRunRequestKind, ActiveRunState, CapabilityPolicyDecision, Plane, RecoveryCounters,
+        RuntimeMode, RuntimeSnapshot, StageName, Timestamp, UsageGovernanceDegradedPolicy,
         UsageGovernanceEvaluationBoundary, UsageGovernanceRuntimeTokenMetric,
         UsageGovernanceRuntimeTokenWindow, UsageGovernanceSubscriptionProvider,
         UsageGovernanceSubscriptionWindow, WatcherMode, WorkDocumentError, WorkItemKind,
-        validate_safe_identifier,
+        validate_capability_id, validate_safe_identifier,
     },
     runners::{
         CodexCliConfig, CodexCliRunnerAdapter, CodexPermissionLevel, PiEventLogPolicy, PiRpcConfig,
@@ -131,6 +131,8 @@ pub struct RuntimeStartupConfig {
     pub usage_governance_enabled: bool,
     /// Full usage-governance runtime config.
     pub usage_governance: UsageGovernanceConfig,
+    /// Full execution-capability config defaults.
+    pub execution_capabilities: ExecutionCapabilitiesConfig,
     /// Stable config content fingerprint projected into the snapshot.
     pub config_version: String,
 }
@@ -155,6 +157,48 @@ impl Default for AutoRecoveryConfig {
             blocked_dependency_retry_enabled: true,
             max_auto_requeues_per_work_item: 3,
             cooldown_seconds: vec![300, 900, 3600],
+        }
+    }
+}
+
+/// Runtime config defaults for execution capability governance.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecutionCapabilitiesConfig {
+    /// Enables execution capability grant compilation and later enforcement.
+    pub enabled: bool,
+    /// Decision used for capability ids without an explicit default.
+    pub default_unknown_capability: CapabilityPolicyDecision,
+    /// Allows advisory-only grants when a runner or adapter cannot enforce directly.
+    pub allow_advisory_grants: bool,
+    /// Fails required advisory grants strictly during grant compilation.
+    pub fail_required_advisory: bool,
+    /// Capability-specific default policy decisions.
+    pub defaults: BTreeMap<String, CapabilityPolicyDecision>,
+}
+
+impl Default for ExecutionCapabilitiesConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            default_unknown_capability: CapabilityPolicyDecision::Deny,
+            allow_advisory_grants: true,
+            fail_required_advisory: false,
+            defaults: BTreeMap::from([
+                ("network.access".to_owned(), CapabilityPolicyDecision::Deny),
+                (
+                    "package.install".to_owned(),
+                    CapabilityPolicyDecision::ApprovalRequired,
+                ),
+                (
+                    "git.mutate".to_owned(),
+                    CapabilityPolicyDecision::ApprovalRequired,
+                ),
+                ("shell.run".to_owned(), CapabilityPolicyDecision::Allow),
+                (
+                    "workspace.write".to_owned(),
+                    CapabilityPolicyDecision::Allow,
+                ),
+            ]),
         }
     }
 }
@@ -213,6 +257,11 @@ pub fn runtime_config_apply_boundary_for_field(
         | "auto_recovery.blocked_dependency_retry_enabled"
         | "auto_recovery.max_auto_requeues_per_work_item"
         | "auto_recovery.cooldown_seconds" => RuntimeConfigApplyBoundary::NextTick,
+        "execution_capabilities.enabled"
+        | "execution_capabilities.default_unknown_capability"
+        | "execution_capabilities.allow_advisory_grants"
+        | "execution_capabilities.fail_required_advisory"
+        | "execution_capabilities.defaults" => RuntimeConfigApplyBoundary::Recompile,
         _ if field_path.starts_with("stages.") => {
             let parts = field_path.split('.').collect::<Vec<_>>();
             if parts.len() != 3 {
@@ -763,6 +812,7 @@ pub fn load_runtime_startup_config(path: &Path) -> RuntimeStartupResult<RuntimeS
     let mut watchers_watch_specs_queue = true;
     let mut auto_recovery = AutoRecoveryConfig::default();
     let mut usage_governance = UsageGovernanceConfig::default();
+    let mut execution_capabilities = ExecutionCapabilitiesConfig::default();
 
     let raw = match fs::read_to_string(path) {
         Ok(raw) => Some(raw),
@@ -847,6 +897,18 @@ pub fn load_runtime_startup_config(path: &Path) -> RuntimeStartupResult<RuntimeS
         {
             load_usage_governance_config(usage_governance_table, &mut usage_governance, path)?;
         }
+        if let Some(execution_capabilities_table) = child_table_at(
+            root,
+            "execution_capabilities",
+            "execution_capabilities",
+            path,
+        )? {
+            load_execution_capabilities_config(
+                execution_capabilities_table,
+                &mut execution_capabilities,
+                path,
+            )?;
+        }
         if let Some(stages_table) = child_table(root, "stages", path)? {
             stages = load_stage_configs(stages_table, path)?;
         }
@@ -867,6 +929,7 @@ pub fn load_runtime_startup_config(path: &Path) -> RuntimeStartupResult<RuntimeS
         auto_recovery,
         usage_governance_enabled: usage_governance.enabled,
         usage_governance,
+        execution_capabilities,
         config_version,
     })
 }
@@ -1672,6 +1735,39 @@ fn optional_permission_by_model(
     Ok(Some(parsed))
 }
 
+fn optional_capability_policy_decision_map(
+    table: &toml::map::Map<String, toml::Value>,
+    key: &str,
+    field: &str,
+    path: &Path,
+) -> RuntimeStartupResult<Option<BTreeMap<String, CapabilityPolicyDecision>>> {
+    let Some(value) = table.get(key) else {
+        return Ok(None);
+    };
+    let Some(values) = value.as_table() else {
+        return Err(config_error(
+            path,
+            field,
+            "must be a TOML table when present",
+        ));
+    };
+    let mut parsed = BTreeMap::new();
+    for (capability_id, value) in values {
+        let normalized = validate_capability_id(capability_id).map_err(|error| {
+            config_error(path, format!("{field}.{capability_id}"), error.to_string())
+        })?;
+        parsed.insert(
+            normalized,
+            parse_capability_policy_decision_value(
+                value,
+                &format!("{field}.{capability_id}"),
+                path,
+            )?,
+        );
+    }
+    Ok(Some(parsed))
+}
+
 fn optional_positive_f64(
     table: &toml::map::Map<String, toml::Value>,
     key: &str,
@@ -1823,6 +1919,74 @@ fn reject_unknown_auto_recovery_config_keys(
                 path,
                 format!("auto_recovery.{key}"),
                 "unknown auto_recovery config key",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn load_execution_capabilities_config(
+    table: &toml::map::Map<String, toml::Value>,
+    config: &mut ExecutionCapabilitiesConfig,
+    path: &Path,
+) -> RuntimeStartupResult<()> {
+    reject_unknown_execution_capabilities_config_keys(table, path)?;
+    if let Some(enabled) =
+        optional_bool_at(table, "enabled", "execution_capabilities.enabled", path)?
+    {
+        config.enabled = enabled;
+    }
+    if let Some(decision) = table.get("default_unknown_capability") {
+        config.default_unknown_capability = parse_capability_policy_decision_value(
+            decision,
+            "execution_capabilities.default_unknown_capability",
+            path,
+        )?;
+    }
+    if let Some(allow_advisory_grants) = optional_bool_at(
+        table,
+        "allow_advisory_grants",
+        "execution_capabilities.allow_advisory_grants",
+        path,
+    )? {
+        config.allow_advisory_grants = allow_advisory_grants;
+    }
+    if let Some(fail_required_advisory) = optional_bool_at(
+        table,
+        "fail_required_advisory",
+        "execution_capabilities.fail_required_advisory",
+        path,
+    )? {
+        config.fail_required_advisory = fail_required_advisory;
+    }
+    if let Some(defaults) = optional_capability_policy_decision_map(
+        table,
+        "defaults",
+        "execution_capabilities.defaults",
+        path,
+    )? {
+        config.defaults = defaults;
+    }
+    Ok(())
+}
+
+fn reject_unknown_execution_capabilities_config_keys(
+    table: &toml::map::Map<String, toml::Value>,
+    path: &Path,
+) -> RuntimeStartupResult<()> {
+    for key in table.keys() {
+        if !matches!(
+            key.as_str(),
+            "enabled"
+                | "default_unknown_capability"
+                | "allow_advisory_grants"
+                | "fail_required_advisory"
+                | "defaults"
+        ) {
+            return Err(config_error(
+                path,
+                format!("execution_capabilities.{key}"),
+                "unknown execution_capabilities config key",
             ));
         }
     }
@@ -2381,6 +2545,23 @@ fn parse_permission_value(
             "must be one of `basic`, `elevated`, or `maximum`",
         )),
     }
+}
+
+fn parse_capability_policy_decision_value(
+    value: &toml::Value,
+    field: &str,
+    path: &Path,
+) -> RuntimeStartupResult<CapabilityPolicyDecision> {
+    let Some(value) = value.as_str() else {
+        return Err(config_error(path, field, "must be a string when present"));
+    };
+    CapabilityPolicyDecision::from_value(value).map_err(|_| {
+        config_error(
+            path,
+            field,
+            "must be one of `allow`, `deny`, or `approval_required`",
+        )
+    })
 }
 
 fn parse_reasoning_effort_value(

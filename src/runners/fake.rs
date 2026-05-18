@@ -4,13 +4,18 @@ use std::path::{Path, PathBuf};
 
 use serde_json::json;
 
-use crate::contracts::{ResultClass, StageName, Timestamp, TokenUsage};
+use crate::contracts::{
+    CapabilityDecisionState, CapabilityEnforcementMode, CapabilitySupportDecision,
+    CapabilitySupportState, ExecutionCapabilityGrant, ResultClass, StageName, Timestamp,
+    TokenUsage,
+};
 use crate::runtime::StageRunRequest;
 
 use super::{
     RunnerCompletionArtifactContext, RunnerEnvironmentDelta, RunnerError, RunnerExitKind,
-    RunnerRawResult, RunnerResult, StageRunnerAdapter, completion_artifact_from_raw_result,
-    invocation_artifact_from_request, write_runner_completion, write_runner_invocation,
+    RunnerRawResult, RunnerResult, StageRunnerAdapter, capability_evidence_refs_for_request,
+    completion_artifact_from_raw_result, invocation_artifact_from_request,
+    missing_capability_evidence_refs_for_request, write_runner_completion, write_runner_invocation,
     write_stage_prompt_artifact,
 };
 
@@ -109,7 +114,23 @@ impl FakeRunner {
 }
 
 impl StageRunnerAdapter for FakeRunner {
+    fn evaluate_capability_grant(
+        &self,
+        grant: &ExecutionCapabilityGrant,
+        request: &StageRunRequest,
+    ) -> CapabilitySupportDecision {
+        let runner_id = request
+            .runner_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or(&self.config.runner_name);
+        fake_capability_support_decision(runner_id, grant, request)
+    }
+
     fn run(&self, request: &StageRunRequest) -> RunnerResult<RunnerRawResult> {
+        let request = self.request_with_capability_support(request);
+        let request = &request;
         let result = self.selected_result(request);
         let run_dir = Path::new(&request.run_dir);
         fs::create_dir_all(run_dir).map_err(|error| RunnerError::Io {
@@ -165,6 +186,10 @@ impl StageRunnerAdapter for FakeRunner {
             terminal_result_path,
             event_log_path,
             token_usage: result.token_usage.clone(),
+            failure_capability_class: failure_capability_class_for_request(request),
+            capability_support_decisions: request.capability_support_decisions.clone(),
+            capability_evidence_refs: capability_evidence_refs_for_request(request),
+            missing_capability_evidence_refs: missing_capability_evidence_refs_for_request(request),
             started_at: self.config.fixed_started_at.clone(),
             ended_at: self.config.fixed_ended_at.clone(),
         };
@@ -377,6 +402,62 @@ fn parse_fake_timestamp(value: &str) -> RunnerResult<Timestamp> {
     Timestamp::parse("timestamp", value).map_err(|error| RunnerError::InvalidRawResult {
         message: error.to_string(),
     })
+}
+
+fn fake_capability_support_decision(
+    runner_id: &str,
+    grant: &ExecutionCapabilityGrant,
+    request: &StageRunRequest,
+) -> CapabilitySupportDecision {
+    if grant.decision_state != CapabilityDecisionState::Granted {
+        return CapabilitySupportDecision {
+            runner_id: runner_id.to_owned(),
+            invocation_context_ref: request.stage.as_str().to_owned(),
+            grant_id: grant.grant_id.clone(),
+            support_state: CapabilitySupportState::Unsupported,
+            enforcement_mode: CapabilityEnforcementMode::NotApplicable,
+            limitations: Vec::new(),
+            evidence_available: Vec::new(),
+            reason: format!("grant decision is {}", grant.decision_state.as_str()),
+        };
+    }
+    if matches!(
+        grant.capability_id.as_str(),
+        "runner.invoke" | "artifact.read" | "artifact.write" | "evidence.emit"
+    ) {
+        return CapabilitySupportDecision {
+            runner_id: runner_id.to_owned(),
+            invocation_context_ref: request.stage.as_str().to_owned(),
+            grant_id: grant.grant_id.clone(),
+            support_state: CapabilitySupportState::Supported,
+            enforcement_mode: grant.enforcement_mode,
+            limitations: Vec::new(),
+            evidence_available: vec![
+                "runner_invocation".to_owned(),
+                "runner_completion".to_owned(),
+            ],
+            reason: "Millrace fake runner records deterministic invocation and artifacts"
+                .to_owned(),
+        };
+    }
+    CapabilitySupportDecision {
+        runner_id: runner_id.to_owned(),
+        invocation_context_ref: request.stage.as_str().to_owned(),
+        grant_id: grant.grant_id.clone(),
+        support_state: CapabilitySupportState::PartiallySupported,
+        enforcement_mode: CapabilityEnforcementMode::AdvisoryOnly,
+        limitations: vec!["fake runner does not enforce external side effects".to_owned()],
+        evidence_available: vec![
+            "runner_invocation".to_owned(),
+            "runner_completion".to_owned(),
+        ],
+        reason: "fake runner support is advisory outside Millrace-owned artifacts".to_owned(),
+    }
+}
+
+fn failure_capability_class_for_request(request: &StageRunRequest) -> Option<String> {
+    (!missing_capability_evidence_refs_for_request(request).is_empty())
+        .then(|| "capability_evidence_missing".to_owned())
 }
 
 fn fake_failure_class(exit_kind: RunnerExitKind) -> Option<&'static str> {

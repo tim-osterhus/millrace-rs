@@ -93,9 +93,44 @@ with `missing_root_idea_source`, the runtime emits `root_idea_source_missing`
 candidate evidence, and the daemon loop continues through normal bounded-cycle
 behavior.
 
+For the Python `v0.19.0` execution capability surface, Rust now implements the
+contract/config boundary, compiler grant boundary, and runner support/evidence
+boundary. Public contracts cover capability scopes, approval policy refs,
+capability requests, policy overrides, execution grants, runner support
+decisions, capability id aliases and validation, approval-required grant
+invariants, evidence normalization, and stable grant fingerprints. Runtime JSON
+accepts the `approve_execution_capability` and `deny_execution_capability`
+mailbox command values with safe approval-id and non-empty reason payload
+validation.
+`[execution_capabilities]` config defaults match the Python contract surface,
+all `execution_capabilities.*` fields are recompile-boundary fields, and
+`config show` exposes the three implemented status keys. Compiler
+materialization resolves Python-style mode and graph-node declarations plus
+stage-kind declarations into sealed per-node execution capability grants,
+warnings, policy fingerprints, and plan/plane summaries; disabled capability
+policy compiles zero grants, and strict required-advisory policy fails
+advisory required grants such as `workspace.read`. Stage requests now preserve
+compiled grants plus runner support decisions in JSON and rendered prompt
+context. The runner boundary propagates grants, support decisions, capability
+evidence refs, missing evidence refs, and `failure_capability_class` through
+invocation/completion artifacts, raw results, and normalized stage-result
+metadata; Codex CLI support reporting remains advisory for broad `maximum`
+permission posture, Pi RPC remains conservative/advisory for remote
+boundaries, and missing required evidence normalizes as
+`capability_evidence_missing`. Runtime capability gates now evaluate compiled
+grants before serial or daemon runner invocation, persist
+`capability_gate.<request_id>.json`, emit `capability_gate_evaluated`, and
+turn denied, unsupported, unresolved approval-required, or missing-evidence
+required grants into recoverable runtime-policy failures without invoking the
+runner. Approval-required grants use durable approval records under
+`millrace-agents/approvals/{pending,resolved}` keyed by run/request/grant.
+Approval CLI/runtime-control now lists, shows, approves, and denies those
+records. Offline decisions resolve pending approvals directly; daemon-owned
+decisions are applied by mailbox intake at the runtime-owned boundary with
+processed/failed archive evidence and approval-decision runtime events.
+
 The optional Python `millrace-web` package remains outside the accepted Rust
-runtime boundary, including the Python `v0.18.5` and `v0.18.6`
-package/runtime version syncs.
+runtime boundary, including the Python `v0.19.0` package/runtime version sync.
 Rust inspection stays local and read-only through CLI commands
 such as `queue ls/show`, `status show`, `runs ls/show/tail`, `modes show`,
 `config show`, `compile show`, `compile graph`, and `runs trace <run_id>`.

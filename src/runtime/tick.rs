@@ -26,14 +26,14 @@ use crate::{
         MailboxAddIdeaPayload, MailboxAddProbePayload, MailboxAddSpecPayload,
         MailboxAddTaskPayload, MailboxArchiveBlockedTaskPayload,
         MailboxArchiveInvalidIncidentPayload, MailboxCancelWorkItemPayload, MailboxCommand,
-        MailboxCommandEnvelope, MailboxIncidentInterventionPayload,
-        MailboxRetargetTaskDependencyPayload, MailboxSupersedeTaskPayload, PauseSource, Plane,
-        PlanningTerminalResult, ReconDecision, ReconPacketDocument, RecoveryCounters,
-        ReloadOutcome, ResultClass, RootIntakeKind, RuntimeErrorCode, RuntimeErrorContext,
-        RuntimeJsonContract, RuntimeSnapshot, SpecDocument, SpecSourceType, StageName,
-        StageResultEnvelope, SubscriptionQuotaTelemetryState, TaskDocument, TerminalResult,
-        Timestamp, UsageGovernanceBlocker, WorkDocumentError, WorkItemKind,
-        allowed_work_item_kinds, stage_allows_work_item_kind, stage_name_for_plane,
+        MailboxCommandEnvelope, MailboxExecutionCapabilityApprovalPayload,
+        MailboxIncidentInterventionPayload, MailboxRetargetTaskDependencyPayload,
+        MailboxSupersedeTaskPayload, PauseSource, Plane, PlanningTerminalResult, ReconDecision,
+        ReconPacketDocument, RecoveryCounters, ReloadOutcome, ResultClass, RootIntakeKind,
+        RuntimeErrorCode, RuntimeErrorContext, RuntimeJsonContract, RuntimeSnapshot, SpecDocument,
+        SpecSourceType, StageName, StageResultEnvelope, SubscriptionQuotaTelemetryState,
+        TaskDocument, TerminalResult, Timestamp, UsageGovernanceBlocker, WorkDocumentError,
+        WorkItemKind, allowed_work_item_kinds, stage_allows_work_item_kind, stage_name_for_plane,
     },
     recon_packets::{read_recon_packet, render_recon_packet},
     runners::{
@@ -62,8 +62,10 @@ use crate::{
 use super::{
     AllowedResultClassPolicy, AllowedResultClassesByOutcome, RequestKind, RuntimeStartupError,
     RuntimeStartupSession, RuntimeWatchEvent, StageRunRequest, StageRunRequestError,
+    approvals::{approve_execution_capability_request, deny_execution_capability_request},
     blocked_recovery::persist_blocked_item_metadata,
-    build_runtime_watcher_session, evaluate_usage_governance, load_runtime_startup_config,
+    build_runtime_watcher_session, capability_gate_failure_result, evaluate_usage_governance,
+    load_runtime_startup_config, record_capability_gate_result,
     run_traces::{
         record_router_decision_trace, spawned_work_ref_from_path, upsert_stage_result_trace_node,
     },
@@ -350,6 +352,29 @@ pub fn run_serial_runtime_tick(
     session: &mut RuntimeStartupSession,
     options: RuntimeTickOptions,
 ) -> RuntimeTickResult<RuntimeTickOutcome> {
+    let prepared = prepare_serial_runtime_tick(session, options)?;
+    let Some(request) = prepared.outcome.stage_request.clone() else {
+        return Ok(prepared.outcome);
+    };
+    let event_log_path = mark_stage_running_and_emit_started(session, &request, &prepared.now)?;
+    Ok(RuntimeTickOutcome {
+        kind: RuntimeTickOutcomeKind::StageRequestReady,
+        reason: "stage_started".to_owned(),
+        stage_request: Some(request),
+        snapshot: session.snapshot.clone(),
+        event_log_path: Some(event_log_path),
+    })
+}
+
+struct PreparedSerialRuntimeTick {
+    now: Timestamp,
+    outcome: RuntimeTickOutcome,
+}
+
+fn prepare_serial_runtime_tick(
+    session: &mut RuntimeStartupSession,
+    options: RuntimeTickOptions,
+) -> RuntimeTickResult<PreparedSerialRuntimeTick> {
     let now = options
         .now
         .clone()
@@ -359,7 +384,8 @@ pub fn run_serial_runtime_tick(
     ingest_runtime_cycle_inputs(session, &now)?;
 
     if session.snapshot.stop_requested {
-        return stopped_outcome(session, &now);
+        let outcome = stopped_outcome(session, &now)?;
+        return Ok(PreparedSerialRuntimeTick { now, outcome });
     }
 
     evaluate_and_apply_usage_governance(session, &now, None)?;
@@ -369,12 +395,15 @@ pub fn run_serial_runtime_tick(
         save_snapshot(&session.paths, &session.snapshot)?;
         let event_log_path =
             write_runtime_event(&session.paths, "runtime_tick_paused", Map::new(), &now)?;
-        return Ok(RuntimeTickOutcome {
-            kind: RuntimeTickOutcomeKind::Paused,
-            reason: "paused".to_owned(),
-            stage_request: None,
-            snapshot: session.snapshot.clone(),
-            event_log_path: Some(event_log_path),
+        return Ok(PreparedSerialRuntimeTick {
+            now,
+            outcome: RuntimeTickOutcome {
+                kind: RuntimeTickOutcomeKind::Paused,
+                reason: "paused".to_owned(),
+                stage_request: None,
+                snapshot: session.snapshot.clone(),
+                event_log_path: Some(event_log_path),
+            },
         });
     }
 
@@ -387,12 +416,15 @@ pub fn run_serial_runtime_tick(
         )?;
         session.snapshot.updated_at = now.clone();
         save_snapshot(&session.paths, &session.snapshot)?;
-        return Ok(RuntimeTickOutcome {
-            kind: RuntimeTickOutcomeKind::Blocked,
-            reason: "stale_active_state".to_owned(),
-            stage_request: None,
-            snapshot: session.snapshot.clone(),
-            event_log_path: Some(event_log_path),
+        return Ok(PreparedSerialRuntimeTick {
+            now,
+            outcome: RuntimeTickOutcome {
+                kind: RuntimeTickOutcomeKind::Blocked,
+                reason: "stale_active_state".to_owned(),
+                stage_request: None,
+                snapshot: session.snapshot.clone(),
+                event_log_path: Some(event_log_path),
+            },
         });
     }
 
@@ -407,31 +439,39 @@ pub fn run_serial_runtime_tick(
         save_snapshot(&session.paths, &session.snapshot)?;
         let event_log_path =
             write_runtime_event(&session.paths, "runtime_tick_paused", Map::new(), &now)?;
-        return Ok(RuntimeTickOutcome {
-            kind: RuntimeTickOutcomeKind::Paused,
-            reason: "paused".to_owned(),
-            stage_request: None,
-            snapshot: session.snapshot.clone(),
-            event_log_path: Some(event_log_path),
+        return Ok(PreparedSerialRuntimeTick {
+            now,
+            outcome: RuntimeTickOutcome {
+                kind: RuntimeTickOutcomeKind::Paused,
+                reason: "paused".to_owned(),
+                stage_request: None,
+                snapshot: session.snapshot.clone(),
+                event_log_path: Some(event_log_path),
+            },
         });
     }
 
     let Some(active_plane) = session.snapshot.active_plane else {
-        return idle_outcome(session, &now);
+        let outcome = idle_outcome(session, &now)?;
+        return Ok(PreparedSerialRuntimeTick { now, outcome });
     };
     let Some(active_stage) = session.snapshot.active_stage else {
-        return idle_outcome(session, &now);
+        let outcome = idle_outcome(session, &now)?;
+        return Ok(PreparedSerialRuntimeTick { now, outcome });
     };
 
     if let Some(event_log_path) =
         guard_stage_work_item_ownership_for_plane(session, active_plane, &now)?
     {
-        return Ok(RuntimeTickOutcome {
-            kind: RuntimeTickOutcomeKind::Blocked,
-            reason: STAGE_WORK_ITEM_OWNERSHIP_INVALID.to_owned(),
-            stage_request: None,
-            snapshot: session.snapshot.clone(),
-            event_log_path: Some(event_log_path),
+        return Ok(PreparedSerialRuntimeTick {
+            now,
+            outcome: RuntimeTickOutcome {
+                kind: RuntimeTickOutcomeKind::Blocked,
+                reason: STAGE_WORK_ITEM_OWNERSHIP_INVALID.to_owned(),
+                stage_request: None,
+                snapshot: session.snapshot.clone(),
+                event_log_path: Some(event_log_path),
+            },
         });
     }
 
@@ -455,12 +495,15 @@ pub fn run_serial_runtime_tick(
             )]),
             &now,
         )?;
-        return Ok(RuntimeTickOutcome {
-            kind: RuntimeTickOutcomeKind::Blocked,
-            reason: "missing_active_work_item_identity".to_owned(),
-            stage_request: None,
-            snapshot: session.snapshot.clone(),
-            event_log_path: Some(event_log_path),
+        return Ok(PreparedSerialRuntimeTick {
+            now,
+            outcome: RuntimeTickOutcome {
+                kind: RuntimeTickOutcomeKind::Blocked,
+                reason: "missing_active_work_item_identity".to_owned(),
+                stage_request: None,
+                snapshot: session.snapshot.clone(),
+                event_log_path: Some(event_log_path),
+            },
         });
     }
 
@@ -471,20 +514,15 @@ pub fn run_serial_runtime_tick(
         build_stage_run_request(session, stage_plan, &options, &now)?
     };
 
-    mark_active_stage_running(session, &request, &now)?;
-    let event_log_path = write_runtime_event(
-        &session.paths,
-        "stage_started",
-        stage_started_data(&request),
-        &now,
-    )?;
-
-    Ok(RuntimeTickOutcome {
-        kind: RuntimeTickOutcomeKind::StageRequestReady,
-        reason: "stage_started".to_owned(),
-        stage_request: Some(request),
-        snapshot: session.snapshot.clone(),
-        event_log_path: Some(event_log_path),
+    Ok(PreparedSerialRuntimeTick {
+        now,
+        outcome: RuntimeTickOutcome {
+            kind: RuntimeTickOutcomeKind::StageRequestReady,
+            reason: "stage_ready".to_owned(),
+            stage_request: Some(request),
+            snapshot: session.snapshot.clone(),
+            event_log_path: None,
+        },
     })
 }
 
@@ -494,7 +532,9 @@ pub fn run_serial_runtime_tick_with_runner(
     options: RuntimeTickOptions,
     runner: &impl StageRunnerAdapter,
 ) -> RuntimeTickResult<RuntimeTickDispatchOutcome> {
-    let activation = run_serial_runtime_tick(session, options)?;
+    let activation = prepare_serial_runtime_tick(session, options)?;
+    let activation_now = activation.now.clone();
+    let activation = activation.outcome;
     let Some(request) = activation.stage_request.clone() else {
         return Ok(RuntimeTickDispatchOutcome {
             kind: activation.kind,
@@ -513,6 +553,20 @@ pub fn run_serial_runtime_tick_with_runner(
             event_log_path: activation.event_log_path,
         });
     };
+    let gate_result = super::evaluate_stage_request_capabilities_with_runner(
+        &session.paths,
+        &request,
+        runner,
+        &activation_now,
+    )?;
+    let request = gate_result.request.clone();
+    record_capability_gate_result(&session.paths, &request, &gate_result, &activation_now)?;
+    if !gate_result.allowed {
+        let raw_result = capability_gate_failure_result(&request, &gate_result, &activation_now)?;
+        return apply_stage_worker_raw_result(session, request, raw_result);
+    }
+
+    mark_stage_running_and_emit_started(session, &request, &activation_now)?;
 
     let started_at = utc_now_timestamp("started_at")?;
     let raw_result = match runner.run(&request) {
@@ -671,6 +725,10 @@ pub(crate) fn runner_exception_raw_result(
         terminal_result_path: None,
         event_log_path: None,
         token_usage: None,
+        failure_capability_class: None,
+        capability_support_decisions: request.capability_support_decisions.clone(),
+        capability_evidence_refs: Vec::new(),
+        missing_capability_evidence_refs: Vec::new(),
         started_at: started_at.clone(),
         ended_at: completed_at.clone(),
     };
@@ -1757,6 +1815,8 @@ fn build_stage_run_request(
         thinking_level: stage_plan.thinking_level.clone(),
         model_reasoning_effort: stage_plan.model_reasoning_effort.clone(),
         timeout_seconds: stage_plan.timeout_seconds,
+        execution_capability_grants: stage_plan.execution_capability_grants.clone(),
+        capability_support_decisions: Vec::new(),
     };
     request.validate()?;
     Ok(request)
@@ -1878,6 +1938,8 @@ fn build_closure_target_stage_run_request(
         thinking_level: stage_plan.thinking_level.clone(),
         model_reasoning_effort: stage_plan.model_reasoning_effort.clone(),
         timeout_seconds: stage_plan.timeout_seconds,
+        execution_capability_grants: stage_plan.execution_capability_grants.clone(),
+        capability_support_decisions: Vec::new(),
     };
     request.validate()?;
     Ok(request)
@@ -5780,7 +5842,98 @@ fn apply_mailbox_command(
                 },
             )
         }
+        MailboxCommand::ApproveExecutionCapability | MailboxCommand::DenyExecutionCapability => {
+            let payload = MailboxExecutionCapabilityApprovalPayload::from_json_value(
+                Value::Object(envelope.payload.clone()),
+            )
+            .map_err(|source| RuntimeTickError::InvalidState {
+                message: format!(
+                    "mailbox {} payload is invalid: {source}",
+                    envelope.command.as_str()
+                ),
+            })?;
+            apply_approval_decision_from_mailbox(session, envelope, now, payload)
+        }
     }
+}
+
+fn apply_approval_decision_from_mailbox(
+    session: &mut RuntimeStartupSession,
+    envelope: &MailboxCommandEnvelope,
+    now: &Timestamp,
+    payload: MailboxExecutionCapabilityApprovalPayload,
+) -> RuntimeTickResult<Map<String, Value>> {
+    let approval = match envelope.command {
+        MailboxCommand::ApproveExecutionCapability => approve_execution_capability_request(
+            &session.paths,
+            &payload.approval_id,
+            &envelope.issuer,
+            &payload.reason,
+            now,
+        ),
+        MailboxCommand::DenyExecutionCapability => deny_execution_capability_request(
+            &session.paths,
+            &payload.approval_id,
+            &envelope.issuer,
+            &payload.reason,
+            now,
+        ),
+        _ => unreachable!("approval decision command checked by caller"),
+    }
+    .map_err(|error| RuntimeTickError::InvalidState {
+        message: error.to_string(),
+    })?;
+
+    session.snapshot.updated_at = now.clone();
+    save_snapshot(&session.paths, &session.snapshot)?;
+
+    let status = approval.status.as_str().to_owned();
+    let event_data = json_object([
+        ("approval_id", Value::String(approval.approval_id.clone())),
+        ("status", Value::String(status.clone())),
+        ("grant_id", Value::String(approval.grant_id.clone())),
+        (
+            "capability_id",
+            Value::String(approval.capability_id.clone()),
+        ),
+        ("run_id", Value::String(approval.run_id.clone())),
+        ("request_id", Value::String(approval.request_id.clone())),
+        ("reason", Value::String(payload.reason.clone())),
+    ]);
+    write_runtime_event(
+        &session.paths,
+        "execution_capability_approval_decided",
+        mailbox_event_data(envelope, event_data.clone()),
+        now,
+    )?;
+    write_runtime_event(
+        &session.paths,
+        "mailbox_operator_intervention_applied",
+        mailbox_event_data(
+            envelope,
+            extend_json_object(
+                event_data,
+                json_object([(
+                    "event_type",
+                    Value::String("execution_capability_approval_decided".to_owned()),
+                )]),
+            ),
+        ),
+        now,
+    )?;
+
+    let action = match envelope.command {
+        MailboxCommand::ApproveExecutionCapability => "approved",
+        MailboxCommand::DenyExecutionCapability => "denied",
+        _ => unreachable!("approval decision command checked by caller"),
+    };
+    Ok(mailbox_result(
+        true,
+        format!(
+            "{action} execution capability request {}",
+            approval.approval_id
+        ),
+    ))
 }
 
 fn apply_operator_intervention_from_mailbox<F>(
@@ -7292,7 +7445,7 @@ fn skill_evidence(path: &str) -> RuntimeTickResult<Value> {
     }
 }
 
-fn write_runtime_event(
+pub(crate) fn write_runtime_event(
     paths: &WorkspacePaths,
     event_type: &str,
     data: Map<String, Value>,

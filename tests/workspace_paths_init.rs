@@ -41,6 +41,14 @@ fn workspace_paths_resolve_python_shaped_contract_surfaces() {
     );
     assert_eq!(paths.runs_dir, root.join("millrace-agents/runs"));
     assert_eq!(
+        paths.approvals_pending_dir,
+        root.join("millrace-agents/approvals/pending")
+    );
+    assert_eq!(
+        paths.approvals_resolved_dir,
+        root.join("millrace-agents/approvals/resolved")
+    );
+    assert_eq!(
         paths.tasks_queue_dir,
         root.join("millrace-agents/tasks/queue")
     );
@@ -140,6 +148,9 @@ fn directories_cover_the_canonical_workspace_tree_without_legacy_roles() {
         "millrace-agents/arbiter/rubrics",
         "millrace-agents/arbiter/targets",
         "millrace-agents/arbiter/verdicts",
+        "millrace-agents/approvals",
+        "millrace-agents/approvals/pending",
+        "millrace-agents/approvals/resolved",
         "millrace-agents/entrypoints",
         "millrace-agents/graphs",
         "millrace-agents/graphs/execution",
