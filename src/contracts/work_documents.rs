@@ -7,7 +7,8 @@ use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use super::{
     ContractError, IncidentDecision, IncidentSeverity, LearningRequestAction, LearningStageName,
     Plane, ProbeStatusHint, RootIntakeKind, SpecSourceType, StageName, TaskStatusHint,
-    WorkItemKind, stage_plane, validate_safe_identifier,
+    WorkItemKind, coerce_family_and_kind, normalize_work_item_family_id, stage_plane,
+    validate_safe_identifier,
 };
 
 /// Canonical work-document schema version used by the Python reference.
@@ -427,6 +428,60 @@ impl LearningRequestDocument {
     }
 }
 
+/// Structured closure blocker reference for work items and Blueprint artifacts.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ClosureBlockingWorkRef {
+    pub blocker_type: String,
+    pub reason: String,
+    #[serde(default)]
+    pub work_item_family_id: Option<String>,
+    #[serde(default)]
+    pub work_item_kind: Option<WorkItemKind>,
+    #[serde(default)]
+    pub work_item_id: Option<String>,
+    #[serde(default)]
+    pub state: Option<String>,
+    #[serde(default)]
+    pub root_spec_id: Option<String>,
+    #[serde(default)]
+    pub root_idea_id: Option<String>,
+    #[serde(default)]
+    pub artifact_path: Option<String>,
+    #[serde(default)]
+    pub detail: Option<String>,
+}
+
+impl ClosureBlockingWorkRef {
+    /// Validates the structured closure blocker reference.
+    pub fn validate(&self) -> Result<(), WorkDocumentError> {
+        validate_safe_identifier(&self.blocker_type, "blocker_type")?;
+        validate_safe_identifier(&self.reason, "reason")?;
+        let (family_id, kind) =
+            coerce_family_and_kind(self.work_item_family_id.as_deref(), self.work_item_kind)?;
+        if let Some(family_id) = self.work_item_family_id.as_deref() {
+            normalize_work_item_family_id(family_id, "work_item_family_id")?;
+        }
+        if let (Some(family_id), Some(kind)) = (family_id.as_deref(), kind) {
+            if family_id != kind.as_str() {
+                return Err(WorkDocumentError::InvalidDocument {
+                    message: "work_item_family_id must agree with work_item_kind".to_owned(),
+                });
+            }
+        }
+        validate_optional_identifier("work_item_id", &self.work_item_id)?;
+        validate_optional_identifier("state", &self.state)?;
+        validate_optional_identifier("root_spec_id", &self.root_spec_id)?;
+        validate_optional_identifier("root_idea_id", &self.root_idea_id)?;
+        if self.work_item_id.is_none() && self.artifact_path.is_none() {
+            return Err(WorkDocumentError::InvalidDocument {
+                message: "closure blocker refs require work_item_id or artifact_path".to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
 /// Persisted closure target state owned by the Arbiter contract surface.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -454,6 +509,8 @@ pub struct ClosureTargetState {
     pub closure_blocked_by_lineage_work: bool,
     #[serde(default)]
     pub blocking_work_ids: Vec<String>,
+    #[serde(default)]
+    pub blocking_work_refs: Vec<ClosureBlockingWorkRef>,
     pub opened_at: Timestamp,
     #[serde(default)]
     pub closed_at: Option<Timestamp>,
@@ -483,6 +540,9 @@ impl ClosureTargetState {
         for work_item_id in &self.blocking_work_ids {
             validate_safe_identifier(work_item_id, "blocking_work_ids")?;
         }
+        for blocking_ref in &self.blocking_work_refs {
+            blocking_ref.validate()?;
+        }
         if let Some(closed_at) = &self.closed_at {
             let opened_at = parse_timestamp_for_compare("opened_at", self.opened_at.as_str())?;
             let closed_at = parse_timestamp_for_compare("closed_at", closed_at.as_str())?;
@@ -497,10 +557,11 @@ impl ClosureTargetState {
                 });
             }
         }
-        if !self.blocking_work_ids.is_empty() && !self.closure_blocked_by_lineage_work {
+        if (!self.blocking_work_ids.is_empty() || !self.blocking_work_refs.is_empty())
+            && !self.closure_blocked_by_lineage_work
+        {
             return Err(WorkDocumentError::InvalidDocument {
-                message: "blocking_work_ids require closure_blocked_by_lineage_work=true"
-                    .to_owned(),
+                message: "blocking work requires closure_blocked_by_lineage_work=true".to_owned(),
             });
         }
         Ok(())

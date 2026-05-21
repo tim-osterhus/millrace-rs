@@ -245,6 +245,8 @@ fn request_with_grant(root: &Path, grant: ExecutionCapabilityGrant) -> StageRunR
         request_kind: millrace_ai::RequestKind::ActiveWorkItem,
         mode_id: "default_codex".to_owned(),
         compiled_plan_id: "plan-approval".to_owned(),
+        launch_plan_id: None,
+        lane_id: None,
         node_id: "builder".to_owned(),
         stage_kind_id: "builder".to_owned(),
         running_status_marker: "BUILDER_RUNNING".to_owned(),
@@ -257,6 +259,7 @@ fn request_with_grant(root: &Path, grant: ExecutionCapabilityGrant) -> StageRunR
         entrypoint_contract_id: Some("builder.contract.v1".to_owned()),
         required_skill_paths: Vec::new(),
         attached_skill_paths: Vec::new(),
+        active_work_item_family_id: None,
         active_work_item_kind: Some(WorkItemKind::Task),
         active_work_item_id: Some("task-approval".to_owned()),
         active_work_item_path: Some(
@@ -299,6 +302,11 @@ fn request_with_grant(root: &Path, grant: ExecutionCapabilityGrant) -> StageRunR
         timeout_seconds: 60,
         execution_capability_grants: vec![grant],
         capability_support_decisions: Vec::new(),
+        request_context_profile_id: None,
+        context_bundle_path: None,
+        context_artifact_refs: Vec::new(),
+        context_render_plan_id: None,
+        rendered_prompt_context_path: None,
     };
     request.validate().unwrap();
     request

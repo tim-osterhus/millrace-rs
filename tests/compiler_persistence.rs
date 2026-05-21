@@ -36,6 +36,62 @@ fn compile_default(paths: &WorkspacePaths) -> millrace_ai::compiler::CompileOutc
 }
 
 #[test]
+fn compiler_persistence_v0_20_0_guardrail_fixture_requires_persisted_primitive_authority_fields() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "fixtures/compiler_parity/auto_port_v0_20_0_compiler_contract_scout.json"
+    ))
+    .expect("parse v0.20.0 compiler contract scout");
+    assert_eq!(fixture["kind"], "auto_port_v0_20_0_compiler_contract_scout");
+    assert_eq!(
+        fixture["python_reference"]["diff_range"],
+        "v0.19.0..v0.20.0"
+    );
+
+    let persisted_fields: std::collections::BTreeSet<_> = fixture["persisted_plan_fields"]
+        .as_array()
+        .expect("persisted plan fields are present")
+        .iter()
+        .map(|value| value.as_str().expect("persisted plan field"))
+        .collect();
+    for field in [
+        "workflow_primitives",
+        "workflow_primitive_fingerprints",
+        "lane_policy",
+        "request_context_profile_id",
+        "terminal_action_mappings",
+        "runtime_effect_rule_selections",
+        "completion_behavior",
+        "workspace_schema_epoch",
+        "pending_compiled_plan",
+    ] {
+        assert!(
+            persisted_fields.contains(field),
+            "missing v0.20.0 persisted primitive authority field {field}"
+        );
+    }
+
+    let inspection_fields: std::collections::BTreeSet<_> = fixture["compile_inspection_fields"]
+        .as_array()
+        .expect("compile inspection fields are present")
+        .iter()
+        .map(|value| value.as_str().expect("compile inspection field"))
+        .collect();
+    for field in [
+        "workflow_primitives",
+        "workflow_primitive_fingerprints",
+        "runtime_effect_rule_selections",
+        "workspace_schema_epoch",
+        "blueprint_graph_id",
+        "pending_compiled_plan",
+    ] {
+        assert!(
+            inspection_fields.contains(field),
+            "missing v0.20.0 compile inspection field {field}"
+        );
+    }
+}
+
+#[test]
 fn compile_facade_persists_plan_and_diagnostics_without_legacy_artifact() {
     let temp_dir = TempDir::new().unwrap();
     let workspace_root = temp_dir.path().join("workspace");

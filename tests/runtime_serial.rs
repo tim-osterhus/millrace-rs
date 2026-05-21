@@ -152,6 +152,8 @@ fn sample_request(run_dir: &Path) -> StageRunRequest {
         request_kind: RequestKind::ActiveWorkItem,
         mode_id: "learning_codex".to_owned(),
         compiled_plan_id: "plan-001".to_owned(),
+        launch_plan_id: None,
+        lane_id: None,
         node_id: "builder-node".to_owned(),
         stage_kind_id: "builder".to_owned(),
         running_status_marker: "BUILDER_RUNNING".to_owned(),
@@ -163,6 +165,7 @@ fn sample_request(run_dir: &Path) -> StageRunRequest {
             "millrace-agents/skills/stage/execution/builder-core/SKILL.md".to_owned(),
         ],
         attached_skill_paths: Vec::new(),
+        active_work_item_family_id: None,
         active_work_item_kind: Some(WorkItemKind::Task),
         active_work_item_id: Some("task-001".to_owned()),
         active_work_item_path: Some("millrace-agents/tasks/active/task-001.md".to_owned()),
@@ -190,6 +193,11 @@ fn sample_request(run_dir: &Path) -> StageRunRequest {
         timeout_seconds: 3600,
         execution_capability_grants: Vec::new(),
         capability_support_decisions: Vec::new(),
+        request_context_profile_id: None,
+        context_bundle_path: None,
+        context_artifact_refs: Vec::new(),
+        context_render_plan_id: None,
+        rendered_prompt_context_path: None,
     };
     request.validate().unwrap();
     request
@@ -907,6 +915,7 @@ fn closure_target_state(root_spec_id: &str, root_idea_id: &str) -> ClosureTarget
         closure_open: true,
         closure_blocked_by_lineage_work: false,
         blocking_work_ids: Vec::new(),
+        blocking_work_refs: Vec::new(),
         opened_at: timestamp(STARTUP_NOW),
         closed_at: None,
         last_arbiter_run_id: None,
@@ -924,11 +933,15 @@ fn active_run_state(
 ) -> ActiveRunState {
     ActiveRunState {
         plane,
+        lane_id: String::new(),
         stage,
         node_id: node_id.to_owned(),
         stage_kind_id: node_id.to_owned(),
         run_id: run_id.to_owned(),
+        compiled_plan_id: String::new(),
+        compiled_plan_fingerprint: String::new(),
         request_kind,
+        work_item_family_id: None,
         work_item_kind,
         work_item_id: work_item_id.map(str::to_owned),
         closure_target_root_spec_id: None,
@@ -974,6 +987,7 @@ fn active_item_path(
         WorkItemKind::LearningRequest => paths
             .learning_requests_active_dir
             .join(format!("{work_item_id}.md")),
+        WorkItemKind::BlueprintDraft => panic!("unsupported active path for blueprint draft"),
     }
 }
 
@@ -992,6 +1006,7 @@ fn queued_item_path(
         WorkItemKind::LearningRequest => paths
             .learning_requests_queue_dir
             .join(format!("{work_item_id}.md")),
+        WorkItemKind::BlueprintDraft => panic!("unsupported queue path for blueprint draft"),
     }
 }
 
@@ -1522,9 +1537,10 @@ impl StageRunnerAdapter for PreemptiveCompletionRunner {
                 WorkItemKind::Spec => {
                     queue.mark_spec_done(self.work_item_id).unwrap();
                 }
-                WorkItemKind::Probe | WorkItemKind::Incident | WorkItemKind::LearningRequest => {
-                    panic!("unsupported preemptive completion kind");
-                }
+                WorkItemKind::Probe
+                | WorkItemKind::Incident
+                | WorkItemKind::LearningRequest
+                | WorkItemKind::BlueprintDraft => panic!("unsupported preemptive completion kind"),
             }
         }
         self.inner.run(request)
@@ -1974,6 +1990,11 @@ impl StageRunnerAdapter for ScriptedE2eRunner {
         })?;
         let stdout_path = run_dir.join(format!("e2e-{}.stdout.txt", request.request_id));
         let output = self.output_for_stage(request.stage);
+        if request.stage == StageName::Planner
+            && scripted_terminal_token(output) == Some("PLANNER_COMPLETE")
+        {
+            write_scripted_planner_disposition(request, run_dir)?;
+        }
         let mut terminal_result_path = None;
         if let ScriptedStageOutput::TerminalWithFixContract { contract_text, .. } = output {
             let contract_path = run_dir.join("fix_contract.md");
@@ -2035,6 +2056,54 @@ impl StageRunnerAdapter for ScriptedE2eRunner {
         raw_result.validate()?;
         Ok(raw_result)
     }
+}
+
+fn scripted_terminal_token(output: ScriptedStageOutput) -> Option<&'static str> {
+    match output {
+        ScriptedStageOutput::Terminal(marker)
+        | ScriptedStageOutput::TerminalWithFixContract { marker, .. } => {
+            Some(marker.trim_start_matches("###").trim())
+        }
+        ScriptedStageOutput::Stdout(_) => None,
+    }
+}
+
+fn write_scripted_planner_disposition(
+    request: &StageRunRequest,
+    run_dir: &Path,
+) -> RunnerResult<()> {
+    let kind_family_id = request.active_work_item_kind.map(|kind| kind.as_str());
+    let source_work_item_family_id = request
+        .active_work_item_family_id
+        .as_deref()
+        .or(kind_family_id)
+        .unwrap_or("spec");
+    let payload = serde_json::to_string_pretty(&json!({
+        "schema_version": "1.0",
+        "kind": "planner_disposition",
+        "source_work_item_family_id": source_work_item_family_id,
+        "source_work_item_id": request.active_work_item_id.as_deref().unwrap_or("unknown"),
+        "disposition": "active_source_ready_for_manager",
+        "emitted_spec_ids": [],
+        "refined_active_source": true,
+        "recommended_next_action": "continue_to_manager",
+        "created_at": "2026-04-28T20:10:01Z",
+        "created_by": "planner",
+    }))
+    .map_err(|error| RunnerError::InvalidRawResult {
+        message: error.to_string(),
+    })?;
+    fs::write(
+        run_dir.join("planner_disposition.json"),
+        format!("{payload}\n"),
+    )
+    .map_err(|error| RunnerError::Io {
+        path: run_dir
+            .join("planner_disposition.json")
+            .display()
+            .to_string(),
+        message: error.to_string(),
+    })
 }
 
 fn standard_e2e_outputs() -> Vec<(StageName, ScriptedStageOutput)> {
@@ -5746,11 +5815,15 @@ fn serial_tick_applies_consultant_handoff_through_typed_incident_and_blocked_tas
     let active_since = timestamp("2026-04-28T20:11:00Z");
     let active_run = ActiveRunState {
         plane: Plane::Execution,
+        lane_id: String::new(),
         stage: StageName::Consultant,
         node_id: "consultant".to_owned(),
         stage_kind_id: "consultant".to_owned(),
         run_id: "run-handoff".to_owned(),
+        compiled_plan_id: String::new(),
+        compiled_plan_fingerprint: String::new(),
         request_kind: ActiveRunRequestKind::ActiveWorkItem,
+        work_item_family_id: None,
         work_item_kind: Some(WorkItemKind::Task),
         work_item_id: Some("task-handoff".to_owned()),
         closure_target_root_spec_id: None,
@@ -5854,11 +5927,15 @@ fn serial_tick_consultant_runner_failure_blocked_persists_retryable_metadata() {
     let active_since = timestamp("2026-04-28T20:12:00Z");
     let active_run = ActiveRunState {
         plane: Plane::Execution,
+        lane_id: String::new(),
         stage: StageName::Consultant,
         node_id: "consultant".to_owned(),
         stage_kind_id: "consultant".to_owned(),
         run_id: "run-network-blocked".to_owned(),
+        compiled_plan_id: String::new(),
+        compiled_plan_fingerprint: String::new(),
         request_kind: ActiveRunRequestKind::ActiveWorkItem,
+        work_item_family_id: None,
         work_item_kind: Some(WorkItemKind::Task),
         work_item_id: Some("task-network-blocked".to_owned()),
         closure_target_root_spec_id: None,

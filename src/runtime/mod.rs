@@ -18,8 +18,14 @@ use crate::contracts::{
 
 mod approvals;
 mod blocked_recovery;
+mod blueprint_effects;
 mod capability_gates;
+mod effects;
+mod failure_policy;
+mod lanes;
+mod lifecycle;
 mod monitor;
+mod request_context;
 mod run_traces;
 mod startup;
 mod supervisor;
@@ -43,9 +49,26 @@ pub use capability_gates::{
     capability_gate_failure_result, evaluate_stage_request_capabilities,
     evaluate_stage_request_capabilities_with_runner, record_capability_gate_result,
 };
+pub use effects::{
+    RuntimeEffectApplication, RuntimeEffectDecision, RuntimeEffectResult,
+    apply_runtime_effect_for_stage_result,
+};
+pub use failure_policy::{
+    RuntimeEffectFailurePolicyInput, RuntimeFailurePolicyInterpretation,
+    interpret_runtime_effect_failure_policy,
+};
+pub use lanes::{
+    can_dispatch_lane, compiled_plan_fingerprint_for_runtime, default_lane_id_for_plane,
+    ensure_snapshot_lanes, lane_dispatch_order, lane_id_for_plane, snapshot_with_lane_active_run,
+    snapshot_without_lane_active_run,
+};
 pub use monitor::{
     BasicMonitorRenderer, BasicTerminalMonitor, NullRuntimeMonitorSink, RuntimeMonitorEvent,
     RuntimeMonitorFanout, RuntimeMonitorSink, runtime_monitor_events_from_jsonl,
+};
+pub use request_context::{
+    RenderedRequestContext, RequestContextRenderPlan, attach_default_request_context,
+    render_request_context,
 };
 pub use run_traces::{
     RunTraceError, RunTraceResult, derive_run_trace_from_stage_results, inspect_run_trace,
@@ -355,6 +378,10 @@ pub struct StageRunRequest {
     pub mode_id: String,
     pub compiled_plan_id: String,
     #[serde(default)]
+    pub launch_plan_id: Option<String>,
+    #[serde(default)]
+    pub lane_id: Option<String>,
+    #[serde(default)]
     pub node_id: String,
     #[serde(default)]
     pub stage_kind_id: String,
@@ -372,6 +399,8 @@ pub struct StageRunRequest {
     #[serde(default)]
     pub attached_skill_paths: Vec<String>,
 
+    #[serde(default)]
+    pub active_work_item_family_id: Option<String>,
     pub active_work_item_kind: Option<WorkItemKind>,
     pub active_work_item_id: Option<String>,
     pub active_work_item_path: Option<String>,
@@ -404,6 +433,16 @@ pub struct StageRunRequest {
     pub execution_capability_grants: Vec<ExecutionCapabilityGrant>,
     #[serde(default)]
     pub capability_support_decisions: Vec<CapabilitySupportDecision>,
+    #[serde(default)]
+    pub request_context_profile_id: Option<String>,
+    #[serde(default)]
+    pub context_bundle_path: Option<String>,
+    #[serde(default)]
+    pub context_artifact_refs: Vec<String>,
+    #[serde(default)]
+    pub context_render_plan_id: Option<String>,
+    #[serde(default)]
+    pub rendered_prompt_context_path: Option<String>,
 }
 
 impl<'de> Deserialize<'de> for StageRunRequest {
@@ -438,6 +477,11 @@ impl StageRunRequest {
         require_non_blank("run_id", &self.run_id)?;
         require_non_blank("mode_id", &self.mode_id)?;
         require_non_blank("compiled_plan_id", &self.compiled_plan_id)?;
+        if self.launch_plan_id.is_none() {
+            self.launch_plan_id = Some(self.compiled_plan_id.clone());
+        }
+        require_optional_non_blank("launch_plan_id", &self.launch_plan_id)?;
+        require_optional_non_blank("lane_id", &self.lane_id)?;
         require_non_blank("entrypoint_path", &self.entrypoint_path)?;
         require_non_blank("run_dir", &self.run_dir)?;
         require_non_blank("summary_status_path", &self.summary_status_path)?;
@@ -509,6 +553,28 @@ impl StageRunRequest {
                 message: "active_work_item_kind and active_work_item_id must be set together"
                     .to_owned(),
             });
+        }
+        if self.active_work_item_family_id.is_none()
+            && let Some(kind) = self.active_work_item_kind
+        {
+            self.active_work_item_family_id = Some(kind.as_str().to_owned());
+        }
+        require_optional_non_blank(
+            "active_work_item_family_id",
+            &self.active_work_item_family_id,
+        )?;
+        require_optional_non_blank(
+            "request_context_profile_id",
+            &self.request_context_profile_id,
+        )?;
+        require_optional_non_blank("context_bundle_path", &self.context_bundle_path)?;
+        require_optional_non_blank("context_render_plan_id", &self.context_render_plan_id)?;
+        require_optional_non_blank(
+            "rendered_prompt_context_path",
+            &self.rendered_prompt_context_path,
+        )?;
+        for context_ref in &self.context_artifact_refs {
+            require_non_blank("context_artifact_refs", context_ref)?;
         }
 
         match self.request_kind {
@@ -606,6 +672,11 @@ impl StageRunRequest {
             format!("Run ID: {}", self.run_id),
             format!("Mode ID: {}", self.mode_id),
             format!("Compiled Plan ID: {}", self.compiled_plan_id),
+            format!(
+                "Launch Plan ID: {}",
+                self.launch_plan_id.as_deref().unwrap_or("none")
+            ),
+            format!("Lane ID: {}", self.lane_id.as_deref().unwrap_or("none")),
             format!("Node ID: {}", self.node_id),
             format!("Stage Kind ID: {}", self.stage_kind_id),
             format!("Stage: {}", self.stage.as_str()),
@@ -616,6 +687,10 @@ impl StageRunRequest {
             format!(
                 "Entrypoint Contract ID: {}",
                 self.entrypoint_contract_id.as_deref().unwrap_or("none")
+            ),
+            format!(
+                "Active Work Item Family ID: {}",
+                self.active_work_item_family_id.as_deref().unwrap_or("none")
             ),
             format!(
                 "Active Work Item: {} {}",
@@ -692,6 +767,24 @@ impl StageRunRequest {
             format!("Recovery Counters Path: {}", self.recovery_counters_path),
             format!("Summary Status Path: {}", self.summary_status_path),
             format!(
+                "Request Context Profile ID: {}",
+                self.request_context_profile_id.as_deref().unwrap_or("none")
+            ),
+            format!(
+                "Context Bundle Path: {}",
+                self.context_bundle_path.as_deref().unwrap_or("none")
+            ),
+            format!(
+                "Rendered Prompt Context Path: {}",
+                self.rendered_prompt_context_path
+                    .as_deref()
+                    .unwrap_or("none")
+            ),
+            format!(
+                "Context Render Plan ID: {}",
+                self.context_render_plan_id.as_deref().unwrap_or("none")
+            ),
+            format!(
                 "Preferred Troubleshoot Report Path: {}",
                 self.preferred_troubleshoot_report_path
                     .as_deref()
@@ -733,6 +826,11 @@ impl StageRunRequest {
             ),
             format!("Timeout Seconds: {}", self.timeout_seconds),
         ]);
+        push_value_list(
+            &mut lines,
+            "Visible Context References",
+            &self.context_artifact_refs,
+        );
         lines
     }
 
@@ -772,6 +870,10 @@ struct StageRunRequestRaw {
     mode_id: String,
     compiled_plan_id: String,
     #[serde(default)]
+    launch_plan_id: Option<String>,
+    #[serde(default)]
+    lane_id: Option<String>,
+    #[serde(default)]
     node_id: String,
     #[serde(default)]
     stage_kind_id: String,
@@ -789,6 +891,8 @@ struct StageRunRequestRaw {
     #[serde(default)]
     attached_skill_paths: Vec<String>,
 
+    #[serde(default)]
+    active_work_item_family_id: Option<String>,
     active_work_item_kind: Option<WorkItemKind>,
     active_work_item_id: Option<String>,
     active_work_item_path: Option<String>,
@@ -821,6 +925,16 @@ struct StageRunRequestRaw {
     execution_capability_grants: Vec<ExecutionCapabilityGrant>,
     #[serde(default)]
     capability_support_decisions: Vec<CapabilitySupportDecision>,
+    #[serde(default)]
+    request_context_profile_id: Option<String>,
+    #[serde(default)]
+    context_bundle_path: Option<String>,
+    #[serde(default)]
+    context_artifact_refs: Vec<String>,
+    #[serde(default)]
+    context_render_plan_id: Option<String>,
+    #[serde(default)]
+    rendered_prompt_context_path: Option<String>,
 }
 
 impl StageRunRequestRaw {
@@ -833,6 +947,8 @@ impl StageRunRequestRaw {
             request_kind: self.request_kind,
             mode_id: self.mode_id,
             compiled_plan_id: self.compiled_plan_id,
+            launch_plan_id: self.launch_plan_id,
+            lane_id: self.lane_id,
             node_id: self.node_id,
             stage_kind_id: self.stage_kind_id,
             running_status_marker: self.running_status_marker,
@@ -842,6 +958,7 @@ impl StageRunRequestRaw {
             entrypoint_contract_id: self.entrypoint_contract_id,
             required_skill_paths: self.required_skill_paths,
             attached_skill_paths: self.attached_skill_paths,
+            active_work_item_family_id: self.active_work_item_family_id,
             active_work_item_kind: self.active_work_item_kind,
             active_work_item_id: self.active_work_item_id,
             active_work_item_path: self.active_work_item_path,
@@ -869,6 +986,11 @@ impl StageRunRequestRaw {
             timeout_seconds: self.timeout_seconds,
             execution_capability_grants: self.execution_capability_grants,
             capability_support_decisions: self.capability_support_decisions,
+            request_context_profile_id: self.request_context_profile_id,
+            context_bundle_path: self.context_bundle_path,
+            context_artifact_refs: self.context_artifact_refs,
+            context_render_plan_id: self.context_render_plan_id,
+            rendered_prompt_context_path: self.rendered_prompt_context_path,
         };
         request.validate()?;
         Ok(request)
@@ -959,6 +1081,23 @@ fn require_non_blank(field_name: &'static str, value: &str) -> Result<(), StageR
         Err(StageRunRequestError::InvalidField {
             field_name,
             message: "is required".to_owned(),
+        })
+    } else {
+        Ok(())
+    }
+}
+
+fn require_optional_non_blank(
+    field_name: &'static str,
+    value: &Option<String>,
+) -> Result<(), StageRunRequestError> {
+    if value
+        .as_deref()
+        .is_some_and(|value| value.trim().is_empty())
+    {
+        Err(StageRunRequestError::InvalidField {
+            field_name,
+            message: "must not be blank when set".to_owned(),
         })
     } else {
         Ok(())

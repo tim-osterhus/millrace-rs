@@ -129,7 +129,12 @@ pub fn normalize_stage_result(
         report_artifact: report_artifact.clone(),
         artifact_paths: merge_artifact_paths(
             extraction.artifact_paths,
-            [report_artifact, raw_result.event_log_path.clone()],
+            [
+                report_artifact,
+                raw_result.event_log_path.clone(),
+                request.context_bundle_path.clone(),
+                request.rendered_prompt_context_path.clone(),
+            ],
         ),
         detected_marker: extraction.detected_marker,
         stdout_path: raw_result.stdout_path.clone(),
@@ -797,7 +802,12 @@ fn failure_envelope(
         report_artifact: report_artifact.clone(),
         artifact_paths: merge_artifact_paths(
             artifact_paths,
-            [report_artifact, raw_result.event_log_path.clone()],
+            [
+                report_artifact,
+                raw_result.event_log_path.clone(),
+                request.context_bundle_path.clone(),
+                request.rendered_prompt_context_path.clone(),
+            ],
         ),
         detected_marker,
         stdout_path: raw_result.stdout_path.clone(),
@@ -960,6 +970,30 @@ fn transport_reconciliation_notes(raw_result: &RunnerRawResult) -> Vec<String> {
     }
 }
 
+fn artifact_parse_status(request: &StageRunRequest) -> &'static str {
+    let Some(context_bundle_path) = request.context_bundle_path.as_deref() else {
+        return "missing_context_bundle";
+    };
+    let path = Path::new(context_bundle_path);
+    if !path.is_file() {
+        return "missing_context_bundle";
+    }
+    if fs::read_to_string(path)
+        .ok()
+        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
+        .is_none()
+    {
+        return "malformed_context_bundle";
+    }
+    let Some(prompt_context_path) = request.rendered_prompt_context_path.as_deref() else {
+        return "missing_prompt_context";
+    };
+    if !Path::new(prompt_context_path).is_file() {
+        return "missing_prompt_context";
+    }
+    "valid"
+}
+
 fn resolved_thinking_level(
     request: &StageRunRequest,
     raw_result: &RunnerRawResult,
@@ -990,6 +1024,8 @@ fn request_metadata(
         "compiled_plan_id".to_owned(),
         json!(request.compiled_plan_id),
     );
+    metadata.insert("launch_plan_id".to_owned(), json!(request.launch_plan_id));
+    metadata.insert("lane_id".to_owned(), json!(request.lane_id));
     metadata.insert(
         "closure_target_root_spec_id".to_owned(),
         json!(request.closure_target_root_spec_id),
@@ -1011,6 +1047,10 @@ fn request_metadata(
         json!(request.preferred_report_path),
     );
     metadata.insert(
+        "active_work_item_family_id".to_owned(),
+        json!(request.active_work_item_family_id),
+    );
+    metadata.insert(
         "active_work_item_kind".to_owned(),
         json!(request.active_work_item_kind.map(|kind| kind.as_str())),
     );
@@ -1025,6 +1065,34 @@ fn request_metadata(
     metadata.insert(
         "skill_revision_evidence_path".to_owned(),
         json!(request.skill_revision_evidence_path),
+    );
+    metadata.insert(
+        "request_context_profile_id".to_owned(),
+        json!(request.request_context_profile_id),
+    );
+    metadata.insert(
+        "context_bundle_path".to_owned(),
+        json!(request.context_bundle_path),
+    );
+    metadata.insert(
+        "context_artifact_refs".to_owned(),
+        json!(request.context_artifact_refs),
+    );
+    metadata.insert(
+        "visible_context_refs".to_owned(),
+        json!(request.context_artifact_refs),
+    );
+    metadata.insert(
+        "context_render_plan_id".to_owned(),
+        json!(request.context_render_plan_id),
+    );
+    metadata.insert(
+        "rendered_prompt_context_path".to_owned(),
+        json!(request.rendered_prompt_context_path),
+    );
+    metadata.insert(
+        "artifact_parse_status".to_owned(),
+        json!(artifact_parse_status(request)),
     );
     metadata.insert("thinking_level".to_owned(), json!(request.thinking_level));
     metadata.insert(

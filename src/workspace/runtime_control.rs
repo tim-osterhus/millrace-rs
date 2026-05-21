@@ -995,7 +995,7 @@ impl RuntimeControl {
         scope: Option<Plane>,
     ) -> RuntimeControlResult<RuntimeControlActionResult> {
         let active_run = match retry_active_run(&snapshot, scope) {
-            RetryActiveRunSelection::Selected(active_run) => active_run,
+            RetryActiveRunSelection::Selected(active_run) => *active_run,
             RetryActiveRunSelection::Missing => {
                 return Ok(RuntimeControlActionResult::direct(
                     MailboxCommand::RetryActive,
@@ -1703,6 +1703,7 @@ fn clear_active_projection(snapshot: &mut RuntimeSnapshot) {
     snapshot.active_node_id = None;
     snapshot.active_stage_kind_id = None;
     snapshot.active_run_id = None;
+    snapshot.active_work_item_family_id = None;
     snapshot.active_work_item_kind = None;
     snapshot.active_work_item_id = None;
     snapshot.active_runs_by_plane.clear();
@@ -1728,6 +1729,7 @@ fn legacy_active_run_for_plane(snapshot: &RuntimeSnapshot, plane: Plane) -> Opti
     let active_work_item_id = snapshot.active_work_item_id.clone()?;
     Some(ActiveRunState {
         plane,
+        lane_id: format!("{}.main", plane.as_str()),
         stage: active_stage,
         node_id: snapshot
             .active_node_id
@@ -1738,11 +1740,14 @@ fn legacy_active_run_for_plane(snapshot: &RuntimeSnapshot, plane: Plane) -> Opti
             .clone()
             .unwrap_or_else(|| active_stage.as_str().to_owned()),
         run_id: active_run_id,
+        compiled_plan_id: snapshot.compiled_plan_id.clone(),
+        compiled_plan_fingerprint: snapshot.compiled_plan_fingerprint.clone(),
         request_kind: if active_work_item_kind == WorkItemKind::LearningRequest {
             crate::contracts::ActiveRunRequestKind::LearningRequest
         } else {
             crate::contracts::ActiveRunRequestKind::ActiveWorkItem
         },
+        work_item_family_id: Some(active_work_item_kind.as_str().to_owned()),
         work_item_kind: Some(active_work_item_kind),
         work_item_id: Some(active_work_item_id),
         closure_target_root_spec_id: None,
@@ -1753,7 +1758,7 @@ fn legacy_active_run_for_plane(snapshot: &RuntimeSnapshot, plane: Plane) -> Opti
 }
 
 enum RetryActiveRunSelection {
-    Selected(ActiveRunState),
+    Selected(Box<ActiveRunState>),
     Missing,
     Multiple,
 }
@@ -1761,25 +1766,25 @@ enum RetryActiveRunSelection {
 fn retry_active_run(snapshot: &RuntimeSnapshot, scope: Option<Plane>) -> RetryActiveRunSelection {
     if let Some(scope) = scope {
         return active_run_for_plane(snapshot, scope)
-            .map(RetryActiveRunSelection::Selected)
+            .map(|active_run| RetryActiveRunSelection::Selected(Box::new(active_run)))
             .unwrap_or(RetryActiveRunSelection::Missing);
     }
     if snapshot.active_runs_by_plane.len() > 1 {
         return RetryActiveRunSelection::Multiple;
     }
     if snapshot.active_runs_by_plane.len() == 1 {
-        return RetryActiveRunSelection::Selected(
+        return RetryActiveRunSelection::Selected(Box::new(
             snapshot
                 .active_runs_by_plane
                 .values()
                 .next()
                 .expect("len checked")
                 .clone(),
-        );
+        ));
     }
     if let Some(active_plane) = snapshot.active_plane {
         return active_run_for_plane(snapshot, active_plane)
-            .map(RetryActiveRunSelection::Selected)
+            .map(|active_run| RetryActiveRunSelection::Selected(Box::new(active_run)))
             .unwrap_or(RetryActiveRunSelection::Missing);
     }
     RetryActiveRunSelection::Missing
@@ -1822,6 +1827,7 @@ fn project_foreground_active_run(snapshot: &mut RuntimeSnapshot) -> RuntimeContr
     snapshot.active_node_id = Some(active_run.node_id);
     snapshot.active_stage_kind_id = Some(active_run.stage_kind_id);
     snapshot.active_run_id = Some(active_run.run_id);
+    snapshot.active_work_item_family_id = active_run.work_item_family_id;
     snapshot.active_work_item_kind = active_run.work_item_kind;
     snapshot.active_work_item_id = active_run.work_item_id;
     snapshot.active_since = Some(active_run.active_since);
@@ -1840,6 +1846,9 @@ fn requeue_active_item(
         WorkItemKind::Spec => queue.requeue_spec(work_item_id, reason),
         WorkItemKind::Incident => queue.requeue_incident(work_item_id, reason),
         WorkItemKind::LearningRequest => queue.requeue_learning_request(work_item_id, reason),
+        WorkItemKind::BlueprintDraft => Err(QueueStoreError::InvalidState {
+            message: "blueprint_draft requeue is not backed by QueueStore".to_owned(),
+        }),
     }
 }
 

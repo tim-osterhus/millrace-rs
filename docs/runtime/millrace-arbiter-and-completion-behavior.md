@@ -83,6 +83,12 @@ Missing root-lineage metadata or missing root idea source evidence blocks
 Planning with diagnosable runtime events rather than silently idling through
 required closure behavior.
 
+In Blueprint modes, Arbiter readiness also checks same-lineage Blueprint
+manifests, active/blocked drafts, candidate packets, evaluations, critiques,
+promotions, and generated execution tasks. A root with open Blueprint artifacts
+or generated execution work is not closure-ready even if ordinary task/spec
+queues are drained.
+
 ## Operator Inspection Surfaces
 
 Operators inspect this behavior through local CLI and workspace artifacts:

@@ -654,9 +654,10 @@ pub fn build_lineage_repair_plan_at(
             WorkItemKind::Incident => {
                 changes.extend(incident_repair_changes(&finding, target));
             }
-            WorkItemKind::Probe | WorkItemKind::Spec | WorkItemKind::LearningRequest => {
-                skipped_findings.push(finding);
-            }
+            WorkItemKind::Probe
+            | WorkItemKind::Spec
+            | WorkItemKind::LearningRequest
+            | WorkItemKind::BlueprintDraft => skipped_findings.push(finding),
         }
     }
 
@@ -747,7 +748,10 @@ pub fn apply_lineage_repair_plan(
                 atomic_write_text(&path, &render_incident_document(&document))?;
                 repaired_paths += 1;
             }
-            WorkItemKind::Probe | WorkItemKind::Spec | WorkItemKind::LearningRequest => {}
+            WorkItemKind::Probe
+            | WorkItemKind::Spec
+            | WorkItemKind::LearningRequest
+            | WorkItemKind::BlueprintDraft => {}
         }
     }
 

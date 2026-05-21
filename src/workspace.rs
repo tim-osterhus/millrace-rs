@@ -10,23 +10,43 @@ use serde_json::json;
 
 use crate::contracts::validate_safe_identifier;
 
+#[path = "workspace/blueprint_state.rs"]
+mod blueprint_state;
 #[path = "workspace/doctor.rs"]
 mod doctor;
 #[path = "workspace/lineage_repair.rs"]
 mod lineage_repair;
 #[path = "workspace/managed_assets.rs"]
 mod managed_assets;
+#[path = "workspace/queue_claims.rs"]
+mod queue_claims;
+#[path = "workspace/queue_lifecycle.rs"]
+mod queue_lifecycle;
 #[path = "workspace/queue_store.rs"]
 mod queue_store;
 #[path = "workspace/runtime_control.rs"]
 mod runtime_control;
 #[path = "workspace/runtime_lock.rs"]
 mod runtime_lock;
+#[path = "workspace/schema_epoch.rs"]
+mod schema_epoch;
 #[path = "workspace/state_store.rs"]
 mod state_store;
 #[path = "workspace/task_lifecycle_integrity.rs"]
 mod task_lifecycle_integrity;
+#[path = "workspace/work_item_adapters.rs"]
+mod work_item_adapters;
 
+pub use blueprint_state::{
+    approve_active_blueprint_draft, block_active_blueprint_draft, blueprint_artifact_ref,
+    blueprint_manifest_path, cancel_blueprint_draft, claim_next_blueprint_draft,
+    enqueue_blueprint_draft, list_blueprint_manifests, list_blueprint_manifests_for_root,
+    list_open_blueprint_lineage_work_ids, list_open_blueprint_lineage_work_refs,
+    move_candidate_blueprint_packet, persist_blueprint_critique, persist_blueprint_evaluation,
+    persist_blueprint_packet, persist_blueprint_promotion, read_active_blueprint_draft,
+    read_blueprint_draft, read_blueprint_manifest, requeue_active_blueprint_draft,
+    resolve_blueprint_manifest_path, update_active_blueprint_draft, write_blueprint_manifest,
+};
 pub use doctor::{DoctorIssue, DoctorReport, run_workspace_doctor, run_workspace_doctor_for_paths};
 pub use lineage_repair::{
     ClosureLineageRepairOutcome, LineageDiagnosticReason, LineageDriftDiagnostic,
@@ -45,9 +65,14 @@ pub use managed_assets::{
     load_baseline_manifest, preview_baseline_upgrade, should_skip_runtime_asset_path,
     write_baseline_manifest,
 };
+pub use queue_claims::QueueClaim;
+pub use queue_lifecycle::{
+    QueueLifecycleInterpreter, SourceLifecycleAction, SourceLifecycleIntent,
+    apply_source_lifecycle_intent, requeue_active_work_item, requeue_all_active_work_items,
+};
 pub use queue_store::{
     OperatorInterventionAction, OperatorInterventionContext, OperatorInterventionRecord,
-    OperatorInterventionResult, QueueClaim, QueueInspectionEntry, QueueStore, QueueStoreError,
+    OperatorInterventionResult, QueueInspectionEntry, QueueStore, QueueStoreError,
     QueueStoreResult, StaleActiveState, archive_blocked_task, archive_invalid_incident_artifact,
     cancel_incident, cancel_work_item, claim_next_execution_task, claim_next_learning_request,
     claim_next_planning_item, detect_execution_stale_state, detect_learning_stale_state,
@@ -71,6 +96,13 @@ pub use runtime_lock::{
     clear_stale_runtime_ownership_lock_with_pid_checker, inspect_runtime_ownership_lock,
     inspect_runtime_ownership_lock_with_pid_checker, release_runtime_ownership_lock,
 };
+pub use schema_epoch::{
+    CURRENT_WORKSPACE_SCHEMA_EPOCH, SchemaArchiveResetOptions, SchemaArchiveResetResult,
+    SchemaEpochError, WorkspaceSchemaEpochMarker, archive_reset_workspace_schema,
+    archive_reset_workspace_schema_with_options, default_workspace_schema_epoch_marker_payload,
+    ensure_workspace_schema_epoch_current, load_workspace_schema_epoch_marker,
+    workspace_schema_epoch_marker_path, write_workspace_schema_epoch_marker,
+};
 pub use state_store::{
     StateStore, StateStoreError, StateStoreResult, append_usage_governance_ledger_entry,
     atomic_write_text, increment_troubleshoot_attempt, load_execution_status, load_learning_status,
@@ -82,6 +114,11 @@ pub use state_store::{
 pub use task_lifecycle_integrity::{
     TaskLifecycleDuplicate, find_duplicate_task_lifecycle_ids,
     retire_stale_blocked_task_duplicate_after_done,
+};
+pub use work_item_adapters::{
+    AdapterParsedDocument, WorkItemDocumentAdapter, adapter_for_family_id, adapter_for_kind,
+    builtin_work_item_adapters, enqueue_rendered_with_adapter, parse_with_adapter,
+    validate_filename_with_adapter,
 };
 
 /// Result type for workspace filesystem operations.
@@ -667,6 +704,10 @@ pub fn default_file_payloads(paths: &WorkspacePaths) -> WorkspaceResult<BTreeMap
     payloads.insert(
         paths.recovery_counters_file.clone(),
         default_recovery_counters_payload()?,
+    );
+    payloads.insert(
+        workspace_schema_epoch_marker_path(paths),
+        default_workspace_schema_epoch_marker_payload()?,
     );
     Ok(payloads)
 }

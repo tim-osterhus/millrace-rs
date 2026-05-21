@@ -176,6 +176,88 @@ fn compiler_contracts_v0_19_0_guardrail_fixture_requires_capability_request_poli
 }
 
 #[test]
+fn compiler_contracts_v0_20_0_guardrail_fixture_requires_workflow_primitive_authority_fields() {
+    let fixture: Value = fixture_value(include_str!(
+        "fixtures/compiler_parity/auto_port_v0_20_0_compiler_contract_scout.json"
+    ));
+    assert_eq!(fixture["kind"], "auto_port_v0_20_0_compiler_contract_scout");
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.20.0");
+    assert_eq!(
+        fixture["python_reference"]["diff_range"],
+        "v0.19.0..v0.20.0"
+    );
+    assert_eq!(fixture["rust_reference"]["planned_crate_version"], "0.5.0");
+
+    let sources: BTreeSet<_> = fixture["compiler_sources"]
+        .as_array()
+        .expect("compiler source references are present")
+        .iter()
+        .map(|value| value.as_str().expect("compiler source"))
+        .collect();
+    for source in [
+        "../millrace-py/src/millrace_ai/architecture/workflow_primitives.py",
+        "../millrace-py/src/millrace_ai/compilation/assets.py",
+        "../millrace-py/src/millrace_ai/compilation/validation.py",
+        "../millrace-py/src/millrace_ai/compilation/plan_authority.py",
+        "../millrace-py/src/millrace_ai/assets/registry/runtime_effect_rules/blueprint_effect_rules.json",
+        "../millrace-py/src/millrace_ai/assets/modes/blueprint_codex.json",
+        "../millrace-py/tests/compilation/test_workflow_validation.py",
+    ] {
+        assert!(
+            sources.contains(source),
+            "missing v0.20.0 compiler workflow primitive source {source}"
+        );
+    }
+
+    let targets: BTreeSet<_> = fixture["expected_rust_compiler_targets"]
+        .as_array()
+        .expect("expected Rust compiler targets are present")
+        .iter()
+        .map(|value| value.as_str().expect("expected Rust target"))
+        .collect();
+    for target in [
+        "src/compiler/contracts.rs",
+        "src/compiler/assets.rs",
+        "src/compiler/materialization.rs",
+        "src/compiler/persistence.rs",
+        "src/compiler/workflow_primitives.rs",
+        "tests/compiler_contracts.rs",
+        "tests/compiler_assets.rs",
+        "tests/compiler_materialization.rs",
+        "tests/compiler_persistence.rs",
+        "tests/compiler_workflow_primitives.rs",
+    ] {
+        assert!(
+            targets.contains(target),
+            "missing v0.20.0 compiler workflow primitive target {target}"
+        );
+    }
+
+    let validation_errors: BTreeSet<_> = fixture["required_validation_errors"]
+        .as_array()
+        .expect("validation error classes are present")
+        .iter()
+        .map(|value| value.as_str().expect("validation error class"))
+        .collect();
+    for error_class in [
+        "duplicate_runtime_effect_binding",
+        "unknown_runtime_effect_handler",
+        "missing_handler_implementation",
+        "invalid_work_item_family_document_adapter",
+        "missing_lane_conflict_policy",
+        "invalid_terminal_action",
+        "stale_workspace_schema_epoch",
+        "missing_completion_behavior",
+        "blueprint_graph_mode_reference_drift",
+    ] {
+        assert!(
+            validation_errors.contains(error_class),
+            "missing v0.20.0 compiler validation guardrail {error_class}"
+        );
+    }
+}
+
+#[test]
 fn baseline_mode_graph_and_stage_kind_assets_parse_through_contracts() {
     let default_mode: ModeDefinition = parse_contract(include_str!(
         "../src/assets/baseline/modes/default_codex.json"
@@ -634,6 +716,7 @@ fn compiled_stage_graph_export_contract_matches_python_public_shape() {
             node_id: "builder".to_owned(),
             plane: Plane::Execution,
             stage_kind_id: "builder".to_owned(),
+            lane_id: Some("execution.main".to_owned()),
             entrypoint_path: "entrypoints/execution/builder.md".to_owned(),
             entrypoint_contract_id: Some("builder.contract.v1".to_owned()),
             running_status_marker: "BUILDER_RUNNING".to_owned(),
@@ -652,6 +735,9 @@ fn compiled_stage_graph_export_contract_matches_python_public_shape() {
             execution_capability_grants: Vec::new(),
             execution_capability_warnings: Vec::new(),
             execution_capability_policy_fingerprint: String::new(),
+            request_context_profile_id: Some("builder.default".to_owned()),
+            terminal_action_mappings: Default::default(),
+            runtime_effect_rule_selections: Vec::new(),
         }],
         edges: vec![GraphExportEdge {
             edge_id: "builder-complete-to-checker".to_owned(),
@@ -676,6 +762,9 @@ fn compiled_stage_graph_export_contract_matches_python_public_shape() {
             emits_artifacts: Vec::new(),
             ends_plane_run: true,
         }],
+        lane_policy: None,
+        workspace_schema_epoch: None,
+        workflow_primitive_fingerprints: Default::default(),
         source_refs: vec![
             "mode:default_codex".to_owned(),
             "graph_loop:execution.standard".to_owned(),
@@ -695,6 +784,7 @@ fn compiled_stage_graph_export_contract_matches_python_public_shape() {
             "entries",
             "exported_at",
             "kind",
+            "lane_policy",
             "loop_id",
             "mode_id",
             "nodes",
@@ -702,6 +792,8 @@ fn compiled_stage_graph_export_contract_matches_python_public_shape() {
             "schema_version",
             "source_refs",
             "terminal_states",
+            "workflow_primitive_fingerprints",
+            "workspace_schema_epoch",
         ]
     );
     assert_eq!(
@@ -715,14 +807,18 @@ fn compiled_stage_graph_export_contract_matches_python_public_shape() {
             "execution_capability_grants",
             "execution_capability_policy_fingerprint",
             "execution_capability_warnings",
+            "lane_id",
             "model_name",
             "model_reasoning_effort",
             "node_id",
             "plane",
+            "request_context_profile_id",
             "required_skill_paths",
             "runner_name",
             "running_status_marker",
+            "runtime_effect_rule_selections",
             "stage_kind_id",
+            "terminal_action_mappings",
             "thinking_level",
             "timeout_seconds",
         ]

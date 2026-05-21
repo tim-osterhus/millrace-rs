@@ -39,6 +39,8 @@ struct InspectedStageResult {
     envelope: StageResultEnvelope,
     request_id: Option<String>,
     compiled_plan_id: Option<String>,
+    launch_plan_id: Option<String>,
+    lane_id: Option<String>,
     mode_id: Option<String>,
     request_kind: Option<String>,
     closure_target_root_spec_id: Option<String>,
@@ -50,6 +52,22 @@ struct InspectedStageResult {
     raw_exit_kind: Option<String>,
     raw_exit_code: Option<String>,
     failure_class: Option<String>,
+    failure_origin: Option<String>,
+    artifact_parse_status: Option<String>,
+    runtime_effect_handler_id: Option<String>,
+    runtime_effect_decision: Option<String>,
+    runtime_effect_mutation_phase: Option<String>,
+    runtime_effect_failure_class: Option<String>,
+    runtime_effect_failure_policy_id: Option<String>,
+    runtime_effect_recovery_action: Option<String>,
+    runtime_effect_source_lifecycle_plan_id: Option<String>,
+    runtime_effect_source_lifecycle_action: Option<String>,
+    runtime_effect_created_paths: Vec<String>,
+    request_context_profile_id: Option<String>,
+    context_bundle_path: Option<String>,
+    visible_context_refs: Vec<String>,
+    context_render_plan_id: Option<String>,
+    rendered_prompt_context_path: Option<String>,
     prompt_artifact: Option<String>,
     stdout_path: Option<String>,
     stderr_path: Option<String>,
@@ -74,6 +92,12 @@ struct InspectedStageRequest {
     stage: String,
     node_id: String,
     stage_kind_id: String,
+    lane_id: Option<String>,
+    launch_plan_id: Option<String>,
+    request_context_profile_id: Option<String>,
+    context_bundle_path: Option<String>,
+    visible_context_refs: Vec<String>,
+    rendered_prompt_context_path: Option<String>,
     runner_name: Option<String>,
     model_name: Option<String>,
     thinking_level: Option<String>,
@@ -86,13 +110,30 @@ struct InspectedRunSummary {
     run_id: String,
     run_dir: PathBuf,
     status: String,
+    artifact_status: String,
+    runtime_outcome: String,
     compiled_plan_id: Option<String>,
+    launch_plan_id: Option<String>,
+    lane_id: Option<String>,
     mode_id: Option<String>,
     request_kind: Option<String>,
     closure_target_root_spec_id: Option<String>,
     work_item_kind: Option<WorkItemKind>,
     work_item_id: Option<String>,
     failure_class: Option<String>,
+    failure_origin: Option<String>,
+    artifact_parse_status: Option<String>,
+    runtime_effect_handler_id: Option<String>,
+    runtime_effect_decision: Option<String>,
+    runtime_effect_mutation_phase: Option<String>,
+    runtime_effect_failure_class: Option<String>,
+    runtime_effect_failure_policy_id: Option<String>,
+    runtime_effect_recovery_action: Option<String>,
+    runtime_effect_source_lifecycle_plan_id: Option<String>,
+    runtime_effect_source_lifecycle_action: Option<String>,
+    runtime_effect_created_paths: Vec<String>,
+    context_bundle_path: Option<String>,
+    visible_context_refs: Vec<String>,
     troubleshoot_report_path: Option<String>,
     primary_prompt_artifact_path: Option<String>,
     primary_stdout_path: Option<String>,
@@ -364,6 +405,20 @@ pub fn runs_ls_lines(paths: &WorkspacePaths) -> Result<Vec<String>, String> {
         lines.extend([
             format!("run_id: {}", summary.run_id),
             format!("status: {}", summary.status),
+            format!("runtime_outcome: {}", summary.runtime_outcome),
+            format!(
+                "launch_plan_id: {}",
+                option_str(summary.launch_plan_id.as_deref())
+            ),
+            format!("lane_id: {}", option_str(summary.lane_id.as_deref())),
+            format!(
+                "context_bundle_path: {}",
+                option_str(summary.context_bundle_path.as_deref())
+            ),
+            format!(
+                "visible_context_refs: {}",
+                join_or_none(&summary.visible_context_refs)
+            ),
             format!("work_item_kind: {}", option_value(summary.work_item_kind)),
             format!(
                 "work_item_id: {}",
@@ -372,6 +427,26 @@ pub fn runs_ls_lines(paths: &WorkspacePaths) -> Result<Vec<String>, String> {
             format!(
                 "failure_class: {}",
                 option_str(summary.failure_class.as_deref())
+            ),
+            format!(
+                "failure_origin: {}",
+                option_str(summary.failure_origin.as_deref())
+            ),
+            format!(
+                "artifact_parse_status: {}",
+                option_str(summary.artifact_parse_status.as_deref())
+            ),
+            format!(
+                "runtime_effect_handler_id: {}",
+                option_str(summary.runtime_effect_handler_id.as_deref())
+            ),
+            format!(
+                "runtime_effect_decision: {}",
+                option_str(summary.runtime_effect_decision.as_deref())
+            ),
+            format!(
+                "runtime_effect_failure_class: {}",
+                option_str(summary.runtime_effect_failure_class.as_deref())
             ),
             format!("stage_result_count: {}", summary.stage_results.len()),
             format!("runner_artifact_count: {}", summary.runner_artifacts.len()),
@@ -677,6 +752,7 @@ fn render_status_lines(paths: &WorkspacePaths) -> Result<Vec<String>, String> {
             option_str(payload.active_work_item_id.as_deref())
         ),
         format!("active_run_count: {}", payload.active_run_count),
+        format!("pending_plan: {}", pending_plan_text(&payload.pending_plan)),
         format!("execution_queue_depth: {}", payload.execution_queue_depth),
         format!("planning_queue_depth: {}", payload.planning_queue_depth),
         format!("learning_queue_depth: {}", payload.learning_queue_depth),
@@ -696,6 +772,73 @@ fn render_status_lines(paths: &WorkspacePaths) -> Result<Vec<String>, String> {
             operator_intervention_status_text(payload.latest_operator_intervention.as_ref())
         ),
     ];
+    lines.extend(render_lane_state_lines(&status.snapshot));
+    if let Some(failure_origin) = &payload.latest_failure_origin {
+        lines.push(format!("latest_failure_origin: {failure_origin}"));
+    }
+    lines.push(format!(
+        "latest_launch_plan_id: {}",
+        option_str(payload.latest_launch_plan_id.as_deref())
+    ));
+    lines.push(format!(
+        "latest_visible_context_refs: {}",
+        join_or_none(&payload.latest_visible_context_refs)
+    ));
+    lines.push(format!(
+        "latest_artifact_parse_status: {}",
+        option_str(payload.latest_artifact_parse_status.as_deref())
+    ));
+    lines.push(format!(
+        "latest_runtime_outcome: {}",
+        option_str(payload.latest_runtime_outcome.as_deref())
+    ));
+    lines.push(format!(
+        "latest_runtime_effect_handler_id: {}",
+        option_str(payload.latest_runtime_effect_handler_id.as_deref())
+    ));
+    lines.push(format!(
+        "latest_runtime_effect_decision: {}",
+        option_str(payload.latest_runtime_effect_decision.as_deref())
+    ));
+    lines.push(format!(
+        "latest_runtime_effect_mutation_phase: {}",
+        option_str(payload.latest_runtime_effect_mutation_phase.as_deref())
+    ));
+    lines.push(format!(
+        "latest_runtime_effect_failure_class: {}",
+        option_str(payload.latest_runtime_effect_failure_class.as_deref())
+    ));
+    lines.push(format!(
+        "latest_runtime_effect_failure_policy_id: {}",
+        option_str(payload.latest_runtime_effect_failure_policy_id.as_deref())
+    ));
+    lines.push(format!(
+        "latest_runtime_effect_recovery_action: {}",
+        option_str(payload.latest_runtime_effect_recovery_action.as_deref())
+    ));
+    lines.push(format!(
+        "latest_runtime_effect_source_lifecycle_plan_id: {}",
+        option_str(
+            payload
+                .latest_runtime_effect_source_lifecycle_plan_id
+                .as_deref()
+        )
+    ));
+    lines.push(format!(
+        "latest_runtime_effect_source_lifecycle_action: {}",
+        option_str(
+            payload
+                .latest_runtime_effect_source_lifecycle_action
+                .as_deref()
+        )
+    ));
+    lines.push(format!(
+        "latest_runtime_effect_created_paths: {}",
+        join_or_none(&payload.latest_runtime_effect_created_paths)
+    ));
+    if let Some(context_bundle_path) = &payload.context_bundle_path {
+        lines.push(format!("context_bundle_path: {context_bundle_path}"));
+    }
     lines.extend(render_active_run_lines(&status.snapshot));
     lines.extend(render_baseline_manifest_lines(
         status.baseline_manifest.as_ref(),
@@ -737,6 +880,25 @@ struct StatusInspection {
     payload: ReadOnlyStatusPayload,
 }
 
+#[derive(Debug, Default)]
+struct LatestStatusRunEvidence {
+    failure_origin: Option<String>,
+    context_bundle_path: Option<String>,
+    launch_plan_id: Option<String>,
+    visible_context_refs: Vec<String>,
+    artifact_parse_status: Option<String>,
+    runtime_outcome: Option<String>,
+    runtime_effect_handler_id: Option<String>,
+    runtime_effect_decision: Option<String>,
+    runtime_effect_mutation_phase: Option<String>,
+    runtime_effect_failure_class: Option<String>,
+    runtime_effect_failure_policy_id: Option<String>,
+    runtime_effect_recovery_action: Option<String>,
+    runtime_effect_source_lifecycle_plan_id: Option<String>,
+    runtime_effect_source_lifecycle_action: Option<String>,
+    runtime_effect_created_paths: Vec<String>,
+}
+
 fn inspect_status(paths: &WorkspacePaths) -> Result<StatusInspection, String> {
     let snapshot = load_snapshot(paths).map_err(|error| error.to_string())?;
     let baseline_manifest = load_baseline_manifest(paths).ok();
@@ -747,6 +909,7 @@ fn inspect_status(paths: &WorkspacePaths) -> Result<StatusInspection, String> {
     let closure_status = closure_target_status(paths)?;
     let latest_runtime_error_report_path = latest_runtime_error_report_path(paths)?;
     let latest_operator_intervention = latest_operator_intervention(paths)?;
+    let latest_run_evidence = latest_status_run_evidence(paths, &snapshot);
     let active_run_count = snapshot.active_runs_by_plane.len() as u64;
     let blocked_idle = blocked_idle(
         process_running,
@@ -774,6 +937,8 @@ fn inspect_status(paths: &WorkspacePaths) -> Result<StatusInspection, String> {
         active_work_item_kind: snapshot.active_work_item_kind,
         active_work_item_id: snapshot.active_work_item_id.clone(),
         active_run_count,
+        lane_state: lane_state_payload(&snapshot),
+        pending_plan: pending_plan_payload(&snapshot),
         execution_queue_depth: queue_depths.execution,
         planning_queue_depth: queue_depths.planning,
         learning_queue_depth: queue_depths.learning,
@@ -782,6 +947,24 @@ fn inspect_status(paths: &WorkspacePaths) -> Result<StatusInspection, String> {
         learning_status_marker: snapshot.learning_status_marker.clone(),
         blocked_idle,
         current_failure_class: snapshot.current_failure_class.clone(),
+        latest_failure_origin: latest_run_evidence.failure_origin,
+        context_bundle_path: latest_run_evidence.context_bundle_path,
+        latest_launch_plan_id: latest_run_evidence.launch_plan_id,
+        latest_visible_context_refs: latest_run_evidence.visible_context_refs,
+        latest_artifact_parse_status: latest_run_evidence.artifact_parse_status,
+        latest_runtime_outcome: latest_run_evidence.runtime_outcome,
+        latest_runtime_effect_handler_id: latest_run_evidence.runtime_effect_handler_id,
+        latest_runtime_effect_decision: latest_run_evidence.runtime_effect_decision,
+        latest_runtime_effect_mutation_phase: latest_run_evidence.runtime_effect_mutation_phase,
+        latest_runtime_effect_failure_class: latest_run_evidence.runtime_effect_failure_class,
+        latest_runtime_effect_failure_policy_id: latest_run_evidence
+            .runtime_effect_failure_policy_id,
+        latest_runtime_effect_recovery_action: latest_run_evidence.runtime_effect_recovery_action,
+        latest_runtime_effect_source_lifecycle_plan_id: latest_run_evidence
+            .runtime_effect_source_lifecycle_plan_id,
+        latest_runtime_effect_source_lifecycle_action: latest_run_evidence
+            .runtime_effect_source_lifecycle_action,
+        latest_runtime_effect_created_paths: latest_run_evidence.runtime_effect_created_paths,
         latest_runtime_error_report_path,
         latest_operator_intervention,
         closure_target_root_spec_id: closure_status.root_spec_id,
@@ -819,6 +1002,218 @@ fn render_active_run_lines(snapshot: &RuntimeSnapshot) -> Vec<String> {
         ));
     }
     lines
+}
+
+fn render_lane_state_lines(snapshot: &RuntimeSnapshot) -> Vec<String> {
+    let mut lanes = snapshot.lanes_by_id.values().collect::<Vec<_>>();
+    lanes.sort_by(|left, right| left.lane_id.cmp(&right.lane_id));
+    lanes
+        .into_iter()
+        .map(|lane| {
+            format!(
+                "lane_state: lane={} plane={} status={} compiled_plan_id={} active_runs={} active_work_refs={}",
+                lane.lane_id,
+                lane.plane.as_str(),
+                lane.status.as_str(),
+                lane.compiled_plan_id,
+                join_or_none(&lane.active_run_ids),
+                join_or_none(&lane.active_work_refs)
+            )
+        })
+        .collect()
+}
+
+fn lane_state_payload(snapshot: &RuntimeSnapshot) -> Value {
+    let mut lanes = serde_json::Map::new();
+    let mut lane_ids = snapshot.lanes_by_id.keys().cloned().collect::<Vec<_>>();
+    lane_ids.sort();
+    for lane_id in lane_ids {
+        if let Some(lane) = snapshot.lanes_by_id.get(&lane_id) {
+            lanes.insert(
+                lane_id,
+                serde_json::json!({
+                    "plane": lane.plane.as_str(),
+                    "status": lane.status.as_str(),
+                    "compiled_plan_id": lane.compiled_plan_id.clone(),
+                    "compiled_plan_fingerprint": lane.compiled_plan_fingerprint.clone(),
+                    "active_run_ids": lane.active_run_ids.clone(),
+                    "active_work_refs": lane.active_work_refs.clone(),
+                    "last_terminal_outcome": lane.last_terminal_outcome.clone(),
+                }),
+            );
+        }
+    }
+    Value::Object(lanes)
+}
+
+fn pending_plan_payload(snapshot: &RuntimeSnapshot) -> Value {
+    match &snapshot.pending_compiled_plan_id {
+        Some(compiled_plan_id) => serde_json::json!({
+            "compiled_plan_id": compiled_plan_id,
+            "compiled_plan_path": snapshot.pending_compiled_plan_path.clone(),
+            "compiled_plan_fingerprint": snapshot.pending_compiled_plan_fingerprint.clone(),
+        }),
+        None => Value::Null,
+    }
+}
+
+fn pending_plan_text(value: &Value) -> String {
+    if value.is_null() {
+        return "none".to_owned();
+    }
+    let Some(object) = value.as_object() else {
+        return "unknown".to_owned();
+    };
+    format!(
+        "{} path={} fingerprint={}",
+        option_str(object.get("compiled_plan_id").and_then(Value::as_str)),
+        option_str(object.get("compiled_plan_path").and_then(Value::as_str)),
+        option_str(
+            object
+                .get("compiled_plan_fingerprint")
+                .and_then(Value::as_str)
+        )
+    )
+}
+
+fn latest_status_run_evidence(
+    paths: &WorkspacePaths,
+    snapshot: &RuntimeSnapshot,
+) -> LatestStatusRunEvidence {
+    let Some(raw_path) = snapshot.last_stage_result_path.as_deref() else {
+        return LatestStatusRunEvidence::default();
+    };
+    let path = resolve_workspace_or_absolute_path(paths, raw_path);
+    let Ok(raw) = fs::read_to_string(path) else {
+        return LatestStatusRunEvidence::default();
+    };
+    let Ok(value) = serde_json::from_str::<Value>(&raw) else {
+        return LatestStatusRunEvidence {
+            runtime_outcome: Some("malformed".to_owned()),
+            ..LatestStatusRunEvidence::default()
+        };
+    };
+    let runtime_outcome = match StageResultEnvelope::from_json_value(value.clone()) {
+        Ok(envelope) => Some(runtime_outcome_for_envelope(&envelope).to_owned()),
+        Err(_) => Some("malformed".to_owned()),
+    };
+    LatestStatusRunEvidence {
+        failure_origin: string_stage_result_metadata(&value, "failure_origin"),
+        context_bundle_path: string_stage_result_metadata(&value, "context_bundle_path"),
+        launch_plan_id: string_stage_result_metadata(&value, "launch_plan_id"),
+        visible_context_refs: string_vec_stage_result_metadata(&value, "visible_context_refs"),
+        artifact_parse_status: string_stage_result_metadata(&value, "artifact_parse_status"),
+        runtime_outcome,
+        runtime_effect_handler_id: string_stage_result_metadata(
+            &value,
+            "runtime_effect_handler_id",
+        ),
+        runtime_effect_decision: string_stage_result_metadata(&value, "runtime_effect_decision"),
+        runtime_effect_mutation_phase: string_stage_result_metadata(
+            &value,
+            "runtime_effect_mutation_phase",
+        ),
+        runtime_effect_failure_class: string_stage_result_metadata(
+            &value,
+            "runtime_effect_failure_class",
+        ),
+        runtime_effect_failure_policy_id: string_stage_result_metadata(
+            &value,
+            "runtime_effect_failure_policy_id",
+        ),
+        runtime_effect_recovery_action: string_stage_result_metadata(
+            &value,
+            "runtime_effect_recovery_action",
+        ),
+        runtime_effect_source_lifecycle_plan_id: string_stage_result_metadata(
+            &value,
+            "runtime_effect_source_lifecycle_plan_id",
+        ),
+        runtime_effect_source_lifecycle_action: string_stage_result_metadata(
+            &value,
+            "runtime_effect_source_lifecycle_action",
+        ),
+        runtime_effect_created_paths: string_vec_stage_result_metadata(
+            &value,
+            "runtime_effect_created_paths",
+        ),
+    }
+}
+
+fn string_stage_result_metadata(value: &Value, key: &str) -> Option<String> {
+    value
+        .get("metadata")
+        .and_then(Value::as_object)
+        .and_then(|metadata| metadata.get(key))
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+}
+
+fn string_vec_stage_result_metadata(value: &Value, key: &str) -> Vec<String> {
+    value
+        .get("metadata")
+        .and_then(Value::as_object)
+        .and_then(|metadata| metadata.get(key))
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .filter(|item| !item.is_empty())
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn runtime_outcome_for_envelope(envelope: &StageResultEnvelope) -> &'static str {
+    if let Some(decision) = envelope
+        .metadata
+        .get("runtime_effect_decision")
+        .and_then(Value::as_str)
+    {
+        return match decision {
+            "request_complete_source" => "complete",
+            "request_block_source" => {
+                if envelope
+                    .metadata
+                    .get("runtime_effect_recovery_action")
+                    .and_then(Value::as_str)
+                    == Some("route_to_node")
+                {
+                    "handoff"
+                } else {
+                    "blocked"
+                }
+            }
+            "retry_recovery" => "handoff",
+            _ => {
+                if envelope.success {
+                    "complete"
+                } else {
+                    "incomplete"
+                }
+            }
+        };
+    }
+    if envelope.success {
+        "complete"
+    } else if envelope.result_class.as_str() == "blocked" {
+        "blocked"
+    } else if envelope.result_class.as_str() == "recoverable_failure" {
+        "handoff"
+    } else {
+        "incomplete"
+    }
+}
+
+fn resolve_workspace_or_absolute_path(paths: &WorkspacePaths, raw_path: &str) -> PathBuf {
+    let path = PathBuf::from(raw_path);
+    if path.is_absolute() {
+        path
+    } else {
+        paths.root.join(path)
+    }
 }
 
 fn render_baseline_manifest_lines(
@@ -1381,6 +1776,8 @@ fn inspect_run(paths: &WorkspacePaths, run_dir: &Path) -> Result<InspectedRunSum
         stage_results.push(InspectedStageResult {
             request_id: string_metadata(&envelope, "request_id"),
             compiled_plan_id: string_metadata(&envelope, "compiled_plan_id"),
+            launch_plan_id: string_metadata(&envelope, "launch_plan_id"),
+            lane_id: string_metadata(&envelope, "lane_id"),
             mode_id: string_metadata(&envelope, "mode_id"),
             request_kind: string_metadata(&envelope, "request_kind"),
             closure_target_root_spec_id: string_metadata(&envelope, "closure_target_root_spec_id"),
@@ -1396,6 +1793,47 @@ fn inspect_run(paths: &WorkspacePaths, run_dir: &Path) -> Result<InspectedRunSum
             raw_exit_kind: string_metadata(&envelope, "raw_exit_kind"),
             raw_exit_code: scalar_metadata(&envelope, "raw_exit_code"),
             failure_class: string_metadata(&envelope, "failure_class"),
+            failure_origin: string_metadata(&envelope, "failure_origin"),
+            artifact_parse_status: string_metadata(&envelope, "artifact_parse_status"),
+            runtime_effect_handler_id: string_metadata(&envelope, "runtime_effect_handler_id"),
+            runtime_effect_decision: string_metadata(&envelope, "runtime_effect_decision"),
+            runtime_effect_mutation_phase: string_metadata(
+                &envelope,
+                "runtime_effect_mutation_phase",
+            ),
+            runtime_effect_failure_class: string_metadata(
+                &envelope,
+                "runtime_effect_failure_class",
+            ),
+            runtime_effect_failure_policy_id: string_metadata(
+                &envelope,
+                "runtime_effect_failure_policy_id",
+            ),
+            runtime_effect_recovery_action: string_metadata(
+                &envelope,
+                "runtime_effect_recovery_action",
+            ),
+            runtime_effect_source_lifecycle_plan_id: string_metadata(
+                &envelope,
+                "runtime_effect_source_lifecycle_plan_id",
+            ),
+            runtime_effect_source_lifecycle_action: string_metadata(
+                &envelope,
+                "runtime_effect_source_lifecycle_action",
+            ),
+            runtime_effect_created_paths: string_vec_metadata(
+                &envelope,
+                "runtime_effect_created_paths",
+            ),
+            request_context_profile_id: string_metadata(&envelope, "request_context_profile_id"),
+            context_bundle_path: metadata_path(&run_dir, &envelope, "context_bundle_path"),
+            visible_context_refs: string_vec_metadata(&envelope, "visible_context_refs"),
+            context_render_plan_id: string_metadata(&envelope, "context_render_plan_id"),
+            rendered_prompt_context_path: metadata_path(
+                &run_dir,
+                &envelope,
+                "rendered_prompt_context_path",
+            ),
             prompt_artifact,
             stage_result_path,
             stdout_path,
@@ -1433,8 +1871,12 @@ fn inspect_run(paths: &WorkspacePaths, run_dir: &Path) -> Result<InspectedRunSum
     Ok(InspectedRunSummary {
         run_id,
         run_dir,
+        artifact_status: status.clone(),
+        runtime_outcome: runtime_outcome_for_run(latest, &status),
         status,
         compiled_plan_id: latest.and_then(|stage| stage.compiled_plan_id.clone()),
+        launch_plan_id: latest.and_then(|stage| stage.launch_plan_id.clone()),
+        lane_id: latest.and_then(|stage| stage.lane_id.clone()),
         mode_id: latest.and_then(|stage| stage.mode_id.clone()),
         request_kind: latest.and_then(|stage| stage.request_kind.clone()),
         closure_target_root_spec_id: latest
@@ -1442,6 +1884,29 @@ fn inspect_run(paths: &WorkspacePaths, run_dir: &Path) -> Result<InspectedRunSum
         work_item_kind: latest.map(|stage| stage.envelope.work_item_kind),
         work_item_id: latest.map(|stage| stage.envelope.work_item_id.clone()),
         failure_class: latest.and_then(|stage| stage.failure_class.clone()),
+        failure_origin: latest.and_then(|stage| stage.failure_origin.clone()),
+        artifact_parse_status: latest.and_then(|stage| stage.artifact_parse_status.clone()),
+        runtime_effect_handler_id: latest.and_then(|stage| stage.runtime_effect_handler_id.clone()),
+        runtime_effect_decision: latest.and_then(|stage| stage.runtime_effect_decision.clone()),
+        runtime_effect_mutation_phase: latest
+            .and_then(|stage| stage.runtime_effect_mutation_phase.clone()),
+        runtime_effect_failure_class: latest
+            .and_then(|stage| stage.runtime_effect_failure_class.clone()),
+        runtime_effect_failure_policy_id: latest
+            .and_then(|stage| stage.runtime_effect_failure_policy_id.clone()),
+        runtime_effect_recovery_action: latest
+            .and_then(|stage| stage.runtime_effect_recovery_action.clone()),
+        runtime_effect_source_lifecycle_plan_id: latest
+            .and_then(|stage| stage.runtime_effect_source_lifecycle_plan_id.clone()),
+        runtime_effect_source_lifecycle_action: latest
+            .and_then(|stage| stage.runtime_effect_source_lifecycle_action.clone()),
+        runtime_effect_created_paths: latest
+            .map(|stage| stage.runtime_effect_created_paths.clone())
+            .unwrap_or_default(),
+        context_bundle_path: latest.and_then(|stage| stage.context_bundle_path.clone()),
+        visible_context_refs: latest
+            .map(|stage| stage.visible_context_refs.clone())
+            .unwrap_or_default(),
         troubleshoot_report_path: latest.and_then(|stage| stage.report_artifact.clone()),
         primary_prompt_artifact_path: latest
             .and_then(|stage| stage.prompt_artifact.clone())
@@ -1498,13 +1963,30 @@ fn incomplete_run_summary(
         run_id,
         run_dir,
         status: "incomplete".to_owned(),
+        artifact_status: "incomplete".to_owned(),
+        runtime_outcome: "incomplete".to_owned(),
         compiled_plan_id: None,
+        launch_plan_id: None,
+        lane_id: None,
         mode_id: None,
         request_kind: None,
         closure_target_root_spec_id: None,
         work_item_kind: None,
         work_item_id: None,
         failure_class: None,
+        failure_origin: None,
+        artifact_parse_status: None,
+        runtime_effect_handler_id: None,
+        runtime_effect_decision: None,
+        runtime_effect_mutation_phase: None,
+        runtime_effect_failure_class: None,
+        runtime_effect_failure_policy_id: None,
+        runtime_effect_recovery_action: None,
+        runtime_effect_source_lifecycle_plan_id: None,
+        runtime_effect_source_lifecycle_action: None,
+        runtime_effect_created_paths: Vec::new(),
+        context_bundle_path: None,
+        visible_context_refs: Vec::new(),
         troubleshoot_report_path: None,
         primary_prompt_artifact_path: runner_artifact_path(&runner_artifacts, "runner_prompt"),
         primary_stdout_path: runner_artifact_path(&runner_artifacts, "runner_stdout"),
@@ -1539,10 +2021,17 @@ fn render_run_show_lines(summary: &InspectedRunSummary) -> Vec<String> {
     let mut lines = vec![
         format!("run_id: {}", summary.run_id),
         format!("status: {}", summary.status),
+        format!("artifact_status: {}", summary.artifact_status),
+        format!("runtime_outcome: {}", summary.runtime_outcome),
         format!(
             "compiled_plan_id: {}",
             option_str(summary.compiled_plan_id.as_deref())
         ),
+        format!(
+            "launch_plan_id: {}",
+            option_str(summary.launch_plan_id.as_deref())
+        ),
+        format!("lane_id: {}", option_str(summary.lane_id.as_deref())),
         format!("mode_id: {}", option_str(summary.mode_id.as_deref())),
         format!(
             "request_kind: {}",
@@ -1560,6 +2049,54 @@ fn render_run_show_lines(summary: &InspectedRunSummary) -> Vec<String> {
         format!(
             "failure_class: {}",
             option_str(summary.failure_class.as_deref())
+        ),
+        format!(
+            "failure_origin: {}",
+            option_str(summary.failure_origin.as_deref())
+        ),
+        format!(
+            "artifact_parse_status: {}",
+            option_str(summary.artifact_parse_status.as_deref())
+        ),
+        format!(
+            "runtime_effect_handler_id: {}",
+            option_str(summary.runtime_effect_handler_id.as_deref())
+        ),
+        format!(
+            "runtime_effect_decision: {}",
+            option_str(summary.runtime_effect_decision.as_deref())
+        ),
+        format!(
+            "runtime_effect_mutation_phase: {}",
+            option_str(summary.runtime_effect_mutation_phase.as_deref())
+        ),
+        format!(
+            "runtime_effect_failure_class: {}",
+            option_str(summary.runtime_effect_failure_class.as_deref())
+        ),
+        format!(
+            "runtime_effect_failure_policy_id: {}",
+            option_str(summary.runtime_effect_failure_policy_id.as_deref())
+        ),
+        format!(
+            "runtime_effect_recovery_action: {}",
+            option_str(summary.runtime_effect_recovery_action.as_deref())
+        ),
+        format!(
+            "runtime_effect_source_lifecycle_plan_id: {}",
+            option_str(summary.runtime_effect_source_lifecycle_plan_id.as_deref())
+        ),
+        format!(
+            "runtime_effect_source_lifecycle_action: {}",
+            option_str(summary.runtime_effect_source_lifecycle_action.as_deref())
+        ),
+        format!(
+            "runtime_effect_created_paths: {}",
+            join_or_none(&summary.runtime_effect_created_paths)
+        ),
+        format!(
+            "context_bundle_path: {}",
+            option_str(summary.context_bundle_path.as_deref())
         ),
         format!("started_at: {}", option_str(summary.started_at.as_deref())),
         format!(
@@ -1643,6 +2180,26 @@ fn render_run_show_lines(summary: &InspectedRunSummary) -> Vec<String> {
             format!("stage_request_node_id: {}", request.node_id),
             format!("stage_request_stage_kind_id: {}", request.stage_kind_id),
             format!(
+                "stage_request_lane_id: {}",
+                option_str(request.lane_id.as_deref())
+            ),
+            format!(
+                "stage_request_launch_plan_id: {}",
+                option_str(request.launch_plan_id.as_deref())
+            ),
+            format!(
+                "stage_request_context_profile_id: {}",
+                option_str(request.request_context_profile_id.as_deref())
+            ),
+            format!(
+                "stage_request_context_bundle_path: {}",
+                option_str(request.context_bundle_path.as_deref())
+            ),
+            format!(
+                "stage_request_rendered_prompt_context_path: {}",
+                option_str(request.rendered_prompt_context_path.as_deref())
+            ),
+            format!(
                 "stage_request_runner_name: {}",
                 option_str(request.runner_name.as_deref())
             ),
@@ -1660,6 +2217,9 @@ fn render_run_show_lines(summary: &InspectedRunSummary) -> Vec<String> {
             ),
             format!("stage_request_timeout_seconds: {}", request.timeout_seconds),
         ]);
+        for context_ref in &request.visible_context_refs {
+            lines.push(format!("stage_request_visible_context_ref: {context_ref}"));
+        }
     }
     for stage in &summary.stage_results {
         lines.extend([
@@ -1669,6 +2229,11 @@ fn render_run_show_lines(summary: &InspectedRunSummary) -> Vec<String> {
                 "compiled_plan_id: {}",
                 option_str(stage.compiled_plan_id.as_deref())
             ),
+            format!(
+                "launch_plan_id: {}",
+                option_str(stage.launch_plan_id.as_deref())
+            ),
+            format!("lane_id: {}", option_str(stage.lane_id.as_deref())),
             format!("mode_id: {}", option_str(stage.mode_id.as_deref())),
             format!("stage: {}", stage.envelope.stage.as_str()),
             format!("node_id: {}", stage.envelope.node_id),
@@ -1702,6 +2267,26 @@ fn render_run_show_lines(summary: &InspectedRunSummary) -> Vec<String> {
                 option_str(stage.skill_revision_evidence_path.as_deref())
             ),
             format!(
+                "request_context_profile_id: {}",
+                option_str(stage.request_context_profile_id.as_deref())
+            ),
+            format!(
+                "context_bundle_path: {}",
+                option_str(stage.context_bundle_path.as_deref())
+            ),
+            format!(
+                "context_render_plan_id: {}",
+                option_str(stage.context_render_plan_id.as_deref())
+            ),
+            format!(
+                "rendered_prompt_context_path: {}",
+                option_str(stage.rendered_prompt_context_path.as_deref())
+            ),
+            format!(
+                "artifact_parse_status: {}",
+                option_str(stage.artifact_parse_status.as_deref())
+            ),
+            format!(
                 "raw_exit_kind: {}",
                 option_str(stage.raw_exit_kind.as_deref())
             ),
@@ -1714,6 +2299,42 @@ fn render_run_show_lines(summary: &InspectedRunSummary) -> Vec<String> {
                 stage.envelope.terminal_result.as_str()
             ),
             format!("result_class: {}", stage.envelope.result_class.as_str()),
+            format!(
+                "failure_origin: {}",
+                option_str(stage.failure_origin.as_deref())
+            ),
+            format!(
+                "runtime_effect_handler_id: {}",
+                option_str(stage.runtime_effect_handler_id.as_deref())
+            ),
+            format!(
+                "runtime_effect_decision: {}",
+                option_str(stage.runtime_effect_decision.as_deref())
+            ),
+            format!(
+                "runtime_effect_mutation_phase: {}",
+                option_str(stage.runtime_effect_mutation_phase.as_deref())
+            ),
+            format!(
+                "runtime_effect_failure_class: {}",
+                option_str(stage.runtime_effect_failure_class.as_deref())
+            ),
+            format!(
+                "runtime_effect_failure_policy_id: {}",
+                option_str(stage.runtime_effect_failure_policy_id.as_deref())
+            ),
+            format!(
+                "runtime_effect_recovery_action: {}",
+                option_str(stage.runtime_effect_recovery_action.as_deref())
+            ),
+            format!(
+                "runtime_effect_source_lifecycle_plan_id: {}",
+                option_str(stage.runtime_effect_source_lifecycle_plan_id.as_deref())
+            ),
+            format!(
+                "runtime_effect_source_lifecycle_action: {}",
+                option_str(stage.runtime_effect_source_lifecycle_action.as_deref())
+            ),
             format!(
                 "runner_name: {}",
                 option_str(stage.envelope.runner_name.as_deref())
@@ -1756,6 +2377,12 @@ fn render_run_show_lines(summary: &InspectedRunSummary) -> Vec<String> {
         }
         for artifact_path in &stage.artifact_paths {
             lines.push(format!("artifact_path: {artifact_path}"));
+        }
+        for created_path in &stage.runtime_effect_created_paths {
+            lines.push(format!("runtime_effect_created_path: {created_path}"));
+        }
+        for context_ref in &stage.visible_context_refs {
+            lines.push(format!("visible_context_ref: {context_ref}"));
         }
         lines.extend(render_stage_capability_metadata_lines(stage));
     }
@@ -1958,6 +2585,18 @@ fn inspect_stage_requests(
             stage: request.stage.as_str().to_owned(),
             node_id: request.node_id,
             stage_kind_id: request.stage_kind_id,
+            lane_id: request.lane_id,
+            launch_plan_id: request.launch_plan_id,
+            request_context_profile_id: request.request_context_profile_id,
+            context_bundle_path: normalize_optional_run_relative_path(
+                run_dir,
+                request.context_bundle_path.as_deref(),
+            ),
+            visible_context_refs: request.context_artifact_refs,
+            rendered_prompt_context_path: normalize_optional_run_relative_path(
+                run_dir,
+                request.rendered_prompt_context_path.as_deref(),
+            ),
             runner_name: request.runner_name,
             model_name: request.model_name,
             thinking_level: request.thinking_level,
@@ -2058,6 +2697,59 @@ fn scalar_metadata(stage_result: &StageResultEnvelope, key: &str) -> Option<Stri
         Value::Number(value) => Some(value.to_string()),
         Value::Bool(value) => Some(bool_text(*value).to_owned()),
         _ => None,
+    }
+}
+
+fn string_vec_metadata(stage_result: &StageResultEnvelope, key: &str) -> Vec<String> {
+    stage_result
+        .metadata
+        .get(key)
+        .and_then(Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn runtime_outcome_for_run(latest: Option<&InspectedStageResult>, status: &str) -> String {
+    if status == "malformed" {
+        return "malformed".to_owned();
+    }
+    let Some(stage) = latest else {
+        return "incomplete".to_owned();
+    };
+    if let Some(decision) = stage.runtime_effect_decision.as_deref() {
+        return match decision {
+            "request_complete_source" => "complete".to_owned(),
+            "request_block_source" => {
+                if stage.runtime_effect_recovery_action.as_deref() == Some("route_to_node") {
+                    "handoff".to_owned()
+                } else {
+                    "blocked".to_owned()
+                }
+            }
+            "retry_recovery" => "handoff".to_owned(),
+            _ => {
+                if stage.envelope.success {
+                    "complete".to_owned()
+                } else {
+                    "incomplete".to_owned()
+                }
+            }
+        };
+    }
+    if stage.envelope.success {
+        "complete".to_owned()
+    } else if stage.envelope.result_class.as_str() == "blocked" {
+        "blocked".to_owned()
+    } else if stage.envelope.result_class.as_str() == "recoverable_failure" {
+        "handoff".to_owned()
+    } else {
+        "incomplete".to_owned()
     }
 }
 
@@ -2499,6 +3191,14 @@ fn option_value<T: Copy + ToString>(value: Option<T>) -> String {
 
 fn option_str(value: Option<&str>) -> String {
     value.unwrap_or("none").to_owned()
+}
+
+fn join_or_none(values: &[String]) -> String {
+    if values.is_empty() {
+        "none".to_owned()
+    } else {
+        values.join(",")
+    }
 }
 
 fn option_f64(value: Option<f64>) -> String {

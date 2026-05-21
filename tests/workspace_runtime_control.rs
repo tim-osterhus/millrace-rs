@@ -179,11 +179,15 @@ fn project_active_planning_run(paths: &millrace_ai::WorkspacePaths) {
     let mut snapshot = load_snapshot(paths).unwrap();
     let active_run = ActiveRunState {
         plane: Plane::Planning,
+        lane_id: String::new(),
         stage: StageName::Manager,
         node_id: "manager".to_owned(),
         stage_kind_id: "manager".to_owned(),
         run_id: "run-planning-retry".to_owned(),
+        compiled_plan_id: String::new(),
+        compiled_plan_fingerprint: String::new(),
         request_kind: ActiveRunRequestKind::ActiveWorkItem,
+        work_item_family_id: None,
         work_item_kind: Some(WorkItemKind::Spec),
         work_item_id: Some("spec-active".to_owned()),
         closure_target_root_spec_id: None,

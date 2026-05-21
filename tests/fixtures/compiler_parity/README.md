@@ -2,14 +2,17 @@
 
 `python_compiler_parity.json` is generated from the Python `millrace-ai`
 reference checkout at `../millrace-py` and currently pins the implemented
-`v0.18.0..v0.18.1` compiler parity range consumed by
-`tests/compiler_parity.rs`.
+Python `v0.19.0..v0.20.0` compiler authority range consumed by
+`tests/compiler_parity.rs`, including workflow primitive registry authority,
+Blueprint compile assets, primitive fingerprints, lane/request-context/
+terminal-action/runtime-effect/schema/completion evidence, and pending-plan
+metadata.
 
 `auto_port_v0_18_1_compiler_contract_scout.json` is target-facing scout
 evidence for Python `v0.18.0..v0.18.1`. It pins the Recon managed assets,
 planning graph entry, mode runner bindings, stage-kind registry, compiler
 materialization source references, and expected Rust fixture/test targets
-alongside the implemented normalized compiler parity fixture.
+alongside the historical compiled-stage-graph parity surface.
 `auto_port_v0_18_2_compiler_contract_scout.json` is target-facing scout
 evidence for Python `v0.18.1..v0.18.2`. It pins the Integrator entrypoint,
 Checker entrypoint update, `execution.with_integrator` graph and loop assets,
@@ -48,6 +51,12 @@ uses this compiler evidence as package-readiness proof that Librarian
 entrypoints, stage-kind registry files, skills, learning graph/loop assets,
 learning mode trigger bindings, shipped skill lint assets, and the v0.18.3
 compiler scout fixture are included by the crate package boundary.
+`auto_port_v0_20_0_compiler_contract_scout.json` is target-facing scout
+evidence for Python `v0.19.0..v0.20.0`. It pins workflow primitive registry
+collections, Blueprint graph/mode assets, compiler validation source
+references, persisted primitive authority fields, compile inspection fields,
+and expected Rust compiler/test targets for the Rust `0.5.0` workflow
+authority auto-port lineage.
 
 Regenerate intentionally with:
 
@@ -60,6 +69,7 @@ manifest identity, compile-input fingerprints whose inputs differ between the
 Python and Rust harnesses, resolved asset content hashes, and platform path
 separators. It preserves the serialized compiled-plan schema, mode alias
 semantics, graph and node authority, stage bindings including `thinking_level`,
-resolved asset identity/path coverage, and the Python v0.18.1 graph-export
-source references that define the implemented compiled-stage-graph export
-parity surface.
+resolved asset identity/path coverage, workflow primitive fingerprints,
+lane/request-context/terminal-action/runtime-effect/schema/completion and
+pending-plan fields, and the Python v0.20.0 source references that define the
+implemented compiler authority surface.

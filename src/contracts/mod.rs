@@ -1,5 +1,6 @@
 //! Typed contracts shared across Millrace runtime artifacts.
 
+mod blueprint;
 mod capabilities;
 mod enums;
 mod error;
@@ -9,7 +10,14 @@ mod run_trace;
 mod runtime_json;
 mod stage_metadata;
 mod work_documents;
+mod work_refs;
+mod workflow_primitives;
 
+pub use blueprint::{
+    BlueprintCritiqueDocument, BlueprintDraftDocument, BlueprintDraftStatus,
+    BlueprintEvaluationDecision, BlueprintEvaluationDocument, BlueprintManifestDocument,
+    BlueprintPacketDocument, BlueprintPromotionRecord, BlueprintSourceWorkItemKind,
+};
 pub use capabilities::{
     ApprovalPolicyRef, BASE_EXECUTION_CAPABILITY_IDS, CapabilityContractError,
     CapabilityPolicyOverride, CapabilityRequest, CapabilityScope, CapabilitySupportDecision,
@@ -43,9 +51,10 @@ pub use runtime_json::{
     ActiveRunRequestKind, ActiveRunState, AutoRecoveryPreRecoverySnapshot,
     BlockedDependencyAutoRecoveryDiagnostic, BlockedItemMetadata, BlockedOrigin,
     BlockedTaskRequeueResult, CompileDiagnostics, FailureClassifierCode, FailureScope,
-    LatestOperatorIntervention, MailboxAddIdeaPayload, MailboxAddProbePayload,
-    MailboxAddSpecPayload, MailboxAddTaskPayload, MailboxArchiveBlockedTaskPayload,
-    MailboxArchiveInvalidIncidentPayload, MailboxCancelWorkItemPayload, MailboxCommandEnvelope,
+    LaneRuntimeState, LaneRuntimeStatus, LatestOperatorIntervention, MailboxAddIdeaPayload,
+    MailboxAddProbePayload, MailboxAddSpecPayload, MailboxAddTaskPayload,
+    MailboxArchiveBlockedTaskPayload, MailboxArchiveInvalidIncidentPayload,
+    MailboxCancelWorkItemPayload, MailboxCommandEnvelope,
     MailboxExecutionCapabilityApprovalPayload, MailboxIncidentInterventionPayload,
     MailboxRetargetTaskDependencyPayload, MailboxSupersedeCascade, MailboxSupersedeTaskPayload,
     PauseSource, ReadOnlyStatusPayload, RecoveryCounterEntry, RecoveryCounters, RunnerFailureClass,
@@ -69,6 +78,25 @@ pub use stage_metadata::{
     validate_safe_identifier, validate_stage_result_class, validate_terminal_marker_for_stage,
 };
 pub use work_documents::{
-    ClosureTargetState, IncidentDocument, LearningRequestDocument, ProbeDocument, SpecDocument,
-    TaskDocument, Timestamp, WORK_DOCUMENT_SCHEMA_VERSION, WorkDocument, WorkDocumentError,
+    ClosureBlockingWorkRef, ClosureTargetState, IncidentDocument, LearningRequestDocument,
+    ProbeDocument, SpecDocument, TaskDocument, Timestamp, WORK_DOCUMENT_SCHEMA_VERSION,
+    WorkDocument, WorkDocumentError,
+};
+pub use work_refs::{
+    coerce_family_and_kind, family_id_for_work_item_kind, legacy_work_item_kind_for_family_id,
+    normalize_work_item_family_id, plane_for_work_item_family_id,
+};
+pub use workflow_primitives::{
+    ArtifactContractDefinition, ArtifactContractId, ArtifactFilenameAdapterDefinition,
+    ArtifactFormat, DocumentAdapterId, LaneConflictPolicyDefinition,
+    LifecycleMutationPlanDefinition, LifecycleMutationPlanId, OperatorControlCapabilityDefinition,
+    OutcomeArtifactDefinition, PlaneQueueClaimPolicyDefinition, QueueClaimPolicyId,
+    RequestContextProfileDefinition, RequestContextProfileId, RequestContextRenderPlan,
+    RuntimeEffectHandlerDefinition, RuntimeEffectHandlerId, RuntimeEffectMutationPhase,
+    RuntimeEffectRuleDefinition, RuntimeEffectRuleId, RuntimeFailurePolicyDefinition,
+    TerminalActionDefinition, TerminalActionId, WorkItemDocumentAdapterDefinition,
+    WorkItemFamilyDefinition, WorkItemFamilyId, WorkItemPartitionSelectorDefinition,
+    WorkItemQueueDirs, WorkflowCompletionBehaviorDefinition, WorkflowLaneDefinition,
+    WorkflowPlaneSchedulerPolicyDefinition, WorkflowPrimitiveBundle, WorkflowPrimitiveId,
+    WorkflowRecoveryPolicyDefinition, WorkspaceSchemaEpochDefinition,
 };

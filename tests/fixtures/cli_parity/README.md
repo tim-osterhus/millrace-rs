@@ -220,6 +220,26 @@ pre-dispatch capability gates, runner support/evidence metadata, inspection
 surfaces, required checks, and the Python v0.19.0 `millrace-web`
 package/version unsupported-gap evidence.
 
+`auto_port_v0_20_0_parity_evidence.json` records target-facing guardrails for
+the Python `v0.19.0..v0.20.0` to Rust `0.5.0` auto-port. It maps the generated
+249-path scout to expected Rust implementation, test, documentation, fixture,
+package evidence, or unsupported-gap targets; pins the v0.19.0 and v0.20.0
+annotated tag objects and peeled commits, Rust `0.4.0 -> 0.5.0` transition,
+workflow primitive assets, compiler authority, schema epochs, lanes,
+request-context artifacts, runtime effects/failure policy, Blueprint Planning,
+CLI `run once` removal, required checks, and the Python v0.20.0
+`millrace-web` unsupported-gap evidence.
+
+`auto_port_v0_20_0_release_parity_evidence.json` records the Rust `0.5.0`
+final release-parity evidence for Python `v0.19.0..v0.20.0`, including
+version-visible CLI metadata, generated-scout path mapping evidence, package
+include rules, README/changelog/roadmap/runtime docs, workflow primitive
+authority, Blueprint Planning runtime evidence, required Builder verification
+command results, dirty-worktree package verification, generated-cache package
+exclusion evidence, and the Python v0.20.0 `millrace-web`
+package/dashboard-summary unsupported gap. It also confirms Builder release
+evidence does not require publish, upload, push, tag, or deployment commands.
+
 `auto_port_v0_18_6_release_parity_evidence.json` records the Rust `0.3.5`
 final release-parity evidence for Python `v0.18.4..v0.18.6`, including
 version-visible CLI metadata, generated-scout path mapping evidence, package

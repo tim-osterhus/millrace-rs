@@ -12,8 +12,8 @@ use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use super::{
     ContractError, MailboxCommand, Plane, ProbeDocument, ReloadOutcome, ResultClass,
     RuntimeErrorCode, RuntimeMode, SpecDocument, StageName, TaskDocument, TerminalResult,
-    Timestamp, WatcherMode, WorkItemKind, parse_terminal_marker_for_plane, stage_plane,
-    terminal_result_for_plane, validate_safe_identifier,
+    Timestamp, WatcherMode, WorkItemKind, coerce_family_and_kind, parse_terminal_marker_for_plane,
+    stage_plane, terminal_result_for_plane, validate_safe_identifier,
 };
 
 const SCHEMA_VERSION: &str = "1.0";
@@ -96,6 +96,18 @@ runtime_string_enum! {
         ActiveWorkItem => "active_work_item",
         ClosureTarget => "closure_target",
         LearningRequest => "learning_request",
+    }
+}
+
+runtime_string_enum! {
+    /// Durable scheduler lane status persisted in runtime snapshots.
+    pub enum LaneRuntimeStatus {
+        Idle => "idle",
+        Active => "active",
+        Paused => "paused",
+        Draining => "draining",
+        Stopped => "stopped",
+        Blocked => "blocked",
     }
 }
 
@@ -643,16 +655,100 @@ pub trait RuntimeJsonContract: Sized + Serialize + DeserializeOwned {
     }
 }
 
+/// Durable runtime projection for one scheduler lane.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LaneRuntimeState {
+    pub lane_id: String,
+    pub plane: Plane,
+    #[serde(default = "default_lane_runtime_status")]
+    pub status: LaneRuntimeStatus,
+    pub compiled_plan_id: String,
+    pub compiled_plan_fingerprint: String,
+    #[serde(default)]
+    pub active_run_ids: Vec<String>,
+    #[serde(default)]
+    pub active_work_refs: Vec<String>,
+    #[serde(default)]
+    pub pause_requested: bool,
+    #[serde(default)]
+    pub stop_requested: bool,
+    #[serde(default)]
+    pub drain_requested: bool,
+    #[serde(default)]
+    pub mutation_lock_refs: Vec<String>,
+    #[serde(default)]
+    pub completion_target_refs: Vec<String>,
+    #[serde(default)]
+    pub failure_counter_refs: Vec<String>,
+    #[serde(default)]
+    pub last_claim_attempt_at: Option<Timestamp>,
+    #[serde(default)]
+    pub last_terminal_outcome: Option<String>,
+}
+
+impl LaneRuntimeState {
+    /// Deserializes and validates a lane-runtime-state JSON value.
+    pub fn from_json_value(value: Value) -> Result<Self, RuntimeJsonError> {
+        let mut decoded: Self = decode_json("lane_runtime_state", value)?;
+        decoded.validate()?;
+        Ok(decoded)
+    }
+
+    /// Validates lane identity and active/idle state invariants.
+    pub fn validate(&mut self) -> Result<(), RuntimeJsonError> {
+        require_non_blank("lane_id", &self.lane_id)?;
+        require_non_blank("compiled_plan_id", &self.compiled_plan_id)?;
+        require_non_blank("compiled_plan_fingerprint", &self.compiled_plan_fingerprint)?;
+        if !self
+            .lane_id
+            .starts_with(&format!("{}.", self.plane.as_str()))
+        {
+            return Err(RuntimeJsonError::InvalidDocument {
+                message: "lane_id must be namespaced by lane plane".to_owned(),
+            });
+        }
+        require_non_blank_entries("active_run_ids", &self.active_run_ids)?;
+        require_non_blank_entries("active_work_refs", &self.active_work_refs)?;
+        require_non_blank_entries("mutation_lock_refs", &self.mutation_lock_refs)?;
+        require_non_blank_entries("completion_target_refs", &self.completion_target_refs)?;
+        require_non_blank_entries("failure_counter_refs", &self.failure_counter_refs)?;
+        require_optional_non_blank("last_terminal_outcome", &self.last_terminal_outcome)?;
+        if let Some(timestamp) = &self.last_claim_attempt_at {
+            parse_time("last_claim_attempt_at", timestamp)?;
+        }
+        if self.status == LaneRuntimeStatus::Active && self.active_run_ids.is_empty() {
+            return Err(RuntimeJsonError::InvalidDocument {
+                message: "active lane runtime state requires active_run_ids".to_owned(),
+            });
+        }
+        if self.status == LaneRuntimeStatus::Idle && !self.active_run_ids.is_empty() {
+            return Err(RuntimeJsonError::InvalidDocument {
+                message: "idle lane runtime state cannot declare active_run_ids".to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
 /// One active plane entry inside a runtime snapshot.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ActiveRunState {
     pub plane: Plane,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub lane_id: String,
     pub stage: StageName,
     pub node_id: String,
     pub stage_kind_id: String,
     pub run_id: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub compiled_plan_id: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub compiled_plan_fingerprint: String,
     pub request_kind: ActiveRunRequestKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work_item_family_id: Option<String>,
     pub work_item_kind: Option<WorkItemKind>,
     pub work_item_id: Option<String>,
     pub closure_target_root_spec_id: Option<String>,
@@ -676,31 +772,56 @@ impl ActiveRunState {
                 message: "active run stage must belong to active run plane".to_owned(),
             });
         }
+        if !self.lane_id.is_empty()
+            && !self
+                .lane_id
+                .starts_with(&format!("{}.", self.plane.as_str()))
+        {
+            return Err(RuntimeJsonError::InvalidDocument {
+                message: "active run lane_id must be namespaced by active run plane".to_owned(),
+            });
+        }
         require_non_blank("node_id", &self.node_id)?;
         require_non_blank("stage_kind_id", &self.stage_kind_id)?;
         require_non_blank("run_id", &self.run_id)?;
+        if !self.compiled_plan_id.is_empty() {
+            require_non_blank("compiled_plan_id", &self.compiled_plan_id)?;
+        }
+        if !self.compiled_plan_fingerprint.is_empty() {
+            require_non_blank("compiled_plan_fingerprint", &self.compiled_plan_fingerprint)?;
+        }
 
-        let has_work_kind = self.work_item_kind.is_some();
+        let (work_item_family_id, work_item_kind) =
+            coerce_family_and_kind(self.work_item_family_id.as_deref(), self.work_item_kind)?;
+        if self.work_item_family_id.is_some() {
+            self.work_item_family_id = work_item_family_id;
+        }
+        self.work_item_kind = work_item_kind;
+
+        let has_work_family = self.work_item_family_id.is_some() || self.work_item_kind.is_some();
         let has_work_id = self.work_item_id.is_some();
         let has_closure_root = self.closure_target_root_spec_id.is_some();
         let has_closure_idea = self.closure_target_root_idea_id.is_some();
 
-        if has_work_kind != has_work_id {
+        if has_work_family != has_work_id {
             return Err(RuntimeJsonError::InvalidDocument {
-                message: "active run work_item_kind and work_item_id must be set together"
+                message: "active run work_item_family_id and work_item_id must be set together"
                     .to_owned(),
             });
         }
 
         match self.request_kind {
             ActiveRunRequestKind::ActiveWorkItem => {
-                if !has_work_kind || !has_work_id {
+                if !has_work_family || !has_work_id {
                     return Err(RuntimeJsonError::InvalidDocument {
                         message: "active_work_item active runs require work item identity"
                             .to_owned(),
                     });
                 }
-                if self.work_item_kind == Some(WorkItemKind::LearningRequest) {
+                if self.work_item_family_id.as_deref()
+                    == Some(WorkItemKind::LearningRequest.as_str())
+                    || self.work_item_kind == Some(WorkItemKind::LearningRequest)
+                {
                     return Err(RuntimeJsonError::InvalidDocument {
                         message:
                             "learning request active runs must use request_kind=learning_request"
@@ -721,7 +842,11 @@ impl ActiveRunState {
                         message: "learning_request active runs must use plane=learning".to_owned(),
                     });
                 }
-                if self.work_item_kind != Some(WorkItemKind::LearningRequest) || !has_work_id {
+                if (self.work_item_family_id.as_deref()
+                    != Some(WorkItemKind::LearningRequest.as_str())
+                    && self.work_item_kind != Some(WorkItemKind::LearningRequest))
+                    || !has_work_id
+                {
                     return Err(RuntimeJsonError::InvalidDocument {
                         message:
                             "learning_request active runs require learning_request work item identity"
@@ -742,7 +867,7 @@ impl ActiveRunState {
                         message: "closure_target active runs must use plane=planning".to_owned(),
                     });
                 }
-                if has_work_kind || has_work_id {
+                if has_work_family || has_work_id {
                     return Err(RuntimeJsonError::InvalidDocument {
                         message: "closure_target active runs cannot declare work item identity"
                             .to_owned(),
@@ -784,17 +909,29 @@ pub struct RuntimeSnapshot {
     #[serde(default)]
     pub loop_ids_by_plane: HashMap<Plane, String>,
     pub compiled_plan_id: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub compiled_plan_fingerprint: String,
     pub compiled_plan_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending_compiled_plan_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending_compiled_plan_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending_compiled_plan_fingerprint: Option<String>,
 
     pub active_plane: Option<Plane>,
     pub active_stage: Option<StageName>,
     pub active_node_id: Option<String>,
     pub active_stage_kind_id: Option<String>,
     pub active_run_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_work_item_family_id: Option<String>,
     pub active_work_item_kind: Option<WorkItemKind>,
     pub active_work_item_id: Option<String>,
     #[serde(default)]
     pub active_runs_by_plane: HashMap<Plane, ActiveRunState>,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub lanes_by_id: HashMap<String, LaneRuntimeState>,
 
     pub execution_status_marker: String,
     pub planning_status_marker: String,
@@ -867,6 +1004,10 @@ pub struct ReadOnlyStatusPayload {
     pub active_work_item_kind: Option<WorkItemKind>,
     pub active_work_item_id: Option<String>,
     pub active_run_count: u64,
+    #[serde(default)]
+    pub lane_state: Value,
+    #[serde(default)]
+    pub pending_plan: Value,
     pub execution_queue_depth: u64,
     pub planning_queue_depth: u64,
     pub learning_queue_depth: u64,
@@ -875,6 +1016,36 @@ pub struct ReadOnlyStatusPayload {
     pub learning_status_marker: String,
     pub blocked_idle: bool,
     pub current_failure_class: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latest_failure_origin: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_bundle_path: Option<String>,
+    #[serde(default)]
+    pub latest_launch_plan_id: Option<String>,
+    #[serde(default)]
+    pub latest_visible_context_refs: Vec<String>,
+    #[serde(default)]
+    pub latest_artifact_parse_status: Option<String>,
+    #[serde(default)]
+    pub latest_runtime_outcome: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latest_runtime_effect_handler_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latest_runtime_effect_decision: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latest_runtime_effect_mutation_phase: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latest_runtime_effect_failure_class: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latest_runtime_effect_failure_policy_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latest_runtime_effect_recovery_action: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latest_runtime_effect_source_lifecycle_plan_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latest_runtime_effect_source_lifecycle_action: Option<String>,
+    #[serde(default)]
+    pub latest_runtime_effect_created_paths: Vec<String>,
     pub latest_runtime_error_report_path: Option<String>,
     pub latest_operator_intervention: Option<LatestOperatorIntervention>,
     pub closure_target_root_spec_id: Value,
@@ -894,6 +1065,7 @@ impl RuntimeJsonContract for RuntimeSnapshot {
         self.normalize_pause_sources();
         self.normalize_plane_indexes();
         self.normalize_active_runs()?;
+        self.validate_lanes()?;
         self.validate_active_state()
     }
 }
@@ -963,6 +1135,7 @@ impl RuntimeSnapshot {
                 node_id,
                 stage_kind_id,
                 run_id,
+                work_item_family_id,
                 work_item_kind,
                 work_item_id,
                 active_since,
@@ -974,6 +1147,7 @@ impl RuntimeSnapshot {
                     active_run.node_id.clone(),
                     active_run.stage_kind_id.clone(),
                     active_run.run_id.clone(),
+                    active_run.work_item_family_id.clone(),
                     active_run.work_item_kind,
                     active_run.work_item_id.clone(),
                     active_run.active_since.clone(),
@@ -984,6 +1158,7 @@ impl RuntimeSnapshot {
             self.active_node_id = Some(node_id);
             self.active_stage_kind_id = Some(stage_kind_id);
             self.active_run_id = Some(run_id);
+            self.active_work_item_family_id = work_item_family_id;
             self.active_work_item_kind = work_item_kind;
             self.active_work_item_id = work_item_id;
             self.active_since = Some(active_since);
@@ -998,27 +1173,37 @@ impl RuntimeSnapshot {
             Some(active_stage),
             Some(active_run_id),
             Some(active_since),
-            Some(active_work_item_kind),
             Some(active_work_item_id),
         ) = (
             self.active_plane,
             self.active_stage,
             self.active_run_id.clone(),
             self.active_since.clone(),
-            self.active_work_item_kind,
             self.active_work_item_id.clone(),
         )
         else {
             return Ok(());
         };
 
-        let request_kind = if active_work_item_kind == WorkItemKind::LearningRequest {
+        let had_work_item_family_id = self.active_work_item_family_id.is_some();
+        let (work_item_family_id, work_item_kind) = coerce_family_and_kind(
+            self.active_work_item_family_id.as_deref(),
+            self.active_work_item_kind,
+        )?;
+        let Some(work_item_family_id) = work_item_family_id else {
+            return Ok(());
+        };
+
+        let request_kind = if work_item_family_id == WorkItemKind::LearningRequest.as_str()
+            || work_item_kind == Some(WorkItemKind::LearningRequest)
+        {
             ActiveRunRequestKind::LearningRequest
         } else {
             ActiveRunRequestKind::ActiveWorkItem
         };
         let active_run = ActiveRunState {
             plane: active_plane,
+            lane_id: format!("{}.main", active_plane.as_str()),
             stage: active_stage,
             node_id: self
                 .active_node_id
@@ -1029,8 +1214,11 @@ impl RuntimeSnapshot {
                 .clone()
                 .unwrap_or_else(|| active_stage.as_str().to_owned()),
             run_id: active_run_id,
+            compiled_plan_id: self.compiled_plan_id.clone(),
+            compiled_plan_fingerprint: self.compiled_plan_fingerprint.clone(),
             request_kind,
-            work_item_kind: Some(active_work_item_kind),
+            work_item_family_id: had_work_item_family_id.then_some(work_item_family_id),
+            work_item_kind,
             work_item_id: Some(active_work_item_id),
             closure_target_root_spec_id: None,
             closure_target_root_idea_id: None,
@@ -1050,6 +1238,29 @@ impl RuntimeSnapshot {
         Err(RuntimeJsonError::InvalidDocument {
             message: "active_runs_by_plane cannot be empty".to_owned(),
         })
+    }
+
+    fn validate_lanes(&mut self) -> Result<(), RuntimeJsonError> {
+        for (lane_id, lane_state) in &mut self.lanes_by_id {
+            if lane_state.compiled_plan_id.trim().is_empty() {
+                lane_state.compiled_plan_id = self.compiled_plan_id.clone();
+            }
+            if lane_state.compiled_plan_fingerprint.trim().is_empty() {
+                lane_state.compiled_plan_fingerprint = if self.compiled_plan_fingerprint.is_empty()
+                {
+                    format!("legacy-{}", self.compiled_plan_id)
+                } else {
+                    self.compiled_plan_fingerprint.clone()
+                };
+            }
+            lane_state.validate()?;
+            if lane_id != &lane_state.lane_id {
+                return Err(RuntimeJsonError::InvalidDocument {
+                    message: "lanes_by_id key must match lane runtime state lane_id".to_owned(),
+                });
+            }
+        }
+        Ok(())
     }
 
     fn validate_active_state(&mut self) -> Result<(), RuntimeJsonError> {
@@ -1079,6 +1290,9 @@ impl RuntimeSnapshot {
         } else {
             self.active_node_id = None;
             self.active_stage_kind_id = None;
+            if self.active_work_item_id.is_none() && self.active_work_item_kind.is_none() {
+                self.active_work_item_family_id = None;
+            }
         }
 
         if self.active_stage.is_some() {
@@ -1086,11 +1300,21 @@ impl RuntimeSnapshot {
             require_optional_non_blank("active_stage_kind_id", &self.active_stage_kind_id)?;
         }
 
-        let has_kind = self.active_work_item_kind.is_some();
+        let (work_item_family_id, work_item_kind) = coerce_family_and_kind(
+            self.active_work_item_family_id.as_deref(),
+            self.active_work_item_kind,
+        )?;
+        if self.active_work_item_family_id.is_some() {
+            self.active_work_item_family_id = work_item_family_id;
+        }
+        self.active_work_item_kind = work_item_kind;
+
+        let has_kind =
+            self.active_work_item_family_id.is_some() || self.active_work_item_kind.is_some();
         let has_id = self.active_work_item_id.is_some();
         if has_kind != has_id {
             return Err(RuntimeJsonError::InvalidDocument {
-                message: "active_work_item_kind and active_work_item_id must be set together"
+                message: "active_work_item_family_id and active_work_item_id must be set together"
                     .to_owned(),
             });
         }
@@ -1114,6 +1338,15 @@ impl RuntimeSnapshot {
                 message: "active_since requires active_stage".to_owned(),
             });
         }
+        require_optional_non_blank("pending_compiled_plan_id", &self.pending_compiled_plan_id)?;
+        require_optional_non_blank(
+            "pending_compiled_plan_path",
+            &self.pending_compiled_plan_path,
+        )?;
+        require_optional_non_blank(
+            "pending_compiled_plan_fingerprint",
+            &self.pending_compiled_plan_fingerprint,
+        )?;
 
         Ok(())
     }
@@ -2252,6 +2485,16 @@ fn require_non_blank(field_name: &'static str, value: &str) -> Result<(), Runtim
     }
 }
 
+fn require_non_blank_entries(
+    field_name: &'static str,
+    values: &[String],
+) -> Result<(), RuntimeJsonError> {
+    for value in values {
+        require_non_blank(field_name, value)?;
+    }
+    Ok(())
+}
+
 fn validate_reason(reason: &str) -> Result<(), RuntimeJsonError> {
     require_non_blank("reason", reason)
 }
@@ -2332,6 +2575,10 @@ fn default_runtime_snapshot_kind() -> String {
 
 fn default_recovery_counters_kind() -> String {
     "recovery_counters".to_owned()
+}
+
+fn default_lane_runtime_status() -> LaneRuntimeStatus {
+    LaneRuntimeStatus::Idle
 }
 
 fn default_mailbox_supersede_cascade() -> MailboxSupersedeCascade {

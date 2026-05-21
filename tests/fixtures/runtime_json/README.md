@@ -110,6 +110,13 @@ context, and inspection output evidence plus expected Rust contract/test
 targets. It is target-facing guardrail evidence for the v0.19.0 capability
 governance auto-port lineage and does not require live Python execution,
 network, credentials, Codex, Pi, a web server, or release upload.
+`auto_port_v0_20_0_runtime_contract_scout.json` pins the Python
+`v0.19.0..v0.20.0` workflow primitive, Blueprint, schema epoch, lane,
+request-context, runtime-effect, failure-policy, CLI/status, and inspection
+contract sources plus expected Rust contract/test targets. It is
+target-facing guardrail evidence for the v0.20.0 workflow-authority auto-port
+lineage and does not require live Python execution, network, credentials,
+Codex, Pi, a web server, or release upload.
 The Rust `0.3.5` release evidence in
 `tests/fixtures/cli_parity/auto_port_v0_18_6_release_parity_evidence.json`
 uses this runtime scout and `mailbox_intervention_payloads.json` as

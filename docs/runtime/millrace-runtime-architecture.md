@@ -129,11 +129,46 @@ records. Offline decisions resolve pending approvals directly; daemon-owned
 decisions are applied by mailbox intake at the runtime-owned boundary with
 processed/failed archive evidence and approval-decision runtime events.
 
+For Python `v0.20.0` workflow authority parity, runtime startup validates the
+workspace schema epoch marker against compiled schema authority before
+dispatch. Archive/reset helpers refuse daemon-owned workspaces, move stale
+mutable runtime state under `millrace-agents/archives/`, initialize clean
+runtime state, and require a fresh compile before work resumes.
+
+Queue claiming and terminal lifecycle movement now consume compiled work-item
+family, queue-claim, terminal-action, and lifecycle mutation plans for tasks,
+specs, probes, incidents, learning requests, and Blueprint drafts. Stage
+results remain evidence; runtime-owned effect/lifecycle handlers perform the
+single-writer queue mutations.
+
+Daemon scheduling persists lane runtime state, launch-plan authority, and
+pending compiled-plan evidence. Config reloads that compile while active work
+exists are held as pending plans until active lanes drain, preserving the
+launch plan that selected the running work.
+
+Stage request construction writes deterministic request-context bundle and
+prompt-context artifacts. Runner normalization and run inspection preserve
+context refs, artifact parse validity, runtime route outcome, runtime-effect
+outcome, latest failure origin, and generated path evidence as distinct fields.
+
+Runtime effects select compiled rules from the active plan after stage-result
+normalization. Effect dispatch writes decision/result artifacts, runs packaged
+handlers such as Planner disposition and Blueprint promotion, applies
+runtime-owned source lifecycle intents, and interprets failures through
+compiled runtime failure policies by origin, class, mutation phase, handler,
+source node, source terminal, plane, and family.
+
+Blueprint Planning adds runtime state for manifests, drafts, candidate packets,
+evaluations, critiques, promotions, generated execution tasks, legacy
+root-keyed manifest reads, remediation manifests, duplicate detection, and
+idempotent replay. Arbiter closure is suppressed until same-lineage Blueprint
+artifacts and generated execution work drain.
+
 The optional Python `millrace-web` package remains outside the accepted Rust
-runtime boundary, including the Python `v0.19.0` package/runtime version sync.
-Rust inspection stays local and read-only through CLI commands
-such as `queue ls/show`, `status show`, `runs ls/show/tail`, `modes show`,
-`config show`, `compile show`, `compile graph`, and `runs trace <run_id>`.
-Those graph/trace CLI commands shadow Python web graph and trace readers
-without adding a Rust web server, dashboard API, static shell, SSE stream, or
-separate dashboard package.
+runtime boundary, including the Python `v0.20.0` package/runtime version sync
+and dashboard summary/static UI changes. Rust inspection stays local and
+read-only through CLI commands such as `queue ls/show`, `status show`,
+`runs ls/show/tail`, `modes show`, `config show`, `compile show`,
+`compile graph`, and `runs trace <run_id>`. Those graph/trace CLI commands
+shadow Python web graph and trace readers without adding a Rust web server,
+dashboard API, static shell, SSE stream, or separate dashboard package.

@@ -63,3 +63,25 @@ missing-source recovery, runtime docs, parity fixtures, and release evidence.
 It preserves the same package boundary: live runtime workspace artifacts, the
 optional Python `packages/millrace-web` package, `target/**`, and generated
 Python cache artifacts remain excluded from the crate package include rules.
+
+## v0.19.0 Package Evidence
+
+Rust `0.4.0` package evidence covers execution capability contracts/config,
+compiled capability grants, approval storage, approval CLI/runtime-control
+routing, pre-dispatch capability gates, runner support/evidence metadata,
+run-inspection capability output, runtime docs, parity fixtures, and release
+evidence. It preserves the same package boundary: live runtime workspace
+artifacts, the optional Python `packages/millrace-web` package, `target/**`,
+and generated Python cache artifacts remain excluded from the crate package
+include rules.
+
+## v0.20.0 Package Evidence
+
+Rust `0.5.0` package evidence covers workflow primitive registry assets,
+Blueprint graph/mode/stage-kind/entrypoint/skill assets, compiler authority,
+workspace schema epochs, generic work-item lifecycle, lanes, request context,
+runtime effects, failure policy, Blueprint runtime effects, status/run
+inspection evidence, runtime docs, parity fixtures, and release evidence. It
+preserves the same package boundary: live runtime workspace artifacts, the
+optional Python `packages/millrace-web` package, `target/**`, and generated
+Python cache artifacts remain excluded from the crate package include rules.

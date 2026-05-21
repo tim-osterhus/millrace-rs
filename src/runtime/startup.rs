@@ -1,4 +1,4 @@
-//! Once-mode runtime startup lifecycle.
+//! Runtime startup lifecycle for daemon and internal bounded tick sessions.
 
 use std::{
     collections::{BTreeMap, HashMap},
@@ -32,14 +32,15 @@ use crate::{
     },
     workspace::{
         QueueStoreError, RuntimeOwnershipLockError, RuntimeOwnershipLockOptions,
-        RuntimeOwnershipRecord, StaleActiveState, StateStoreError, WorkspaceError, WorkspacePaths,
-        detect_execution_stale_state, detect_learning_stale_state, detect_planning_stale_state,
-        load_recovery_counters, load_snapshot, release_runtime_ownership_lock,
-        require_initialized_workspace, require_initialized_workspace_paths, save_recovery_counters,
-        save_snapshot,
+        RuntimeOwnershipRecord, SchemaEpochError, StaleActiveState, StateStoreError,
+        WorkspaceError, WorkspacePaths, detect_execution_stale_state, detect_learning_stale_state,
+        detect_planning_stale_state, ensure_workspace_schema_epoch_current, load_recovery_counters,
+        load_snapshot, release_runtime_ownership_lock, require_initialized_workspace,
+        require_initialized_workspace_paths, save_recovery_counters, save_snapshot,
     },
 };
 
+use super::lanes::{compiled_plan_fingerprint_for_runtime, ensure_snapshot_lanes};
 use super::usage_governance::{
     RuntimeTokenRuleConfig, RuntimeTokenRulesConfig, SubscriptionQuotaRuleConfig,
     SubscriptionQuotaRulesConfig, UsageGovernanceConfig,
@@ -49,15 +50,15 @@ static RUN_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 const STALE_ACTIVE_FAILURE_CLASS: &str = "stale_active_ownership";
 
-/// Result type for once-mode runtime startup.
+/// Result type for runtime startup.
 pub type RuntimeStartupResult<T> = Result<T, RuntimeStartupError>;
 
-/// Caller inputs for the once-mode runtime startup boundary.
+/// Caller inputs for the runtime startup boundary.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeStartupOptions {
-    /// Optional requested runtime mode id. This mirrors `millrace run once --mode`.
+    /// Optional requested runtime mode id.
     pub requested_mode_id: Option<String>,
-    /// Optional runtime config path. This mirrors `millrace run once --config`.
+    /// Optional runtime config path.
     pub config_path: Option<PathBuf>,
     /// Runtime invocation mode projected into the startup snapshot.
     pub runtime_mode: RuntimeMode,
@@ -626,6 +627,8 @@ pub enum RuntimeStartupError {
     },
     /// Runtime ownership lock acquisition or release failed.
     RuntimeLock(RuntimeOwnershipLockError),
+    /// Workspace schema epoch marker is missing, invalid, or incompatible.
+    SchemaEpoch(SchemaEpochError),
     /// Runtime snapshot or counter state failed to load or persist.
     StateStore(StateStoreError),
     /// Queue active-state detection failed.
@@ -682,6 +685,7 @@ impl fmt::Display for RuntimeStartupError {
                 )
             }
             Self::RuntimeLock(error) => write!(f, "{error}"),
+            Self::SchemaEpoch(error) => write!(f, "{error}"),
             Self::StateStore(error) => write!(f, "{error}"),
             Self::Queue(error) => write!(f, "{error}"),
             Self::Time {
@@ -698,6 +702,7 @@ impl std::error::Error for RuntimeStartupError {
             Self::Workspace(error) => Some(error),
             Self::Compiler(error) => Some(error),
             Self::RuntimeLock(error) => Some(error),
+            Self::SchemaEpoch(error) => Some(error),
             Self::StateStore(error) => Some(error),
             Self::Queue(error) => Some(error),
             Self::Config { .. }
@@ -723,6 +728,12 @@ impl From<CompilerPersistenceError> for RuntimeStartupError {
 impl From<RuntimeOwnershipLockError> for RuntimeStartupError {
     fn from(value: RuntimeOwnershipLockError) -> Self {
         Self::RuntimeLock(value)
+    }
+}
+
+impl From<SchemaEpochError> for RuntimeStartupError {
+    fn from(value: SchemaEpochError) -> Self {
+        Self::SchemaEpoch(value)
     }
 }
 
@@ -772,6 +783,7 @@ pub fn startup_runtime_once_for_paths(
     options: RuntimeStartupOptions,
 ) -> RuntimeStartupResult<RuntimeStartupSession> {
     require_initialized_workspace_paths(paths)?;
+    ensure_workspace_schema_epoch_current(paths)?;
     let now = match &options.now {
         Some(now) => now.clone(),
         None => utc_now_timestamp("updated_at")?,
@@ -1086,6 +1098,7 @@ pub fn compiled_entry_node_for_work_item(
         WorkItemKind::Probe => (Plane::Planning, GraphLoopEntryKey::Probe),
         WorkItemKind::Spec => (Plane::Planning, GraphLoopEntryKey::Spec),
         WorkItemKind::Incident => (Plane::Planning, GraphLoopEntryKey::Incident),
+        WorkItemKind::BlueprintDraft => (Plane::Planning, GraphLoopEntryKey::BlueprintDraft),
         WorkItemKind::LearningRequest => (Plane::Learning, GraphLoopEntryKey::LearningRequest),
     };
     let graph = graph_for_plane(plan, plane)?;
@@ -1284,7 +1297,14 @@ fn project_startup_snapshot(
     snapshot.learning_loop_id = compiled_plan.learning_loop_id.clone();
     snapshot.loop_ids_by_plane = compiled_plan.loop_ids_by_plane.clone();
     snapshot.compiled_plan_id = compiled_plan.compiled_plan_id.clone();
+    snapshot.compiled_plan_fingerprint = compiled_plan_fingerprint_for_runtime(compiled_plan);
     snapshot.compiled_plan_path = workspace_relative_path(paths, &paths.compiled_plan_file);
+    if snapshot.active_runs_by_plane.is_empty() {
+        snapshot.pending_compiled_plan_id = None;
+        snapshot.pending_compiled_plan_path = None;
+        snapshot.pending_compiled_plan_fingerprint = None;
+    }
+    ensure_snapshot_lanes(snapshot, compiled_plan);
     snapshot.queue_depth_execution = execution_depth;
     snapshot.queue_depth_planning = planning_depth;
     snapshot.queue_depth_learning = learning_depth;
@@ -1431,6 +1451,7 @@ fn project_foreground_active_run(snapshot: &mut RuntimeSnapshot) {
         snapshot.active_node_id = Some(active_run.node_id.clone());
         snapshot.active_stage_kind_id = Some(active_run.stage_kind_id.clone());
         snapshot.active_run_id = Some(active_run.run_id.clone());
+        snapshot.active_work_item_family_id = active_run.work_item_family_id.clone();
         snapshot.active_work_item_kind = active_run.work_item_kind;
         snapshot.active_work_item_id = active_run.work_item_id.clone();
         snapshot.active_since = Some(active_run.active_since.clone());
@@ -1440,6 +1461,7 @@ fn project_foreground_active_run(snapshot: &mut RuntimeSnapshot) {
         snapshot.active_node_id = None;
         snapshot.active_stage_kind_id = None;
         snapshot.active_run_id = None;
+        snapshot.active_work_item_family_id = None;
         snapshot.active_work_item_kind = None;
         snapshot.active_work_item_id = None;
         snapshot.active_since = None;

@@ -65,6 +65,8 @@ fn request(root: &Path, runner_name: &str) -> StageRunRequest {
         request_kind: RequestKind::ActiveWorkItem,
         mode_id: "learning_codex_auto_port".to_owned(),
         compiled_plan_id: "plan-capability".to_owned(),
+        launch_plan_id: None,
+        lane_id: None,
         node_id: String::new(),
         stage_kind_id: String::new(),
         running_status_marker: String::new(),
@@ -74,6 +76,7 @@ fn request(root: &Path, runner_name: &str) -> StageRunRequest {
         entrypoint_contract_id: Some("builder.contract.v1".to_owned()),
         required_skill_paths: Vec::new(),
         attached_skill_paths: Vec::new(),
+        active_work_item_family_id: None,
         active_work_item_kind: Some(WorkItemKind::Task),
         active_work_item_id: Some("task-capability".to_owned()),
         active_work_item_path: Some(root.join("task-capability.md").display().to_string()),
@@ -114,6 +117,11 @@ fn request(root: &Path, runner_name: &str) -> StageRunRequest {
             ),
         ],
         capability_support_decisions: Vec::new(),
+        request_context_profile_id: None,
+        context_bundle_path: None,
+        context_artifact_refs: Vec::new(),
+        context_render_plan_id: None,
+        rendered_prompt_context_path: None,
     };
     request.validate().unwrap();
     request

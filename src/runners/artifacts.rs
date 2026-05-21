@@ -28,6 +28,14 @@ pub struct RunnerInvocationArtifact {
     pub request_kind: RequestKind,
     pub active_work_item_id: Option<String>,
     pub closure_target_root_spec_id: Option<String>,
+    pub lane_id: Option<String>,
+    pub launch_plan_id: Option<String>,
+    pub request_context_profile_id: Option<String>,
+    pub context_bundle_path: Option<String>,
+    #[serde(default)]
+    pub context_artifact_refs: Vec<String>,
+    pub context_render_plan_id: Option<String>,
+    pub rendered_prompt_context_path: Option<String>,
     pub runner_name: String,
     pub model_name: Option<String>,
     pub thinking_level: Option<String>,
@@ -69,6 +77,33 @@ impl RunnerInvocationArtifact {
         require_non_blank("runner_name", &self.runner_name, "runner_invocation")?;
         require_non_blank("cwd", &self.cwd, "runner_invocation")?;
         require_non_blank("prompt_path", &self.prompt_path, "runner_invocation")?;
+        validate_optional_non_blank("lane_id", &self.lane_id, "runner_invocation")?;
+        validate_optional_non_blank("launch_plan_id", &self.launch_plan_id, "runner_invocation")?;
+        validate_optional_non_blank(
+            "request_context_profile_id",
+            &self.request_context_profile_id,
+            "runner_invocation",
+        )?;
+        validate_optional_non_blank(
+            "context_bundle_path",
+            &self.context_bundle_path,
+            "runner_invocation",
+        )?;
+        validate_optional_non_blank(
+            "context_render_plan_id",
+            &self.context_render_plan_id,
+            "runner_invocation",
+        )?;
+        validate_optional_non_blank(
+            "rendered_prompt_context_path",
+            &self.rendered_prompt_context_path,
+            "runner_invocation",
+        )?;
+        validate_non_blank_values(
+            "context_artifact_refs",
+            &self.context_artifact_refs,
+            "runner_invocation",
+        )?;
         require_command(&self.command, "runner_invocation")?;
         validate_capability_artifact_fields(
             "runner_invocation",
@@ -92,6 +127,14 @@ pub struct RunnerCompletionArtifact {
     pub request_kind: RequestKind,
     pub active_work_item_id: Option<String>,
     pub closure_target_root_spec_id: Option<String>,
+    pub lane_id: Option<String>,
+    pub launch_plan_id: Option<String>,
+    pub request_context_profile_id: Option<String>,
+    pub context_bundle_path: Option<String>,
+    #[serde(default)]
+    pub context_artifact_refs: Vec<String>,
+    pub context_render_plan_id: Option<String>,
+    pub rendered_prompt_context_path: Option<String>,
     pub runner_name: String,
     pub model_name: Option<String>,
     pub thinking_level: Option<String>,
@@ -149,6 +192,33 @@ impl RunnerCompletionArtifact {
         require_non_blank("run_id", &self.run_id, "runner_completion")?;
         require_non_blank("runner_name", &self.runner_name, "runner_completion")?;
         require_non_blank("cwd", &self.cwd, "runner_completion")?;
+        validate_optional_non_blank("lane_id", &self.lane_id, "runner_completion")?;
+        validate_optional_non_blank("launch_plan_id", &self.launch_plan_id, "runner_completion")?;
+        validate_optional_non_blank(
+            "request_context_profile_id",
+            &self.request_context_profile_id,
+            "runner_completion",
+        )?;
+        validate_optional_non_blank(
+            "context_bundle_path",
+            &self.context_bundle_path,
+            "runner_completion",
+        )?;
+        validate_optional_non_blank(
+            "context_render_plan_id",
+            &self.context_render_plan_id,
+            "runner_completion",
+        )?;
+        validate_optional_non_blank(
+            "rendered_prompt_context_path",
+            &self.rendered_prompt_context_path,
+            "runner_completion",
+        )?;
+        validate_non_blank_values(
+            "context_artifact_refs",
+            &self.context_artifact_refs,
+            "runner_completion",
+        )?;
         require_command(&self.command, "runner_completion")?;
         let computed_duration = duration_seconds_between(&self.started_at, &self.ended_at)?;
         if (self.duration_seconds - computed_duration).abs() > 0.001 {
@@ -252,6 +322,13 @@ pub fn invocation_artifact_from_request(
         request_kind: request.request_kind,
         active_work_item_id: request.active_work_item_id.clone(),
         closure_target_root_spec_id: request.closure_target_root_spec_id.clone(),
+        lane_id: request.lane_id.clone(),
+        launch_plan_id: request.launch_plan_id.clone(),
+        request_context_profile_id: request.request_context_profile_id.clone(),
+        context_bundle_path: request.context_bundle_path.clone(),
+        context_artifact_refs: request.context_artifact_refs.clone(),
+        context_render_plan_id: request.context_render_plan_id.clone(),
+        rendered_prompt_context_path: request.rendered_prompt_context_path.clone(),
         runner_name: runner_name.into(),
         model_name: request.model_name.clone(),
         thinking_level: request.thinking_level.clone(),
@@ -301,6 +378,13 @@ pub fn completion_artifact_from_raw_result(
         request_kind: request.request_kind,
         active_work_item_id: request.active_work_item_id.clone(),
         closure_target_root_spec_id: request.closure_target_root_spec_id.clone(),
+        lane_id: request.lane_id.clone(),
+        launch_plan_id: request.launch_plan_id.clone(),
+        request_context_profile_id: request.request_context_profile_id.clone(),
+        context_bundle_path: request.context_bundle_path.clone(),
+        context_artifact_refs: request.context_artifact_refs.clone(),
+        context_render_plan_id: request.context_render_plan_id.clone(),
+        rendered_prompt_context_path: request.rendered_prompt_context_path.clone(),
         runner_name,
         model_name: raw_result.model_name.clone(),
         thinking_level: raw_result.thinking_level.clone(),
@@ -437,6 +521,37 @@ fn require_non_blank(
     if value.trim().is_empty() {
         Err(RunnerError::InvalidRunnerArtifact {
             message: format!("{artifact}.{field_name} is required"),
+        })
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_optional_non_blank(
+    field_name: &'static str,
+    value: &Option<String>,
+    artifact: &'static str,
+) -> RunnerResult<()> {
+    if value
+        .as_deref()
+        .is_some_and(|value| value.trim().is_empty())
+    {
+        Err(RunnerError::InvalidRunnerArtifact {
+            message: format!("{artifact}.{field_name} must not be blank when set"),
+        })
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_non_blank_values(
+    field_name: &'static str,
+    values: &[String],
+    artifact: &'static str,
+) -> RunnerResult<()> {
+    if values.iter().any(|value| value.trim().is_empty()) {
+        Err(RunnerError::InvalidRunnerArtifact {
+            message: format!("{artifact}.{field_name} must not contain blank values"),
         })
     } else {
         Ok(())

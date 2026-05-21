@@ -421,7 +421,7 @@
         "serial_tick_can_dispatch_through_registry_dispatcher_without_real_runner",
         "runtime_configured_dispatcher_registers_real_adapters_and_fake_test_adapter",
         "serial_tick_normalizes_dispatcher_unknown_runner_through_recovery_path",
-        "rust_run_once_executes_one_fake_runner_tick_and_run_views_inspect_artifacts",
+        "rust_run_daemon_max_ticks_one_executes_one_fake_runner_tick_and_run_views_inspect_artifacts",
         "rust_run_daemon_bounded_execution_uses_fake_runner_and_run_views",
         "rust_run_daemon_default_stdout_is_quiet_except_summary_lines"
       ]

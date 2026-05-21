@@ -16,6 +16,12 @@ const TASK_WORK_ITEMS: &[WorkItemKind] = &[WorkItemKind::Task];
 const PROBE_WORK_ITEMS: &[WorkItemKind] = &[WorkItemKind::Probe];
 const INCIDENT_WORK_ITEMS: &[WorkItemKind] = &[WorkItemKind::Incident];
 const SPEC_OR_INCIDENT_WORK_ITEMS: &[WorkItemKind] = &[WorkItemKind::Spec, WorkItemKind::Incident];
+const BLUEPRINT_DRAFT_WORK_ITEMS: &[WorkItemKind] = &[WorkItemKind::BlueprintDraft];
+const SPEC_INCIDENT_OR_BLUEPRINT_DRAFT_WORK_ITEMS: &[WorkItemKind] = &[
+    WorkItemKind::Spec,
+    WorkItemKind::Incident,
+    WorkItemKind::BlueprintDraft,
+];
 const LEARNING_REQUEST_WORK_ITEMS: &[WorkItemKind] = &[WorkItemKind::LearningRequest];
 const NO_ACTIVE_WORK_ITEMS: &[WorkItemKind] = &[];
 
@@ -51,8 +57,18 @@ const P_RECON_BLOCKED: TerminalResult =
 const P_RECON_NOOP: TerminalResult = TerminalResult::Planning(PlanningTerminalResult::ReconNoop);
 const P_MANAGER_COMPLETE: TerminalResult =
     TerminalResult::Planning(PlanningTerminalResult::ManagerComplete);
+const P_MANAGER_BLUEPRINT_COMPLETE: TerminalResult =
+    TerminalResult::Planning(PlanningTerminalResult::ManagerBlueprintComplete);
+const P_BLUEPRINT_CANDIDATE_READY: TerminalResult =
+    TerminalResult::Planning(PlanningTerminalResult::BlueprintCandidateReady);
+const P_BLUEPRINT_APPROVED: TerminalResult =
+    TerminalResult::Planning(PlanningTerminalResult::BlueprintApproved);
+const P_BLUEPRINT_REJECTED: TerminalResult =
+    TerminalResult::Planning(PlanningTerminalResult::BlueprintRejected);
 const P_MECHANIC_COMPLETE: TerminalResult =
     TerminalResult::Planning(PlanningTerminalResult::MechanicComplete);
+const P_MECHANIC_BLUEPRINT_COMPLETE: TerminalResult =
+    TerminalResult::Planning(PlanningTerminalResult::MechanicBlueprintComplete);
 const P_AUDITOR_COMPLETE: TerminalResult =
     TerminalResult::Planning(PlanningTerminalResult::AuditorComplete);
 const P_ARBITER_COMPLETE: TerminalResult =
@@ -296,10 +312,63 @@ const MANAGER_ALLOWED: &[OutcomeResultClasses] = &[
     },
 ];
 
+const MANAGER_BLUEPRINT_LEGAL: &[TerminalResult] = &[P_MANAGER_BLUEPRINT_COMPLETE, P_BLOCKED];
+const MANAGER_BLUEPRINT_ALLOWED: &[OutcomeResultClasses] = &[
+    OutcomeResultClasses {
+        terminal_result: P_MANAGER_BLUEPRINT_COMPLETE,
+        result_classes: SUCCESS_CLASSES,
+    },
+    OutcomeResultClasses {
+        terminal_result: P_BLOCKED,
+        result_classes: BLOCKED_CLASSES,
+    },
+];
+
+const CONTRACTOR_BLUEPRINT_LEGAL: &[TerminalResult] = &[P_BLUEPRINT_CANDIDATE_READY, P_BLOCKED];
+const CONTRACTOR_BLUEPRINT_ALLOWED: &[OutcomeResultClasses] = &[
+    OutcomeResultClasses {
+        terminal_result: P_BLUEPRINT_CANDIDATE_READY,
+        result_classes: SUCCESS_CLASSES,
+    },
+    OutcomeResultClasses {
+        terminal_result: P_BLOCKED,
+        result_classes: BLOCKED_CLASSES,
+    },
+];
+
+const EVALUATOR_BLUEPRINT_LEGAL: &[TerminalResult] =
+    &[P_BLUEPRINT_APPROVED, P_BLUEPRINT_REJECTED, P_BLOCKED];
+const EVALUATOR_BLUEPRINT_ALLOWED: &[OutcomeResultClasses] = &[
+    OutcomeResultClasses {
+        terminal_result: P_BLUEPRINT_APPROVED,
+        result_classes: SUCCESS_CLASSES,
+    },
+    OutcomeResultClasses {
+        terminal_result: P_BLUEPRINT_REJECTED,
+        result_classes: FOLLOWUP_CLASSES,
+    },
+    OutcomeResultClasses {
+        terminal_result: P_BLOCKED,
+        result_classes: BLOCKED_CLASSES,
+    },
+];
+
 const MECHANIC_LEGAL: &[TerminalResult] = &[P_MECHANIC_COMPLETE, P_BLOCKED];
 const MECHANIC_ALLOWED: &[OutcomeResultClasses] = &[
     OutcomeResultClasses {
         terminal_result: P_MECHANIC_COMPLETE,
+        result_classes: SUCCESS_CLASSES,
+    },
+    OutcomeResultClasses {
+        terminal_result: P_BLOCKED,
+        result_classes: BLOCKED_CLASSES,
+    },
+];
+
+const MECHANIC_BLUEPRINT_LEGAL: &[TerminalResult] = &[P_MECHANIC_BLUEPRINT_COMPLETE, P_BLOCKED];
+const MECHANIC_BLUEPRINT_ALLOWED: &[OutcomeResultClasses] = &[
+    OutcomeResultClasses {
+        terminal_result: P_MECHANIC_BLUEPRINT_COMPLETE,
         result_classes: SUCCESS_CLASSES,
     },
     OutcomeResultClasses {
@@ -466,11 +535,35 @@ const MANAGER_METADATA: StageMetadata = StageMetadata {
     legal_terminal_results: MANAGER_LEGAL,
     allowed_result_classes_by_outcome: MANAGER_ALLOWED,
 };
+const MANAGER_BLUEPRINT_METADATA: StageMetadata = StageMetadata {
+    stage: StageName::ManagerBlueprint,
+    plane: Plane::Planning,
+    legal_terminal_results: MANAGER_BLUEPRINT_LEGAL,
+    allowed_result_classes_by_outcome: MANAGER_BLUEPRINT_ALLOWED,
+};
+const CONTRACTOR_BLUEPRINT_METADATA: StageMetadata = StageMetadata {
+    stage: StageName::ContractorBlueprint,
+    plane: Plane::Planning,
+    legal_terminal_results: CONTRACTOR_BLUEPRINT_LEGAL,
+    allowed_result_classes_by_outcome: CONTRACTOR_BLUEPRINT_ALLOWED,
+};
+const EVALUATOR_BLUEPRINT_METADATA: StageMetadata = StageMetadata {
+    stage: StageName::EvaluatorBlueprint,
+    plane: Plane::Planning,
+    legal_terminal_results: EVALUATOR_BLUEPRINT_LEGAL,
+    allowed_result_classes_by_outcome: EVALUATOR_BLUEPRINT_ALLOWED,
+};
 const MECHANIC_METADATA: StageMetadata = StageMetadata {
     stage: StageName::Mechanic,
     plane: Plane::Planning,
     legal_terminal_results: MECHANIC_LEGAL,
     allowed_result_classes_by_outcome: MECHANIC_ALLOWED,
+};
+const MECHANIC_BLUEPRINT_METADATA: StageMetadata = StageMetadata {
+    stage: StageName::MechanicBlueprint,
+    plane: Plane::Planning,
+    legal_terminal_results: MECHANIC_BLUEPRINT_LEGAL,
+    allowed_result_classes_by_outcome: MECHANIC_BLUEPRINT_ALLOWED,
 };
 const AUDITOR_METADATA: StageMetadata = StageMetadata {
     stage: StageName::Auditor,
@@ -522,7 +615,11 @@ pub const STAGE_METADATA_BY_VALUE: &[StageMetadata] = &[
     RECON_METADATA,
     PLANNER_METADATA,
     MANAGER_METADATA,
+    MANAGER_BLUEPRINT_METADATA,
+    CONTRACTOR_BLUEPRINT_METADATA,
+    EVALUATOR_BLUEPRINT_METADATA,
     MECHANIC_METADATA,
+    MECHANIC_BLUEPRINT_METADATA,
     AUDITOR_METADATA,
     ARBITER_METADATA,
     ANALYST_METADATA,
@@ -544,7 +641,11 @@ pub const STAGE_NAME_BY_VALUE: &[StageName] = &[
     StageName::Recon,
     StageName::Planner,
     StageName::Manager,
+    StageName::ManagerBlueprint,
+    StageName::ContractorBlueprint,
+    StageName::EvaluatorBlueprint,
     StageName::Mechanic,
+    StageName::MechanicBlueprint,
     StageName::Auditor,
     StageName::Arbiter,
     StageName::Analyst,
@@ -566,7 +667,11 @@ pub const STAGE_TO_PLANE: &[(StageName, Plane)] = &[
     (StageName::Recon, Plane::Planning),
     (StageName::Planner, Plane::Planning),
     (StageName::Manager, Plane::Planning),
+    (StageName::ManagerBlueprint, Plane::Planning),
+    (StageName::ContractorBlueprint, Plane::Planning),
+    (StageName::EvaluatorBlueprint, Plane::Planning),
     (StageName::Mechanic, Plane::Planning),
+    (StageName::MechanicBlueprint, Plane::Planning),
     (StageName::Auditor, Plane::Planning),
     (StageName::Arbiter, Plane::Planning),
     (StageName::Analyst, Plane::Learning),
@@ -588,7 +693,14 @@ pub const STAGE_ALLOWED_WORK_ITEM_KINDS: &[(StageName, &[WorkItemKind])] = &[
     (StageName::Recon, PROBE_WORK_ITEMS),
     (StageName::Planner, SPEC_OR_INCIDENT_WORK_ITEMS),
     (StageName::Manager, SPEC_OR_INCIDENT_WORK_ITEMS),
+    (StageName::ManagerBlueprint, SPEC_OR_INCIDENT_WORK_ITEMS),
+    (StageName::ContractorBlueprint, BLUEPRINT_DRAFT_WORK_ITEMS),
+    (StageName::EvaluatorBlueprint, BLUEPRINT_DRAFT_WORK_ITEMS),
     (StageName::Mechanic, SPEC_OR_INCIDENT_WORK_ITEMS),
+    (
+        StageName::MechanicBlueprint,
+        SPEC_INCIDENT_OR_BLUEPRINT_DRAFT_WORK_ITEMS,
+    ),
     (StageName::Auditor, INCIDENT_WORK_ITEMS),
     (StageName::Arbiter, NO_ACTIVE_WORK_ITEMS),
     (StageName::Analyst, LEARNING_REQUEST_WORK_ITEMS),
@@ -610,7 +722,11 @@ pub const STAGE_LEGAL_TERMINAL_RESULTS: &[(StageName, &[TerminalResult])] = &[
     (StageName::Recon, RECON_LEGAL),
     (StageName::Planner, PLANNER_LEGAL),
     (StageName::Manager, MANAGER_LEGAL),
+    (StageName::ManagerBlueprint, MANAGER_BLUEPRINT_LEGAL),
+    (StageName::ContractorBlueprint, CONTRACTOR_BLUEPRINT_LEGAL),
+    (StageName::EvaluatorBlueprint, EVALUATOR_BLUEPRINT_LEGAL),
     (StageName::Mechanic, MECHANIC_LEGAL),
+    (StageName::MechanicBlueprint, MECHANIC_BLUEPRINT_LEGAL),
     (StageName::Auditor, AUDITOR_LEGAL),
     (StageName::Arbiter, ARBITER_LEGAL),
     (StageName::Analyst, ANALYST_LEGAL),
@@ -634,7 +750,11 @@ pub fn stage_metadata(stage: StageName) -> &'static StageMetadata {
         StageName::Recon => &RECON_METADATA,
         StageName::Planner => &PLANNER_METADATA,
         StageName::Manager => &MANAGER_METADATA,
+        StageName::ManagerBlueprint => &MANAGER_BLUEPRINT_METADATA,
+        StageName::ContractorBlueprint => &CONTRACTOR_BLUEPRINT_METADATA,
+        StageName::EvaluatorBlueprint => &EVALUATOR_BLUEPRINT_METADATA,
         StageName::Mechanic => &MECHANIC_METADATA,
+        StageName::MechanicBlueprint => &MECHANIC_BLUEPRINT_METADATA,
         StageName::Auditor => &AUDITOR_METADATA,
         StageName::Arbiter => &ARBITER_METADATA,
         StageName::Analyst => &ANALYST_METADATA,
@@ -676,9 +796,14 @@ pub const fn allowed_work_item_kinds(stage: StageName) -> &'static [WorkItemKind
         | StageName::Troubleshooter
         | StageName::Consultant => TASK_WORK_ITEMS,
         StageName::Recon => PROBE_WORK_ITEMS,
-        StageName::Planner | StageName::Manager | StageName::Mechanic => {
-            SPEC_OR_INCIDENT_WORK_ITEMS
+        StageName::Planner
+        | StageName::Manager
+        | StageName::ManagerBlueprint
+        | StageName::Mechanic => SPEC_OR_INCIDENT_WORK_ITEMS,
+        StageName::ContractorBlueprint | StageName::EvaluatorBlueprint => {
+            BLUEPRINT_DRAFT_WORK_ITEMS
         }
+        StageName::MechanicBlueprint => SPEC_INCIDENT_OR_BLUEPRINT_DRAFT_WORK_ITEMS,
         StageName::Auditor => INCIDENT_WORK_ITEMS,
         StageName::Arbiter => NO_ACTIVE_WORK_ITEMS,
         StageName::Analyst | StageName::Professor | StageName::Curator | StageName::Librarian => {
@@ -717,7 +842,11 @@ pub const fn running_status_marker(stage: StageName) -> &'static str {
         StageName::Recon => "RECON_RUNNING",
         StageName::Planner => "PLANNER_RUNNING",
         StageName::Manager => "MANAGER_RUNNING",
+        StageName::ManagerBlueprint => "MANAGER_BLUEPRINT_RUNNING",
+        StageName::ContractorBlueprint => "CONTRACTOR_BLUEPRINT_RUNNING",
+        StageName::EvaluatorBlueprint => "EVALUATOR_BLUEPRINT_RUNNING",
         StageName::Mechanic => "MECHANIC_RUNNING",
+        StageName::MechanicBlueprint => "MECHANIC_BLUEPRINT_RUNNING",
         StageName::Auditor => "AUDITOR_RUNNING",
         StageName::Arbiter => "ARBITER_RUNNING",
         StageName::Analyst => "ANALYST_RUNNING",
@@ -747,7 +876,11 @@ pub fn stage_name_for_value(stage_value: &str) -> Result<StageName, ContractErro
         "recon" => Ok(StageName::Recon),
         "planner" => Ok(StageName::Planner),
         "manager" => Ok(StageName::Manager),
+        "manager_blueprint" => Ok(StageName::ManagerBlueprint),
+        "contractor_blueprint" => Ok(StageName::ContractorBlueprint),
+        "evaluator_blueprint" => Ok(StageName::EvaluatorBlueprint),
         "mechanic" => Ok(StageName::Mechanic),
+        "mechanic_blueprint" => Ok(StageName::MechanicBlueprint),
         "auditor" => Ok(StageName::Auditor),
         "arbiter" => Ok(StageName::Arbiter),
         "analyst" => Ok(StageName::Analyst),

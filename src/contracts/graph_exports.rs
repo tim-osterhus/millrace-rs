@@ -1,13 +1,17 @@
 //! Public compiled-stage-graph export contracts.
 
-use std::{collections::HashMap, fmt};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fmt,
+};
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
 
 use super::{
     ContractError, ExecutionCapabilityGrant, ExecutionCapabilityWarning, Plane, ResultClass,
-    Timestamp, validate_safe_identifier,
+    RuntimeJsonContract, Timestamp, WorkflowPlaneSchedulerPolicyDefinition,
+    WorkspaceSchemaEpochDefinition, validate_safe_identifier,
 };
 
 const SCHEMA_VERSION: &str = "1.0";
@@ -116,6 +120,8 @@ pub struct GraphExportNode {
     pub node_id: String,
     pub plane: Plane,
     pub stage_kind_id: String,
+    #[serde(default)]
+    pub lane_id: Option<String>,
     pub entrypoint_path: String,
     pub entrypoint_contract_id: Option<String>,
     pub running_status_marker: String,
@@ -138,6 +144,12 @@ pub struct GraphExportNode {
     pub execution_capability_warnings: Vec<ExecutionCapabilityWarning>,
     #[serde(default)]
     pub execution_capability_policy_fingerprint: String,
+    #[serde(default)]
+    pub request_context_profile_id: Option<String>,
+    #[serde(default)]
+    pub terminal_action_mappings: BTreeMap<String, String>,
+    #[serde(default)]
+    pub runtime_effect_rule_selections: Vec<String>,
 }
 
 impl GraphExportNode {
@@ -145,6 +157,7 @@ impl GraphExportNode {
     pub fn validate(&self) -> Result<(), GraphExportContractError> {
         validate_safe_identifier(&self.node_id, "node_id")?;
         validate_safe_identifier(&self.stage_kind_id, "stage_kind_id")?;
+        require_optional_non_blank("lane_id", &self.lane_id)?;
         require_non_blank("entrypoint_path", &self.entrypoint_path)?;
         require_optional_non_blank("entrypoint_contract_id", &self.entrypoint_contract_id)?;
         validate_safe_identifier(&self.running_status_marker, "running_status_marker")?;
@@ -179,6 +192,15 @@ impl GraphExportNode {
                 "cap-pol-",
             )?;
         }
+        require_optional_non_blank(
+            "request_context_profile_id",
+            &self.request_context_profile_id,
+        )?;
+        validate_non_blank_string_map("terminal_action_mappings", &self.terminal_action_mappings)?;
+        require_non_blank_vec(
+            "runtime_effect_rule_selections",
+            &self.runtime_effect_rule_selections,
+        )?;
         Ok(())
     }
 }
@@ -279,6 +301,10 @@ pub struct CompiledStageGraphExport {
     pub entries: Vec<GraphExportEntry>,
     #[serde(default)]
     pub terminal_states: Vec<GraphExportTerminalState>,
+    pub lane_policy: Option<WorkflowPlaneSchedulerPolicyDefinition>,
+    pub workspace_schema_epoch: Option<WorkspaceSchemaEpochDefinition>,
+    #[serde(default)]
+    pub workflow_primitive_fingerprints: BTreeMap<String, String>,
     #[serde(default)]
     pub source_refs: Vec<String>,
     pub exported_at: Timestamp,
@@ -337,6 +363,28 @@ impl CompiledStageGraphExport {
         for terminal_state in &self.terminal_states {
             terminal_state.validate()?;
         }
+        if let Some(lane_policy) = &self.lane_policy {
+            let mut lane_policy = lane_policy.clone();
+            lane_policy.validate_contract().map_err(|error| {
+                GraphExportContractError::InvalidField {
+                    field_name: "lane_policy",
+                    message: error.to_string(),
+                }
+            })?;
+        }
+        if let Some(epoch) = &self.workspace_schema_epoch {
+            let mut epoch = epoch.clone();
+            epoch
+                .validate_contract()
+                .map_err(|error| GraphExportContractError::InvalidField {
+                    field_name: "workspace_schema_epoch",
+                    message: error.to_string(),
+                })?;
+        }
+        validate_non_blank_string_map(
+            "workflow_primitive_fingerprints",
+            &self.workflow_primitive_fingerprints,
+        )?;
         require_non_blank_vec("source_refs", &self.source_refs)
     }
 }
@@ -407,6 +455,17 @@ fn require_non_blank_vec(
     values: &[String],
 ) -> Result<(), GraphExportContractError> {
     for value in values {
+        require_non_blank(field_name, value)?;
+    }
+    Ok(())
+}
+
+fn validate_non_blank_string_map(
+    field_name: &'static str,
+    values: &BTreeMap<String, String>,
+) -> Result<(), GraphExportContractError> {
+    for (key, value) in values {
+        require_non_blank(field_name, key)?;
         require_non_blank(field_name, value)?;
     }
     Ok(())

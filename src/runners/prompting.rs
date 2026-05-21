@@ -33,6 +33,15 @@ pub fn build_stage_prompt(request: &StageRunRequest) -> String {
         "Stage Request Context:".to_owned(),
     ];
     lines.extend(request.render_context_lines());
+    if let Some(path) = request.rendered_prompt_context_path.as_deref()
+        && let Ok(rendered_context) = fs::read_to_string(path)
+    {
+        lines.extend([
+            String::new(),
+            "Rendered Request Context:".to_owned(),
+            rendered_context.trim_end().to_owned(),
+        ]);
+    }
     lines.extend([
         String::new(),
         "When done, print exactly one legal terminal marker defined by the opened entrypoint contract."

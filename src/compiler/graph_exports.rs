@@ -120,6 +120,7 @@ fn export_graph(
                 node_id: node.node_id.clone(),
                 plane: node.plane,
                 stage_kind_id: node.stage_kind_id.clone(),
+                lane_id: node.lane_id.clone(),
                 entrypoint_path: node.entrypoint_path.clone(),
                 entrypoint_contract_id: node.entrypoint_contract_id.clone(),
                 running_status_marker: node.running_status_marker.clone(),
@@ -137,6 +138,9 @@ fn export_graph(
                 execution_capability_policy_fingerprint: node
                     .execution_capability_policy_fingerprint
                     .clone(),
+                request_context_profile_id: node.request_context_profile_id.clone(),
+                terminal_action_mappings: node.terminal_action_mappings.clone(),
+                runtime_effect_rule_selections: node.runtime_effect_rule_selections.clone(),
             })
             .collect(),
         edges: graph
@@ -175,6 +179,9 @@ fn export_graph(
                 ends_plane_run: state.ends_plane_run,
             })
             .collect(),
+        lane_policy: plan.lane_policy.clone(),
+        workspace_schema_epoch: plan.workspace_schema_epoch.clone(),
+        workflow_primitive_fingerprints: plan.workflow_primitive_fingerprints.clone(),
         source_refs: plan.source_refs.clone(),
         exported_at,
     };

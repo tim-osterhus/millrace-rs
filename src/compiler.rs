@@ -5,6 +5,7 @@ pub mod contracts;
 pub mod graph_exports;
 pub mod materialization;
 pub mod persistence;
+pub mod workflow_primitives;
 
 pub use assets::{
     CompilerAssetError, CompilerAssetResult, DEFAULT_MODE_ID, EffectiveCodexCompileConfig,
@@ -20,13 +21,14 @@ pub use contracts::{
     CompileInputFingerprint, CompileOutcome, CompiledGraphCompletionEntryPlan,
     CompiledGraphEntryPlan, CompiledGraphResumePolicyPlan, CompiledGraphThresholdPolicyPlan,
     CompiledGraphTransitionPlan, CompiledPlanCurrentness, CompiledPlanCurrentnessState,
-    CompiledRunPlan, CompilerContract, CompilerContractError, ExecutionCapabilitySummary,
-    FrozenGraphPlanePlan, GraphLoopCompletionBehaviorDefinition, GraphLoopCounterName,
-    GraphLoopDefinition, GraphLoopDynamicPoliciesDefinition, GraphLoopEntryDefinition,
-    GraphLoopEntryKey, GraphLoopNodeDefinition, GraphLoopTerminalClass,
+    CompiledRunPlan, CompiledWorkflowPrimitiveBundle, CompilerContract, CompilerContractError,
+    ExecutionCapabilitySummary, FrozenGraphPlanePlan, GraphLoopCompletionBehaviorDefinition,
+    GraphLoopCounterName, GraphLoopDefinition, GraphLoopDynamicPoliciesDefinition,
+    GraphLoopEntryDefinition, GraphLoopEntryKey, GraphLoopNodeDefinition, GraphLoopTerminalClass,
     GraphLoopTerminalStateDefinition, LearningTriggerRuleDefinition, MaterializedGraphNodePlan,
-    ModeDefinition, PlaneConcurrencyPolicyDefinition, RecoveryRole, RegisteredStageKindDefinition,
-    ResolvedAssetRef, StageIdempotencePolicy, validate_graph_stage_kind_references,
+    ModeDefinition, PendingCompiledPlanMetadata, PlaneConcurrencyPolicyDefinition, RecoveryRole,
+    RegisteredStageKindDefinition, ResolvedAssetRef, StageIdempotencePolicy,
+    validate_graph_stage_kind_references,
 };
 pub use graph_exports::{
     CompilerGraphExportError, CompilerGraphExportResult, export_compiled_stage_graph,
@@ -45,6 +47,10 @@ pub use persistence::{
     compile_and_persist_workspace_plan_with_options, inspect_workspace_plan_currentness,
     inspect_workspace_plan_currentness_for_paths, load_persisted_compile_diagnostics,
     load_persisted_compiled_plan, save_compile_diagnostics, save_compiled_plan,
+};
+pub use workflow_primitives::{
+    CompiledWorkflowPrimitiveAuthority, WORKSPACE_SCHEMA_EPOCH_ID,
+    load_workflow_primitive_authority, materialize_workflow_primitive_graph_authority,
 };
 
 pub use crate::contracts::CompileDiagnostics;

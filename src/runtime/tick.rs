@@ -34,6 +34,7 @@ use crate::{
         SpecSourceType, StageName, StageResultEnvelope, SubscriptionQuotaTelemetryState,
         TaskDocument, TerminalResult, Timestamp, UsageGovernanceBlocker, WorkDocumentError,
         WorkItemKind, allowed_work_item_kinds, stage_allows_work_item_kind, stage_name_for_plane,
+        validate_safe_identifier,
     },
     recon_packets::{read_recon_packet, render_recon_packet},
     runners::{
@@ -49,23 +50,30 @@ use crate::{
     },
     workspace::{
         LineageRepairError, OperatorInterventionContext, OperatorInterventionResult, QueueClaim,
-        QueueStore, QueueStoreError, StateStoreError, WorkspacePaths, atomic_write_text,
-        idea_source_artifact_path, load_closure_target_state, load_recovery_counters,
-        load_usage_governance_ledger, load_usage_governance_state, reset_forward_progress_counters,
-        save_closure_target_state, save_recovery_counters, save_snapshot,
-        save_usage_governance_state, scan_closure_lineage_drift, set_execution_status,
-        set_learning_status, set_planning_status, write_idea_source_artifact,
-        write_lineage_drift_diagnostic,
+        QueueLifecycleInterpreter, QueueStore, QueueStoreError, SourceLifecycleAction,
+        SourceLifecycleIntent, StateStoreError, WorkspacePaths, atomic_write_text,
+        idea_source_artifact_path, list_open_blueprint_lineage_work_refs,
+        load_closure_target_state, load_recovery_counters, load_usage_governance_ledger,
+        load_usage_governance_state, reset_forward_progress_counters, save_closure_target_state,
+        save_recovery_counters, save_snapshot, save_usage_governance_state,
+        scan_closure_lineage_drift, set_execution_status, set_learning_status, set_planning_status,
+        write_idea_source_artifact, write_lineage_drift_diagnostic,
     },
 };
 
 use super::{
     AllowedResultClassPolicy, AllowedResultClassesByOutcome, RequestKind, RuntimeStartupError,
     RuntimeStartupSession, RuntimeWatchEvent, StageRunRequest, StageRunRequestError,
+    apply_runtime_effect_for_stage_result,
     approvals::{approve_execution_capability_request, deny_execution_capability_request},
     blocked_recovery::persist_blocked_item_metadata,
     build_runtime_watcher_session, capability_gate_failure_result, evaluate_usage_governance,
+    lanes::{
+        compiled_plan_fingerprint_for_runtime, default_lane_id_for_plane, lane_id_for_plane,
+        snapshot_with_lane_active_run, snapshot_without_lane_active_run,
+    },
     load_runtime_startup_config, record_capability_gate_result,
+    request_context::attach_default_request_context,
     run_traces::{
         record_router_decision_trace, spawned_work_ref_from_path, upsert_stage_result_trace_node,
     },
@@ -1036,7 +1044,7 @@ fn persist_and_apply_dispatch_result(
         Ok(counters) => counters,
         Err(error) => return Err(partial.fail(error.into())),
     };
-    let router_decision = match route_stage_result_from_graph(
+    let mut router_decision = match route_stage_result_from_graph(
         &session.compiled_plan,
         &session.snapshot,
         stage_result,
@@ -1077,8 +1085,26 @@ fn persist_and_apply_dispatch_result(
         return Err(partial.fail(error));
     }
     let run_dir = Path::new(&request.run_dir);
-    upsert_stage_result_trace_node(&session.paths, run_dir, stage_result, stage_result_path);
     partial.stage_result_path = Some(stage_result_path.to_path_buf());
+
+    let runtime_effect_application = match apply_runtime_effect_for_stage_result(
+        session,
+        request,
+        stage_result,
+        router_decision,
+        stage_result_path,
+    ) {
+        Ok(application) => application,
+        Err(error) => return Err(partial.fail(error)),
+    };
+    router_decision = runtime_effect_application.router_decision;
+    partial.router_decision = Some(router_decision.clone());
+    let effect_source_lifecycle_applied = runtime_effect_application.source_lifecycle_applied;
+    let effect_spawned_paths = runtime_effect_application.spawned_paths;
+    if let Err(error) = write_stage_result_artifact(stage_result_path, stage_result) {
+        return Err(partial.fail(error));
+    }
+    upsert_stage_result_trace_node(&session.paths, run_dir, stage_result, stage_result_path);
 
     let learning_request_paths = match enqueue_learning_requests_for_stage_result(
         session,
@@ -1131,14 +1157,24 @@ fn persist_and_apply_dispatch_result(
         Err(error) => return Err(partial.fail(error)),
     };
 
-    let spawned_paths =
-        match apply_router_decision(session, &router_decision, stage_result, stage_result_path) {
-            Ok(paths) => paths,
-            Err(error) => return Err(partial.fail(error)),
-        };
+    let spawned_paths = match apply_router_decision_after_runtime_effect(
+        session,
+        &router_decision,
+        stage_result,
+        stage_result_path,
+        effect_source_lifecycle_applied,
+    ) {
+        Ok(paths) => paths,
+        Err(error) => return Err(partial.fail(error)),
+    };
     let spawned_work = learning_request_paths
         .iter()
         .map(|path| spawned_work_ref_from_path(path, stage_result, "learning_trigger"))
+        .chain(
+            effect_spawned_paths
+                .iter()
+                .map(|path| spawned_work_ref_from_path(path, stage_result, "runtime_effect")),
+        )
         .chain(spawned_paths.iter().map(|path| {
             spawned_work_ref_from_path(path, stage_result, router_decision.reason.clone())
         }))
@@ -1250,15 +1286,19 @@ fn activate_claim(
     let activation = activation_for_claim(&session.compiled_plan, &claim)?;
     let active_run = ActiveRunState {
         plane: activation.plane,
+        lane_id: lane_id_for_plane(Some(&session.compiled_plan), activation.plane),
         stage: activation.stage,
         node_id: activation.node_id,
         stage_kind_id: activation.stage_kind_id,
         run_id: options.run_id.clone().unwrap_or_else(|| new_run_id("run")),
+        compiled_plan_id: session.snapshot.compiled_plan_id.clone(),
+        compiled_plan_fingerprint: session.snapshot.compiled_plan_fingerprint.clone(),
         request_kind: if claim.work_item_kind == WorkItemKind::LearningRequest {
             ActiveRunRequestKind::LearningRequest
         } else {
             ActiveRunRequestKind::ActiveWorkItem
         },
+        work_item_family_id: Some(claim.family_id),
         work_item_kind: Some(claim.work_item_kind),
         work_item_id: Some(claim.work_item_id),
         closure_target_root_spec_id: None,
@@ -1312,11 +1352,15 @@ fn maybe_activate_completion_stage(
     let activation = completion_activation_for_graph(&session.compiled_plan)?;
     let active_run = ActiveRunState {
         plane: activation.plane,
+        lane_id: lane_id_for_plane(Some(&session.compiled_plan), activation.plane),
         stage: activation.stage,
         node_id: activation.node_id,
         stage_kind_id: activation.stage_kind_id,
         run_id: options.run_id.clone().unwrap_or_else(|| new_run_id("run")),
+        compiled_plan_id: session.snapshot.compiled_plan_id.clone(),
+        compiled_plan_fingerprint: session.snapshot.compiled_plan_fingerprint.clone(),
         request_kind: ActiveRunRequestKind::ClosureTarget,
+        work_item_family_id: None,
         work_item_kind: None,
         work_item_id: None,
         closure_target_root_spec_id: Some(target.root_spec_id),
@@ -1470,6 +1514,7 @@ fn create_closure_target_for_root_spec(
         closure_open: true,
         closure_blocked_by_lineage_work: false,
         blocking_work_ids: Vec::new(),
+        blocking_work_refs: Vec::new(),
         opened_at: now.clone(),
         closed_at: None,
         last_arbiter_run_id: None,
@@ -1737,6 +1782,7 @@ fn build_stage_run_request(
     let active_work_item_kind = active_run.work_item_kind;
     let active_work_item_id = active_run.work_item_id.clone();
     let run_id = active_run.run_id.clone();
+    let lane_id = active_run_lane_id(session, &active_run);
     let run_dir = session.paths.runs_dir.join(&run_id);
     create_dir_all(&run_dir)?;
     let request_id = options
@@ -1765,7 +1811,17 @@ fn build_stage_run_request(
         stage,
         request_kind: request_kind_for_active_run(&active_run),
         mode_id: session.snapshot.active_mode_id.clone(),
-        compiled_plan_id: session.snapshot.compiled_plan_id.clone(),
+        compiled_plan_id: if active_run.compiled_plan_id.is_empty() {
+            session.snapshot.compiled_plan_id.clone()
+        } else {
+            active_run.compiled_plan_id.clone()
+        },
+        launch_plan_id: Some(if active_run.compiled_plan_id.is_empty() {
+            session.snapshot.compiled_plan_id.clone()
+        } else {
+            active_run.compiled_plan_id.clone()
+        }),
+        lane_id: Some(lane_id),
         node_id: stage_plan.node_id.clone(),
         stage_kind_id: stage_plan.stage_kind_id.clone(),
         running_status_marker: stage_plan.running_status_marker.clone(),
@@ -1780,6 +1836,7 @@ fn build_stage_run_request(
         entrypoint_contract_id: stage_plan.entrypoint_contract_id.clone(),
         required_skill_paths,
         attached_skill_paths,
+        active_work_item_family_id: active_run.work_item_family_id.clone(),
         active_work_item_kind,
         active_work_item_id: active_work_item_id.clone(),
         active_work_item_path: active_work_item_path(
@@ -1817,8 +1874,15 @@ fn build_stage_run_request(
         timeout_seconds: stage_plan.timeout_seconds,
         execution_capability_grants: stage_plan.execution_capability_grants.clone(),
         capability_support_decisions: Vec::new(),
+        request_context_profile_id: stage_plan.request_context_profile_id.clone(),
+        context_bundle_path: None,
+        context_artifact_refs: Vec::new(),
+        context_render_plan_id: None,
+        rendered_prompt_context_path: None,
     };
     request.validate()?;
+    request =
+        attach_default_request_context(&session.paths.root, request, Some(&session.compiled_plan))?;
     Ok(request)
 }
 
@@ -1854,6 +1918,7 @@ fn build_closure_target_stage_run_request(
     let active_run = active_run_for_plane(&session.snapshot, stage_plan.plane)
         .ok_or_else(|| invalid_state("active closure run is missing for stage request"))?;
     let run_id = active_run.run_id.clone();
+    let lane_id = active_run_lane_id(session, &active_run);
     let run_dir = session.paths.runs_dir.join(&run_id);
     create_dir_all(&run_dir)?;
     let request_id = options
@@ -1881,7 +1946,17 @@ fn build_closure_target_stage_run_request(
         stage,
         request_kind: RequestKind::ClosureTarget,
         mode_id: session.snapshot.active_mode_id.clone(),
-        compiled_plan_id: session.snapshot.compiled_plan_id.clone(),
+        compiled_plan_id: if active_run.compiled_plan_id.is_empty() {
+            session.snapshot.compiled_plan_id.clone()
+        } else {
+            active_run.compiled_plan_id.clone()
+        },
+        launch_plan_id: Some(if active_run.compiled_plan_id.is_empty() {
+            session.snapshot.compiled_plan_id.clone()
+        } else {
+            active_run.compiled_plan_id.clone()
+        }),
+        lane_id: Some(lane_id),
         node_id: stage_plan.node_id.clone(),
         stage_kind_id: stage_plan.stage_kind_id.clone(),
         running_status_marker: stage_plan.running_status_marker.clone(),
@@ -1896,6 +1971,7 @@ fn build_closure_target_stage_run_request(
         entrypoint_contract_id: stage_plan.entrypoint_contract_id.clone(),
         required_skill_paths,
         attached_skill_paths,
+        active_work_item_family_id: None,
         active_work_item_kind: None,
         active_work_item_id: None,
         active_work_item_path: None,
@@ -1940,9 +2016,24 @@ fn build_closure_target_stage_run_request(
         timeout_seconds: stage_plan.timeout_seconds,
         execution_capability_grants: stage_plan.execution_capability_grants.clone(),
         capability_support_decisions: Vec::new(),
+        request_context_profile_id: stage_plan.request_context_profile_id.clone(),
+        context_bundle_path: None,
+        context_artifact_refs: Vec::new(),
+        context_render_plan_id: None,
+        rendered_prompt_context_path: None,
     };
     request.validate()?;
+    request =
+        attach_default_request_context(&session.paths.root, request, Some(&session.compiled_plan))?;
     Ok(request)
+}
+
+fn active_run_lane_id(session: &RuntimeStartupSession, active_run: &ActiveRunState) -> String {
+    if active_run.lane_id.trim().is_empty() {
+        lane_id_for_plane(Some(&session.compiled_plan), active_run.plane)
+    } else {
+        active_run.lane_id.clone()
+    }
 }
 
 pub(crate) fn guard_stage_work_item_ownership_for_plane(
@@ -2670,15 +2761,19 @@ fn set_recovery_stage_for_plane(
     let mut active_run =
         active_run_for_plane(snapshot, stage_result.plane).unwrap_or_else(|| ActiveRunState {
             plane: stage_result.plane,
+            lane_id: format!("{}.main", stage_result.plane.as_str()),
             stage: stage_result.stage,
             node_id: stage_result.node_id.clone(),
             stage_kind_id: stage_result.stage_kind_id.clone(),
             run_id: stage_result.run_id.clone(),
+            compiled_plan_id: snapshot.compiled_plan_id.clone(),
+            compiled_plan_fingerprint: snapshot.compiled_plan_fingerprint.clone(),
             request_kind: if stage_result.work_item_kind == WorkItemKind::LearningRequest {
                 ActiveRunRequestKind::LearningRequest
             } else {
                 ActiveRunRequestKind::ActiveWorkItem
             },
+            work_item_family_id: Some(stage_result.work_item_kind.as_str().to_owned()),
             work_item_kind: Some(stage_result.work_item_kind),
             work_item_id: Some(stage_result.work_item_id.clone()),
             closure_target_root_spec_id: None,
@@ -2789,6 +2884,46 @@ fn apply_router_decision(
             apply_blocked_decision(session, decision, stage_result, stage_result_path)
                 .map(|()| Vec::new())
         }
+    }
+}
+
+fn apply_router_decision_after_runtime_effect(
+    session: &mut RuntimeStartupSession,
+    decision: &RouterDecision,
+    stage_result: &StageResultEnvelope,
+    stage_result_path: &Path,
+    source_lifecycle_applied: bool,
+) -> RuntimeTickResult<Vec<PathBuf>> {
+    if !source_lifecycle_applied {
+        return apply_router_decision(session, decision, stage_result, stage_result_path);
+    }
+
+    clear_runtime_error_context_if_consumed(session, stage_result)?;
+
+    if is_closure_target_stage_result(stage_result) || is_recon_stage_result(stage_result) {
+        return Err(invalid_state(
+            "runtime effects cannot pre-apply closure or recon source lifecycle",
+        ));
+    }
+
+    match decision.action {
+        RouterAction::Idle => {
+            apply_runtime_effect_idle_decision(session, stage_result)?;
+            Ok(Vec::new())
+        }
+        RouterAction::Blocked => {
+            apply_runtime_effect_blocked_decision(
+                session,
+                decision,
+                stage_result,
+                stage_result_path,
+            )?;
+            Ok(Vec::new())
+        }
+        RouterAction::RunStage | RouterAction::Handoff => Err(invalid_state(format!(
+            "runtime effect lifecycle was already applied before router action {}",
+            decision.action.as_str()
+        ))),
     }
 }
 
@@ -3138,7 +3273,30 @@ fn apply_idle_decision(
     session: &mut RuntimeStartupSession,
     stage_result: &StageResultEnvelope,
 ) -> RuntimeTickResult<()> {
-    mark_active_work_item_complete(&session.paths, stage_result)?;
+    mark_active_work_item_complete(session, stage_result)?;
+    clear_active_plane(
+        &mut session.snapshot,
+        stage_result.plane,
+        None,
+        &stage_result.completed_at,
+    );
+    reset_snapshot_route_counters(&mut session.snapshot);
+    set_idle_status_after_terminal(session, stage_result.plane)?;
+    reset_forward_progress_counters(
+        &session.paths,
+        stage_result.work_item_kind,
+        &stage_result.work_item_id,
+    )?;
+    refresh_queue_depths(&session.paths, &mut session.snapshot)?;
+    session.snapshot.updated_at = stage_result.completed_at.clone();
+    save_snapshot(&session.paths, &session.snapshot)?;
+    Ok(())
+}
+
+fn apply_runtime_effect_idle_decision(
+    session: &mut RuntimeStartupSession,
+    stage_result: &StageResultEnvelope,
+) -> RuntimeTickResult<()> {
     clear_active_plane(
         &mut session.snapshot,
         stage_result.plane,
@@ -3173,7 +3331,7 @@ fn apply_handoff_decision(
             stage_result_path,
         )?);
     }
-    mark_active_work_item_blocked(&session.paths, stage_result)?;
+    mark_active_work_item_blocked(session, stage_result)?;
     persist_blocked_metadata_and_event(session, decision, stage_result, stage_result_path)?;
     clear_active_plane(
         &mut session.snapshot,
@@ -3199,7 +3357,34 @@ fn apply_blocked_decision(
     stage_result: &StageResultEnvelope,
     stage_result_path: &Path,
 ) -> RuntimeTickResult<()> {
-    mark_active_work_item_blocked(&session.paths, stage_result)?;
+    mark_active_work_item_blocked(session, stage_result)?;
+    persist_blocked_metadata_and_event(session, decision, stage_result, stage_result_path)?;
+    clear_active_plane(
+        &mut session.snapshot,
+        stage_result.plane,
+        decision.failure_class.clone(),
+        &stage_result.completed_at,
+    );
+    reset_snapshot_route_counters(&mut session.snapshot);
+    reset_forward_progress_counters(
+        &session.paths,
+        stage_result.work_item_kind,
+        &stage_result.work_item_id,
+    )?;
+    refresh_queue_depths(&session.paths, &mut session.snapshot)?;
+    session.snapshot.updated_at = stage_result.completed_at.clone();
+    save_snapshot(&session.paths, &session.snapshot)?;
+    Ok(())
+}
+
+fn apply_runtime_effect_blocked_decision(
+    session: &mut RuntimeStartupSession,
+    decision: &RouterDecision,
+    stage_result: &StageResultEnvelope,
+    stage_result_path: &Path,
+) -> RuntimeTickResult<()> {
+    set_status_for_plane(&session.paths, stage_result.plane, "### BLOCKED")?;
+    set_snapshot_status_for_plane(&mut session.snapshot, stage_result.plane, "### BLOCKED");
     persist_blocked_metadata_and_event(session, decision, stage_result, stage_result_path)?;
     clear_active_plane(
         &mut session.snapshot,
@@ -3401,7 +3586,28 @@ fn block_invalid_recon_handoff(
         counter_key: None,
         create_incident: false,
     };
-    apply_blocked_decision(session, &blocked_decision, stage_result, stage_result_path)?;
+    mark_active_work_item_blocked_by_runtime_failure(session, stage_result)?;
+    persist_blocked_metadata_and_event(
+        session,
+        &blocked_decision,
+        stage_result,
+        stage_result_path,
+    )?;
+    clear_active_plane(
+        &mut session.snapshot,
+        stage_result.plane,
+        blocked_decision.failure_class.clone(),
+        &stage_result.completed_at,
+    );
+    reset_snapshot_route_counters(&mut session.snapshot);
+    reset_forward_progress_counters(
+        &session.paths,
+        stage_result.work_item_kind,
+        &stage_result.work_item_id,
+    )?;
+    refresh_queue_depths(&session.paths, &mut session.snapshot)?;
+    session.snapshot.updated_at = stage_result.completed_at.clone();
+    save_snapshot(&session.paths, &session.snapshot)?;
     Ok(Vec::new())
 }
 
@@ -3897,35 +4103,148 @@ fn write_closure_target_event(
 }
 
 fn mark_active_work_item_complete(
-    paths: &WorkspacePaths,
+    session: &RuntimeStartupSession,
     stage_result: &StageResultEnvelope,
 ) -> RuntimeTickResult<PathBuf> {
-    let queue = QueueStore::from_paths(paths.clone());
-    Ok(match stage_result.work_item_kind {
-        WorkItemKind::Task => queue.mark_task_done(&stage_result.work_item_id)?,
-        WorkItemKind::Probe => queue.mark_probe_done(&stage_result.work_item_id)?,
-        WorkItemKind::Spec => queue.mark_spec_done(&stage_result.work_item_id)?,
-        WorkItemKind::Incident => queue.mark_incident_resolved(&stage_result.work_item_id)?,
-        WorkItemKind::LearningRequest => {
-            queue.mark_learning_request_done(&stage_result.work_item_id)?
-        }
-    })
+    apply_compiled_source_lifecycle_intent(session, stage_result, SourceLifecycleAction::Complete)
 }
 
 fn mark_active_work_item_blocked(
-    paths: &WorkspacePaths,
+    session: &RuntimeStartupSession,
     stage_result: &StageResultEnvelope,
 ) -> RuntimeTickResult<PathBuf> {
-    let queue = QueueStore::from_paths(paths.clone());
-    Ok(match stage_result.work_item_kind {
-        WorkItemKind::Task => queue.mark_task_blocked(&stage_result.work_item_id)?,
-        WorkItemKind::Probe => queue.mark_probe_blocked(&stage_result.work_item_id)?,
-        WorkItemKind::Spec => queue.mark_spec_blocked(&stage_result.work_item_id)?,
-        WorkItemKind::Incident => queue.mark_incident_blocked(&stage_result.work_item_id)?,
-        WorkItemKind::LearningRequest => {
-            queue.mark_learning_request_blocked(&stage_result.work_item_id)?
+    apply_compiled_source_lifecycle_intent(session, stage_result, SourceLifecycleAction::Block)
+}
+
+fn mark_active_work_item_blocked_by_runtime_failure(
+    session: &RuntimeStartupSession,
+    stage_result: &StageResultEnvelope,
+) -> RuntimeTickResult<PathBuf> {
+    let intent = SourceLifecycleIntent::for_builtin(
+        "block_work_item",
+        SourceLifecycleAction::Block,
+        stage_result.work_item_kind,
+        stage_result.work_item_id.clone(),
+    )
+    .with_reason("runtime-owned invalid handoff block");
+    QueueLifecycleInterpreter::new(
+        session.paths.clone(),
+        session
+            .compiled_plan
+            .workflow_primitives
+            .work_item_families
+            .clone(),
+    )
+    .apply(&intent)
+    .map_err(RuntimeTickError::from)
+}
+
+fn apply_compiled_source_lifecycle_intent(
+    session: &RuntimeStartupSession,
+    stage_result: &StageResultEnvelope,
+    expected_action: SourceLifecycleAction,
+) -> RuntimeTickResult<PathBuf> {
+    let intent = source_lifecycle_intent_for_stage_result(session, stage_result)?;
+    if intent.action != expected_action {
+        return Err(invalid_state(format!(
+            "compiled terminal action selected lifecycle action {}, expected {}",
+            intent.action.as_str(),
+            expected_action.as_str()
+        )));
+    }
+    QueueLifecycleInterpreter::new(
+        session.paths.clone(),
+        session
+            .compiled_plan
+            .workflow_primitives
+            .work_item_families
+            .clone(),
+    )
+    .apply(&intent)
+    .map_err(RuntimeTickError::from)
+}
+
+fn source_lifecycle_intent_for_stage_result(
+    session: &RuntimeStartupSession,
+    stage_result: &StageResultEnvelope,
+) -> RuntimeTickResult<SourceLifecycleIntent> {
+    let stage_plan = stage_plan_for_active_state(
+        &session.compiled_plan,
+        stage_result.plane,
+        stage_result.stage,
+        Some(&stage_result.node_id),
+    )?;
+    let outcome = stage_result.terminal_result.as_str();
+    let action_id = stage_plan
+        .terminal_action_mappings
+        .get(outcome)
+        .ok_or_else(|| {
+            invalid_state(format!(
+                "compiled node {} is missing terminal action mapping for {outcome}",
+                stage_plan.node_id
+            ))
+        })?;
+    let terminal_action = session
+        .compiled_plan
+        .workflow_primitives
+        .terminal_actions
+        .iter()
+        .find(|action| action.terminal_action_id == *action_id)
+        .ok_or_else(|| {
+            invalid_state(format!(
+                "compiled terminal action mapping references unknown action {action_id}"
+            ))
+        })?;
+    if terminal_action.non_mutating {
+        return Err(invalid_state(format!(
+            "terminal action {action_id} is non-mutating for active source {}",
+            stage_result.work_item_id
+        )));
+    }
+    let lifecycle_plan_id = terminal_action
+        .lifecycle_mutation_plan_id
+        .as_ref()
+        .ok_or_else(|| {
+            invalid_state(format!(
+                "terminal action {action_id} is missing lifecycle mutation plan"
+            ))
+        })?;
+    let lifecycle_plan = session
+        .compiled_plan
+        .workflow_primitives
+        .lifecycle_mutation_plans
+        .iter()
+        .find(|plan| plan.plan_id == *lifecycle_plan_id)
+        .ok_or_else(|| {
+            invalid_state(format!(
+                "terminal action {action_id} references unknown lifecycle mutation plan {lifecycle_plan_id}"
+            ))
+        })?;
+    let lifecycle_action = match lifecycle_plan.lifecycle_action_id.as_deref() {
+        Some("complete") => SourceLifecycleAction::Complete,
+        Some("block") => SourceLifecycleAction::Block,
+        Some("requeue") => SourceLifecycleAction::Requeue,
+        Some(action) => {
+            return Err(invalid_state(format!(
+                "unsupported lifecycle action id {action} in plan {lifecycle_plan_id}"
+            )));
         }
-    })
+        None => {
+            return Err(invalid_state(format!(
+                "lifecycle mutation plan {lifecycle_plan_id} is missing lifecycle_action_id"
+            )));
+        }
+    };
+    Ok(SourceLifecycleIntent::for_builtin(
+        lifecycle_plan_id.clone(),
+        lifecycle_action,
+        stage_result.work_item_kind,
+        stage_result.work_item_id.clone(),
+    )
+    .with_reason(format!(
+        "runtime terminal action {action_id} for {}",
+        stage_result.terminal_result.as_str()
+    )))
 }
 
 fn set_next_stage_for_plane(
@@ -3958,7 +4277,14 @@ fn clear_active_plane(
     current_failure_class: Option<String>,
     now: &Timestamp,
 ) {
-    snapshot.active_runs_by_plane.remove(&plane);
+    if let Some(active_run) = snapshot.active_runs_by_plane.remove(&plane) {
+        let lane_id = if active_run.lane_id.trim().is_empty() {
+            default_lane_id_for_plane(active_run.plane)
+        } else {
+            active_run.lane_id.clone()
+        };
+        snapshot_without_lane_active_run(snapshot, &lane_id, &active_run.run_id, now, None);
+    }
     project_foreground_active_run(snapshot);
     snapshot.current_failure_class = current_failure_class;
     snapshot.updated_at = now.clone();
@@ -4311,7 +4637,9 @@ fn work_item_lineage_for_stage_result(
                 source_spec_id: document.source_spec_id,
             })
         }
-        WorkItemKind::Probe | WorkItemKind::LearningRequest => Ok(WorkItemLineage::default()),
+        WorkItemKind::Probe | WorkItemKind::LearningRequest | WorkItemKind::BlueprintDraft => {
+            Ok(WorkItemLineage::default())
+        }
     }
 }
 
@@ -4688,6 +5016,10 @@ fn route_planning_stage_result(
             None,
         )),
         ("manager", "MANAGER_COMPLETE", _) => Ok(idle_decision("manager_complete")),
+        ("manager_blueprint", "MANAGER_BLUEPRINT_COMPLETE", _) => {
+            Ok(idle_decision("manager_blueprint_complete"))
+        }
+        ("evaluator_blueprint", "BLUEPRINT_APPROVED", _) => Ok(idle_decision("blueprint_approved")),
         ("arbiter", "ARBITER_COMPLETE", _) => Ok(idle_decision("arbiter_complete")),
         ("arbiter", "REMEDIATION_NEEDED", _) => Ok(RouterDecision {
             action: RouterAction::Handoff,
@@ -6201,6 +6533,15 @@ fn reload_config_from_mailbox(
             ..envelope.clone()
         };
         write_mailbox_envelope(&session.paths, &deferred)?;
+        session.snapshot.pending_compiled_plan_id =
+            Some(format!("{}.pending", session.snapshot.compiled_plan_id));
+        session.snapshot.pending_compiled_plan_path = Some(workspace_relative(
+            &session.paths,
+            &session.paths.compiled_plan_file,
+        ));
+        session.snapshot.pending_compiled_plan_fingerprint = Some(
+            compiled_plan_fingerprint_for_runtime(&session.compiled_plan),
+        );
         session.snapshot.last_reload_error = Some("deferred until active planes drain".to_owned());
         session.snapshot.updated_at = now.clone();
         save_snapshot(&session.paths, &session.snapshot)?;
@@ -6362,8 +6703,14 @@ fn project_reload_snapshot(
     session.snapshot.learning_loop_id = session.compiled_plan.learning_loop_id.clone();
     session.snapshot.loop_ids_by_plane = session.compiled_plan.loop_ids_by_plane.clone();
     session.snapshot.compiled_plan_id = session.compiled_plan.compiled_plan_id.clone();
+    session.snapshot.compiled_plan_fingerprint =
+        compiled_plan_fingerprint_for_runtime(&session.compiled_plan);
     session.snapshot.compiled_plan_path =
         workspace_relative(&session.paths, &session.paths.compiled_plan_file);
+    session.snapshot.pending_compiled_plan_id = None;
+    session.snapshot.pending_compiled_plan_path = None;
+    session.snapshot.pending_compiled_plan_fingerprint = None;
+    super::lanes::ensure_snapshot_lanes(&mut session.snapshot, &session.compiled_plan);
     refresh_queue_depths(&session.paths, &mut session.snapshot)?;
     session.snapshot.config_version = session.config.config_version.clone();
     session.snapshot.watcher_mode = session.watcher_session.mode;
@@ -6705,6 +7052,9 @@ fn requeue_active_item(
         WorkItemKind::Spec => queue.requeue_spec(work_item_id, reason),
         WorkItemKind::Incident => queue.requeue_incident(work_item_id, reason),
         WorkItemKind::LearningRequest => queue.requeue_learning_request(work_item_id, reason),
+        WorkItemKind::BlueprintDraft => Err(QueueStoreError::InvalidState {
+            message: "blueprint_draft requeue is not backed by QueueStore".to_owned(),
+        }),
     }
 }
 
@@ -6799,6 +7149,7 @@ fn work_item_activation_for_graph(
         WorkItemKind::Probe => (&plan.planning_graph, GraphLoopEntryKey::Probe),
         WorkItemKind::Spec => (&plan.planning_graph, GraphLoopEntryKey::Spec),
         WorkItemKind::Incident => (&plan.planning_graph, GraphLoopEntryKey::Incident),
+        WorkItemKind::BlueprintDraft => (&plan.planning_graph, GraphLoopEntryKey::BlueprintDraft),
         WorkItemKind::LearningRequest => (
             plan.learning_graph
                 .as_ref()
@@ -7054,11 +7405,39 @@ fn refresh_closure_target_readiness(
     paths: &WorkspacePaths,
     mut target: ClosureTargetState,
 ) -> RuntimeTickResult<ClosureTargetState> {
-    let blocking_work_ids = open_lineage_work_ids(paths, &target.root_spec_id)?;
-    target.closure_blocked_by_lineage_work = !blocking_work_ids.is_empty();
+    let mut blocking_work_ids = open_lineage_work_ids(paths, &target.root_spec_id)?;
+    let blueprint_refs = list_open_blueprint_lineage_work_refs(paths, &target.root_spec_id)
+        .map_err(RuntimeTickError::from)?;
+    for blocking_ref in &blueprint_refs {
+        if let Some(id) = safe_blueprint_blocking_id(blocking_ref) {
+            if !blocking_work_ids.contains(&id) {
+                blocking_work_ids.push(id);
+            }
+        }
+    }
+    target.closure_blocked_by_lineage_work =
+        !blocking_work_ids.is_empty() || !blueprint_refs.is_empty();
     target.blocking_work_ids = blocking_work_ids;
+    target.blocking_work_refs = blueprint_refs;
     save_closure_target_state(paths, &target)?;
     Ok(target)
+}
+
+fn safe_blueprint_blocking_id(
+    blocking_ref: &crate::contracts::ClosureBlockingWorkRef,
+) -> Option<String> {
+    if let Some(work_item_id) = blocking_ref.work_item_id.as_deref() {
+        if validate_safe_identifier(work_item_id, "blocking_work_id").is_ok() {
+            return Some(work_item_id.to_owned());
+        }
+    }
+    blocking_ref
+        .artifact_path
+        .as_deref()
+        .and_then(|path| Path::new(path).file_stem())
+        .and_then(|value| value.to_str())
+        .filter(|value| validate_safe_identifier(value, "blocking_work_id").is_ok())
+        .map(ToOwned::to_owned)
 }
 
 fn open_lineage_work_ids(
@@ -7205,6 +7584,7 @@ fn reset_runtime_to_idle(
     snapshot.active_node_id = None;
     snapshot.active_stage_kind_id = None;
     snapshot.active_run_id = None;
+    snapshot.active_work_item_family_id = None;
     snapshot.active_work_item_kind = None;
     snapshot.active_work_item_id = None;
     snapshot.active_runs_by_plane.clear();
@@ -7238,6 +7618,7 @@ fn snapshot_with_active_run(
     active_run: ActiveRunState,
     now: &Timestamp,
 ) {
+    snapshot_with_lane_active_run(snapshot, &active_run);
     snapshot
         .active_runs_by_plane
         .insert(active_run.plane, active_run);
@@ -7255,6 +7636,7 @@ fn project_foreground_active_run(snapshot: &mut RuntimeSnapshot) {
         snapshot.active_node_id = Some(active_run.node_id.clone());
         snapshot.active_stage_kind_id = Some(active_run.stage_kind_id.clone());
         snapshot.active_run_id = Some(active_run.run_id.clone());
+        snapshot.active_work_item_family_id = active_run.work_item_family_id.clone();
         snapshot.active_work_item_kind = active_run.work_item_kind;
         snapshot.active_work_item_id = active_run.work_item_id.clone();
         snapshot.active_since = Some(active_run.active_since.clone());
@@ -7264,6 +7646,7 @@ fn project_foreground_active_run(snapshot: &mut RuntimeSnapshot) {
         snapshot.active_node_id = None;
         snapshot.active_stage_kind_id = None;
         snapshot.active_run_id = None;
+        snapshot.active_work_item_family_id = None;
         snapshot.active_work_item_kind = None;
         snapshot.active_work_item_id = None;
         snapshot.active_since = None;
@@ -7292,6 +7675,7 @@ fn legacy_active_run_for_plane(snapshot: &RuntimeSnapshot, plane: Plane) -> Opti
     let active_work_item_id = snapshot.active_work_item_id.clone()?;
     Some(ActiveRunState {
         plane,
+        lane_id: format!("{}.main", plane.as_str()),
         stage: active_stage,
         node_id: snapshot
             .active_node_id
@@ -7302,11 +7686,14 @@ fn legacy_active_run_for_plane(snapshot: &RuntimeSnapshot, plane: Plane) -> Opti
             .clone()
             .unwrap_or_else(|| active_stage.as_str().to_owned()),
         run_id: active_run_id,
+        compiled_plan_id: snapshot.compiled_plan_id.clone(),
+        compiled_plan_fingerprint: snapshot.compiled_plan_fingerprint.clone(),
         request_kind: if active_work_item_kind == WorkItemKind::LearningRequest {
             ActiveRunRequestKind::LearningRequest
         } else {
             ActiveRunRequestKind::ActiveWorkItem
         },
+        work_item_family_id: Some(active_work_item_kind.as_str().to_owned()),
         work_item_kind: Some(active_work_item_kind),
         work_item_id: Some(active_work_item_id),
         closure_target_root_spec_id: None,
@@ -7372,6 +7759,10 @@ fn active_work_item_path(
         WorkItemKind::LearningRequest => paths
             .learning_requests_active_dir
             .join(format!("{work_item_id}.md")),
+        WorkItemKind::BlueprintDraft => paths
+            .runtime_root
+            .join("blueprints/drafts/active")
+            .join(format!("{work_item_id}.json")),
     })
 }
 
@@ -7511,6 +7902,24 @@ fn stage_started_data(request: &StageRunRequest) -> Map<String, Value> {
                 .unwrap_or(Value::Null),
         ),
         (
+            "launch_plan_id",
+            optional_string_json(request.launch_plan_id.as_ref()),
+        ),
+        ("lane_id", optional_string_json(request.lane_id.as_ref())),
+        (
+            "request_context_profile_id",
+            optional_string_json(request.request_context_profile_id.as_ref()),
+        ),
+        (
+            "context_bundle_path",
+            optional_string_json(request.context_bundle_path.as_ref()),
+        ),
+        ("visible_context_refs", json!(request.context_artifact_refs)),
+        (
+            "rendered_prompt_context_path",
+            optional_string_json(request.rendered_prompt_context_path.as_ref()),
+        ),
+        (
             "troubleshoot_report_path",
             request
                 .preferred_troubleshoot_report_path
@@ -7579,6 +7988,114 @@ fn stage_completed_data(
                 .unwrap_or(Value::Null),
         ),
         (
+            "failure_origin",
+            stage_result_metadata_or_null(stage_result, "failure_origin"),
+        ),
+        (
+            "runtime_effect_rule_id",
+            stage_result_metadata_or_null(stage_result, "runtime_effect_rule_id"),
+        ),
+        (
+            "runtime_effect_handler_id",
+            stage_result_metadata_or_null(stage_result, "runtime_effect_handler_id"),
+        ),
+        (
+            "runtime_effect_decision",
+            stage_result_metadata_or_null(stage_result, "runtime_effect_decision"),
+        ),
+        (
+            "runtime_effect_mutation_phase",
+            stage_result_metadata_or_null(stage_result, "runtime_effect_mutation_phase"),
+        ),
+        (
+            "runtime_effect_failure_class",
+            stage_result_metadata_or_null(stage_result, "runtime_effect_failure_class"),
+        ),
+        (
+            "runtime_effect_failure_policy_id",
+            stage_result_metadata_or_null(stage_result, "runtime_effect_failure_policy_id"),
+        ),
+        (
+            "runtime_effect_recovery_action",
+            stage_result_metadata_or_null(stage_result, "runtime_effect_recovery_action"),
+        ),
+        (
+            "runtime_effect_source_lifecycle_plan_id",
+            stage_result_metadata_or_null(stage_result, "runtime_effect_source_lifecycle_plan_id"),
+        ),
+        (
+            "runtime_effect_source_lifecycle_action",
+            stage_result_metadata_or_null(stage_result, "runtime_effect_source_lifecycle_action"),
+        ),
+        (
+            "runtime_effect_created_paths",
+            stage_result_metadata_or_null(stage_result, "runtime_effect_created_paths"),
+        ),
+        (
+            "runtime_effect_decision_path",
+            stage_result_metadata_or_null(stage_result, "runtime_effect_decision_path"),
+        ),
+        (
+            "runtime_effect_result_path",
+            stage_result_metadata_or_null(stage_result, "runtime_effect_result_path"),
+        ),
+        (
+            "launch_plan_id",
+            stage_result_metadata_or_request(
+                stage_result,
+                "launch_plan_id",
+                optional_string_json(request.launch_plan_id.as_ref()),
+            ),
+        ),
+        (
+            "lane_id",
+            stage_result_metadata_or_request(
+                stage_result,
+                "lane_id",
+                optional_string_json(request.lane_id.as_ref()),
+            ),
+        ),
+        (
+            "request_context_profile_id",
+            stage_result_metadata_or_request(
+                stage_result,
+                "request_context_profile_id",
+                optional_string_json(request.request_context_profile_id.as_ref()),
+            ),
+        ),
+        (
+            "context_bundle_path",
+            stage_result_metadata_or_request(
+                stage_result,
+                "context_bundle_path",
+                optional_string_json(request.context_bundle_path.as_ref()),
+            ),
+        ),
+        (
+            "visible_context_refs",
+            stage_result_metadata_or_request(
+                stage_result,
+                "visible_context_refs",
+                json!(request.context_artifact_refs),
+            ),
+        ),
+        (
+            "artifact_parse_status",
+            stage_result_metadata_or_null(stage_result, "artifact_parse_status"),
+        ),
+        (
+            "rendered_prompt_context_path",
+            stage_result_metadata_or_request(
+                stage_result,
+                "rendered_prompt_context_path",
+                optional_string_json(request.rendered_prompt_context_path.as_ref()),
+            ),
+        ),
+        (
+            "runtime_outcome",
+            Value::String(runtime_outcome_for_stage_result(stage_result).to_owned()),
+        ),
+        (
             "stage_result_path",
             Value::String(stage_result_path.display().to_string()),
         ),
@@ -7592,6 +8109,70 @@ fn stage_completed_data(
                 .unwrap_or(Value::Null),
         ),
     ])
+}
+
+fn optional_string_json(value: Option<&String>) -> Value {
+    value.cloned().map(Value::String).unwrap_or(Value::Null)
+}
+
+fn stage_result_metadata_or_null(stage_result: &StageResultEnvelope, key: &str) -> Value {
+    stage_result
+        .metadata
+        .get(key)
+        .cloned()
+        .unwrap_or(Value::Null)
+}
+
+fn stage_result_metadata_or_request(
+    stage_result: &StageResultEnvelope,
+    key: &str,
+    fallback: Value,
+) -> Value {
+    match stage_result.metadata.get(key) {
+        Some(Value::Null) | None => fallback,
+        Some(value) => value.clone(),
+    }
+}
+
+fn runtime_outcome_for_stage_result(stage_result: &StageResultEnvelope) -> &'static str {
+    if let Some(decision) = stage_result
+        .metadata
+        .get("runtime_effect_decision")
+        .and_then(Value::as_str)
+    {
+        return match decision {
+            "request_complete_source" => "complete",
+            "request_block_source" => {
+                if stage_result
+                    .metadata
+                    .get("runtime_effect_recovery_action")
+                    .and_then(Value::as_str)
+                    == Some("route_to_node")
+                {
+                    "handoff"
+                } else {
+                    "blocked"
+                }
+            }
+            "retry_recovery" => "handoff",
+            _ => {
+                if stage_result.success {
+                    "complete"
+                } else {
+                    "incomplete"
+                }
+            }
+        };
+    }
+    if stage_result.success {
+        "complete"
+    } else if stage_result.result_class == ResultClass::Blocked {
+        "blocked"
+    } else if stage_result.result_class == ResultClass::RecoverableFailure {
+        "handoff"
+    } else {
+        "incomplete"
+    }
 }
 
 fn router_decision_data(
@@ -7636,6 +8217,42 @@ fn router_decision_data(
                 .or_else(|| failure_class_from_stage_result(stage_result))
                 .map(Value::String)
                 .unwrap_or(Value::Null),
+        ),
+        (
+            "runtime_effect_handler_id",
+            stage_result_metadata_or_null(stage_result, "runtime_effect_handler_id"),
+        ),
+        (
+            "runtime_effect_decision",
+            stage_result_metadata_or_null(stage_result, "runtime_effect_decision"),
+        ),
+        (
+            "runtime_effect_mutation_phase",
+            stage_result_metadata_or_null(stage_result, "runtime_effect_mutation_phase"),
+        ),
+        (
+            "runtime_effect_failure_class",
+            stage_result_metadata_or_null(stage_result, "runtime_effect_failure_class"),
+        ),
+        (
+            "runtime_effect_failure_policy_id",
+            stage_result_metadata_or_null(stage_result, "runtime_effect_failure_policy_id"),
+        ),
+        (
+            "runtime_effect_recovery_action",
+            stage_result_metadata_or_null(stage_result, "runtime_effect_recovery_action"),
+        ),
+        (
+            "runtime_effect_source_lifecycle_plan_id",
+            stage_result_metadata_or_null(stage_result, "runtime_effect_source_lifecycle_plan_id"),
+        ),
+        (
+            "runtime_effect_source_lifecycle_action",
+            stage_result_metadata_or_null(stage_result, "runtime_effect_source_lifecycle_action"),
+        ),
+        (
+            "runtime_effect_created_paths",
+            stage_result_metadata_or_null(stage_result, "runtime_effect_created_paths"),
         ),
         (
             "next_stage",

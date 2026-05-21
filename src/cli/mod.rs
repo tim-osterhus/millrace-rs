@@ -8,14 +8,12 @@ use crate::{
         MaterializedGraphNodePlan,
     },
     contracts::{
-        MailboxSupersedeCascade, Plane, ResultClass, RuntimeMode, WorkItemKind,
-        validate_safe_identifier,
+        MailboxSupersedeCascade, Plane, RuntimeMode, WorkItemKind, validate_safe_identifier,
     },
     runtime::{
         BasicTerminalMonitor, RetryBlockedTaskRequest, RuntimeDaemonLoopExitReason,
         RuntimeDaemonLoopOptions, RuntimeMonitorEvent, RuntimeMonitorFanout, RuntimeMonitorSink,
-        RuntimeStartupOptions, RuntimeTickDispatchOutcome, RuntimeTickOptions,
-        RuntimeTickOutcomeKind, build_runtime_runner_dispatcher, load_runtime_startup_config,
+        RuntimeStartupOptions, build_runtime_runner_dispatcher, load_runtime_startup_config,
         retry_blocked_task,
     },
     workspace::{
@@ -296,11 +294,10 @@ fn run_init(args: Vec<String>) -> CliOutput {
 
 fn run_runtime_group(mut args: Vec<String>) -> CliOutput {
     if args.is_empty() {
-        return CliOutput::parse_error("missing run command `once` or `daemon`");
+        return CliOutput::parse_error("missing run command `daemon`");
     }
     let command = args.remove(0);
     let specs = match command.as_str() {
-        "once" => vec![workspace_spec(), mode_spec(), config_spec()],
         "daemon" => vec![
             workspace_spec(),
             mode_spec(),
@@ -333,7 +330,7 @@ fn run_runtime_group(mut args: Vec<String>) -> CliOutput {
         }
         return run_daemon(parsed, paths);
     }
-    run_once(parsed, paths)
+    unreachable!("run command validated above")
 }
 
 fn run_daemon(parsed: ParsedArgs, paths: WorkspacePaths) -> CliOutput {
@@ -402,51 +399,6 @@ fn run_daemon(parsed: ParsedArgs, paths: WorkspacePaths) -> CliOutput {
     match outcome {
         Ok(outcome) => render_run_daemon_outcome(mode_override.as_deref(), outcome),
         Err(error) => run_daemon_loop_failure(mode_override.as_deref(), error.to_string()),
-    }
-}
-
-fn run_once(parsed: ParsedArgs, paths: WorkspacePaths) -> CliOutput {
-    let mode_override = parsed.value("--mode").map(ToOwned::to_owned);
-    let startup_options = RuntimeStartupOptions {
-        requested_mode_id: mode_override.clone(),
-        config_path: parsed.value("--config").map(PathBuf::from),
-        runtime_mode: RuntimeMode::Once,
-        ..RuntimeStartupOptions::default()
-    };
-
-    let mut session = match crate::runtime::startup_runtime_once_for_paths(&paths, startup_options)
-    {
-        Ok(session) => session,
-        Err(error) => return run_once_startup_failure(mode_override.as_deref(), error),
-    };
-
-    let runner = match build_runtime_runner_dispatcher(&session) {
-        Ok(runner) => runner,
-        Err(error) => {
-            let release_result = session.close().map_err(|error| error.to_string());
-            return run_once_internal_failure(
-                mode_override.as_deref(),
-                &session,
-                error.to_string(),
-                release_result,
-            );
-        }
-    };
-
-    match crate::runtime::run_serial_runtime_tick_with_runner(
-        &mut session,
-        RuntimeTickOptions::default(),
-        &runner,
-    ) {
-        Ok(outcome) => {
-            let release_result = session.finish().map_err(|error| error.to_string());
-            render_run_once_outcome(mode_override.as_deref(), outcome, release_result)
-        }
-        Err(error) => {
-            let message = error.to_string();
-            let release_result = session.close().map_err(|error| error.to_string());
-            run_once_tick_failure(mode_override.as_deref(), &session, message, release_result)
-        }
     }
 }
 
@@ -566,6 +518,20 @@ fn daemon_startup_monitor_event(
         "queue_depths_by_plane".to_owned(),
         number_plane_map_value(&session.snapshot.queue_depths_by_plane),
     );
+    if let Ok(value) = serde_json::to_value(&session.snapshot.lanes_by_id) {
+        payload.insert("lane_state".to_owned(), value);
+    }
+    payload.insert(
+        "pending_plan".to_owned(),
+        match &session.snapshot.pending_compiled_plan_id {
+            Some(compiled_plan_id) => serde_json::json!({
+                "compiled_plan_id": compiled_plan_id,
+                "compiled_plan_path": session.snapshot.pending_compiled_plan_path.clone(),
+                "compiled_plan_fingerprint": session.snapshot.pending_compiled_plan_fingerprint.clone(),
+            }),
+            None => Value::Null,
+        },
+    );
 
     RuntimeMonitorEvent::new(
         "runtime_started",
@@ -592,25 +558,6 @@ fn number_plane_map_value(map: &std::collections::HashMap<Plane, u64>) -> Value 
         }
     }
     Value::Object(object)
-}
-
-fn run_once_startup_failure(
-    mode_override: Option<&str>,
-    error: crate::runtime::RuntimeStartupError,
-) -> CliOutput {
-    CliOutput::with_exit_code(
-        vec![
-            format!("error: millrace run once startup failed: {error}"),
-            "run_mode: once".to_owned(),
-            format!("mode_override: {}", option_text(mode_override)),
-            "startup_failed: true".to_owned(),
-            "execution_started: false".to_owned(),
-            "stage_dispatched: false".to_owned(),
-            "runtime_ticks: 0".to_owned(),
-            "runtime_session_started: false".to_owned(),
-        ],
-        1,
-    )
 }
 
 fn run_daemon_startup_failure(
@@ -663,157 +610,6 @@ fn run_daemon_loop_failure(mode_override: Option<&str>, error: String) -> CliOut
     )
 }
 
-fn run_once_internal_failure(
-    mode_override: Option<&str>,
-    session: &crate::runtime::RuntimeStartupSession,
-    error: String,
-    release_result: Result<bool, String>,
-) -> CliOutput {
-    let mut lines = run_once_failure_context_lines(mode_override, session);
-    lines[0] = format!("error: millrace run once failed before tick dispatch: {error}");
-    append_release_lines(&mut lines, release_result.as_ref());
-    CliOutput::with_exit_code(lines, 1)
-}
-
-fn run_once_tick_failure(
-    mode_override: Option<&str>,
-    session: &crate::runtime::RuntimeStartupSession,
-    error: String,
-    release_result: Result<bool, String>,
-) -> CliOutput {
-    let mut lines = run_once_failure_context_lines(mode_override, session);
-    lines[0] = format!("error: millrace run once tick failed: {error}");
-    append_release_lines(&mut lines, release_result.as_ref());
-    CliOutput::with_exit_code(lines, 1)
-}
-
-fn run_once_failure_context_lines(
-    mode_override: Option<&str>,
-    session: &crate::runtime::RuntimeStartupSession,
-) -> Vec<String> {
-    vec![
-        String::new(),
-        "run_mode: once".to_owned(),
-        format!("active_mode_id: {}", session.snapshot.active_mode_id),
-        format!("mode_override: {}", option_text(mode_override)),
-        format!("compiled_plan_id: {}", session.snapshot.compiled_plan_id),
-        "execution_started: false".to_owned(),
-        "stage_dispatched: false".to_owned(),
-        "runtime_ticks: 0".to_owned(),
-    ]
-}
-
-fn render_run_once_outcome(
-    mode_override: Option<&str>,
-    outcome: RuntimeTickDispatchOutcome,
-    release_result: Result<bool, String>,
-) -> CliOutput {
-    let mut lines = vec![
-        "run_mode: once".to_owned(),
-        format!("active_mode_id: {}", outcome.snapshot.active_mode_id),
-        format!("mode_override: {}", option_text(mode_override)),
-        format!("compiled_plan_id: {}", outcome.snapshot.compiled_plan_id),
-        format!("tick_outcome: {}", outcome.kind.as_str()),
-        format!("tick_reason: {}", run_once_tick_reason(&outcome)),
-        "runtime_ticks: 1".to_owned(),
-        format!(
-            "execution_started: {}",
-            bool_text(outcome.stage_request.is_some())
-        ),
-        format!(
-            "stage_dispatched: {}",
-            bool_text(outcome.runner_raw_result.is_some())
-        ),
-    ];
-
-    if let Some(request) = &outcome.stage_request {
-        lines.push(format!("run_id: {}", request.run_id));
-        lines.push(format!("request_id: {}", request.request_id));
-        lines.push(format!("plane: {}", request.plane.as_str()));
-        lines.push(format!("stage: {}", request.stage.as_str()));
-        lines.push(format!("node_id: {}", request.node_id));
-        lines.push(format!("stage_kind_id: {}", request.stage_kind_id));
-        lines.push(format!("request_kind: {}", request.request_kind.as_str()));
-        lines.push(format!(
-            "work_item_kind: {}",
-            request
-                .active_work_item_kind
-                .map(|kind| kind.as_str())
-                .unwrap_or("none")
-        ));
-        lines.push(format!(
-            "work_item_id: {}",
-            option_text(request.active_work_item_id.as_deref())
-        ));
-    }
-
-    if let Some(raw_result) = &outcome.runner_raw_result {
-        lines.push("runner_adapter: stage_runner_dispatcher".to_owned());
-        lines.push(format!("runner_name: {}", raw_result.runner_name));
-        lines.push(format!(
-            "runner_exit_kind: {}",
-            raw_result.exit_kind.as_str()
-        ));
-    }
-    if let Some(stage_result) = &outcome.stage_result {
-        lines.push(format!(
-            "terminal_result: {}",
-            stage_result.terminal_result.as_str()
-        ));
-        lines.push(format!(
-            "result_class: {}",
-            stage_result.result_class.as_str()
-        ));
-    }
-    if let Some(decision) = &outcome.router_decision {
-        lines.push(format!("router_action: {}", decision.action.as_str()));
-        lines.push(format!("router_reason: {}", decision.reason));
-        lines.push(format!(
-            "next_stage: {}",
-            decision
-                .next_stage
-                .map(|stage| stage.as_str())
-                .unwrap_or("none")
-        ));
-    }
-
-    append_path_line(
-        &mut lines,
-        "stage_request_path",
-        outcome.stage_request_path.as_ref(),
-    );
-    append_path_line(
-        &mut lines,
-        "runner_raw_result_path",
-        outcome.runner_raw_result_path.as_ref(),
-    );
-    append_path_line(
-        &mut lines,
-        "stage_result_path",
-        outcome.stage_result_path.as_ref(),
-    );
-    append_path_line(
-        &mut lines,
-        "router_decision_path",
-        outcome.router_decision_path.as_ref(),
-    );
-    append_path_line(
-        &mut lines,
-        "runtime_error_context_path",
-        outcome.runtime_error_context_path.as_ref(),
-    );
-    append_path_line(
-        &mut lines,
-        "event_log_path",
-        outcome.event_log_path.as_ref(),
-    );
-    let release_result_for_output = release_result_for_outcome(&outcome, &release_result);
-    append_release_lines(&mut lines, release_result_for_output.as_ref());
-
-    let exit_code = run_once_exit_code(&outcome, release_result.as_ref());
-    CliOutput::with_exit_code(lines, exit_code)
-}
-
 fn render_run_daemon_outcome(
     mode_override: Option<&str>,
     outcome: crate::runtime::RuntimeDaemonLoopOutcome,
@@ -861,51 +657,6 @@ fn render_run_daemon_outcome(
         0
     };
     CliOutput::with_exit_code(lines, exit_code)
-}
-
-fn run_once_tick_reason(outcome: &RuntimeTickDispatchOutcome) -> &str {
-    outcome
-        .router_decision
-        .as_ref()
-        .map(|decision| decision.reason.as_str())
-        .unwrap_or(&outcome.reason)
-}
-
-fn run_once_exit_code(
-    outcome: &RuntimeTickDispatchOutcome,
-    release_result: Result<&bool, &String>,
-) -> u8 {
-    if release_result.is_err() {
-        return 1;
-    }
-    if outcome.kind == RuntimeTickOutcomeKind::Blocked {
-        return 1;
-    }
-    if let Some(stage_result) = &outcome.stage_result {
-        if matches!(
-            stage_result.result_class,
-            ResultClass::RecoverableFailure | ResultClass::Blocked
-        ) {
-            return 1;
-        }
-    }
-    0
-}
-
-fn append_path_line(lines: &mut Vec<String>, label: &str, path: Option<&PathBuf>) {
-    if let Some(path) = path {
-        lines.push(format!("{label}: {}", path.display()));
-    }
-}
-
-fn release_result_for_outcome(
-    outcome: &RuntimeTickDispatchOutcome,
-    release_result: &Result<bool, String>,
-) -> Result<bool, String> {
-    match release_result {
-        Ok(released) => Ok(*released || outcome.kind == RuntimeTickOutcomeKind::Stopped),
-        Err(error) => Err(error.clone()),
-    }
 }
 
 fn append_release_lines(lines: &mut Vec<String>, release_result: Result<&bool, &String>) {
@@ -1637,7 +1388,9 @@ fn parse_optional_work_item_kind(kind: Option<&str>) -> Result<Option<WorkItemKi
         WorkItemKind::Task | WorkItemKind::Probe | WorkItemKind::Spec | WorkItemKind::Incident => {
             Ok(Some(kind))
         }
-        WorkItemKind::LearningRequest => Err("kind must be one of: task, probe, spec, incident"),
+        WorkItemKind::LearningRequest | WorkItemKind::BlueprintDraft => {
+            Err("kind must be one of: task, probe, spec, incident")
+        }
     }
 }
 
@@ -2440,6 +2193,7 @@ fn render_compile_show_lines(paths: &WorkspacePaths, outcome: &CompileOutcome) -
         persisted_fingerprint.assets_fingerprint
     ));
     lines.extend(render_execution_capability_summary_lines(plan));
+    lines.extend(render_workflow_primitive_lines(plan));
 
     for graph in ordered_graphs(plan) {
         for entry in &graph.compiled_entries {
@@ -2599,14 +2353,77 @@ fn render_concurrency_policy_lines(plan: &CompiledRunPlan) -> Vec<String> {
     lines
 }
 
+fn render_workflow_primitive_lines(plan: &CompiledRunPlan) -> Vec<String> {
+    let primitives = &plan.workflow_primitives;
+    let mut lines = vec![
+        format!(
+            "workflow_primitives.artifact_contracts: {}",
+            primitives.artifact_contracts.len()
+        ),
+        format!(
+            "workflow_primitives.work_item_families: {}",
+            primitives.work_item_families.len()
+        ),
+        format!(
+            "workflow_primitives.request_context_profiles: {}",
+            primitives.request_context_profiles.len()
+        ),
+        format!(
+            "workflow_primitives.runtime_effect_rules: {}",
+            primitives.runtime_effect_rules.len()
+        ),
+        format!(
+            "workflow_primitives.terminal_actions: {}",
+            primitives.terminal_actions.len()
+        ),
+    ];
+    for (collection, fingerprint) in &plan.workflow_primitive_fingerprints {
+        lines.push(format!(
+            "workflow_primitive_fingerprint.{collection}: {fingerprint}"
+        ));
+    }
+    if let Some(epoch) = &plan.workspace_schema_epoch {
+        lines.push(format!("workspace_schema_epoch: {}", epoch.epoch_id));
+        lines.push(format!(
+            "workspace_schema_epoch.minimum_supported: {}",
+            epoch.minimum_supported_epoch_id
+        ));
+    } else {
+        lines.push("workspace_schema_epoch: none".to_owned());
+    }
+    if let Some(lane_policy) = &plan.lane_policy {
+        lines.push(format!("lane_policy: {}", lane_policy.policy_id));
+        for lane in &lane_policy.lanes {
+            lines.push(format!(
+                "lane: {} plane={} families={} conflict_policy={}",
+                lane.lane_id,
+                lane.plane.as_str(),
+                join_or_none(&lane.allowed_family_ids),
+                option_text(lane.conflict_policy_id.as_deref())
+            ));
+        }
+    } else {
+        lines.push("lane_policy: none".to_owned());
+    }
+    match &plan.pending_compiled_plan {
+        Some(pending) => lines.push(format!(
+            "pending_compiled_plan: {} mode={} reason={}",
+            pending.compiled_plan_id, pending.mode_id, pending.reason
+        )),
+        None => lines.push("pending_compiled_plan: none".to_owned()),
+    }
+    lines
+}
+
 fn render_stage_lines(stage_plan: &MaterializedGraphNodePlan) -> Vec<String> {
-    vec![
+    let mut lines = vec![
         format!(
             "stage: {}.{}",
             stage_plan.plane.as_str(),
             stage_plan.node_id
         ),
         format!("stage_kind_id: {}", stage_plan.stage_kind_id),
+        format!("lane_id: {}", option_text(stage_plan.lane_id.as_deref())),
         format!(
             "running_status_marker: {}",
             stage_plan.running_status_marker
@@ -2641,7 +2458,31 @@ fn render_stage_lines(stage_plan: &MaterializedGraphNodePlan) -> Vec<String> {
             option_text(stage_plan.model_reasoning_effort.as_deref())
         ),
         format!("timeout_seconds: {}", stage_plan.timeout_seconds),
-    ]
+        format!(
+            "request_context_profile_id: {}",
+            option_text(stage_plan.request_context_profile_id.as_deref())
+        ),
+    ];
+    for (outcome, action_id) in &stage_plan.terminal_action_mappings {
+        lines.push(format!(
+            "terminal_action_mapping: {} {outcome} -> {action_id}",
+            stage_plan.node_id
+        ));
+    }
+    if stage_plan.runtime_effect_rule_selections.is_empty() {
+        lines.push(format!(
+            "runtime_effect_rule_selections: {} none",
+            stage_plan.node_id
+        ));
+    } else {
+        for rule_id in &stage_plan.runtime_effect_rule_selections {
+            lines.push(format!(
+                "runtime_effect_rule_selection: {} {rule_id}",
+                stage_plan.node_id
+            ));
+        }
+    }
+    lines
 }
 
 fn render_execution_capability_summary_lines(plan: &CompiledRunPlan) -> Vec<String> {

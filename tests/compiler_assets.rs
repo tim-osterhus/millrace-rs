@@ -66,6 +66,25 @@ fn initialized_workspace_assets_resolve_deterministically_from_authoritative_roo
             "registry/stage_kinds/planning/mechanic.json",
             "registry/stage_kinds/planning/auditor.json",
             "registry/stage_kinds/planning/arbiter.json",
+            "registry/artifact_contracts/default_artifact_contracts.json",
+            "registry/document_adapters/builtin_markdown_v1.json",
+            "registry/document_adapters/blueprint_draft_markdown_v1.json",
+            "registry/lifecycle_mutation_plans/default_lifecycle_mutations.json",
+            "registry/queue_claim_policies/default_queue_claim_policies.json",
+            "registry/request_context_profiles/default_request_context_profiles.json",
+            "registry/runtime_effect_handlers/default_effect_handlers.json",
+            "registry/runtime_effect_rules/planner_effect_rules.json",
+            "registry/runtime_effect_rules/blueprint_effect_rules.json",
+            "registry/runtime_failure_policies/default_runtime_failure_policies.json",
+            "registry/terminal_actions/default_terminal_actions.json",
+            "registry/recovery_policies/default_recovery_policies.json",
+            "registry/workspace_schema_epochs/current.json",
+            "registry/work_item_families/blueprint_draft.json",
+            "registry/work_item_families/incident.json",
+            "registry/work_item_families/learning_request.json",
+            "registry/work_item_families/probe.json",
+            "registry/work_item_families/spec.json",
+            "registry/work_item_families/task.json",
             "entrypoints/execution/builder.md",
             "entrypoints/execution/checker.md",
             "entrypoints/execution/fixer.md",
@@ -216,6 +235,57 @@ fn opt_in_integrated_execution_assets_resolve_without_changing_default_mode() {
             "learning integrated resolution missed {expected_path}"
         );
     }
+}
+
+#[test]
+fn blueprint_modes_resolve_blueprint_graph_stage_kinds_entrypoints_and_skills() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+
+    let blueprint = resolve_compile_assets(&paths, Some("blueprint_codex")).unwrap();
+    assert_eq!(blueprint.mode_id, "blueprint_codex");
+    assert!(
+        blueprint
+            .graph_loops
+            .iter()
+            .any(|graph| graph.graph_loop.loop_id == "planning.blueprint")
+    );
+    let resolved_paths: Vec<_> = blueprint
+        .resolved_assets
+        .iter()
+        .map(|asset| asset.compile_time_path.as_str())
+        .collect();
+    for expected_path in [
+        "modes/blueprint_codex.json",
+        "graphs/planning/blueprint.json",
+        "registry/stage_kinds/planning/manager_blueprint.json",
+        "registry/stage_kinds/planning/contractor_blueprint.json",
+        "registry/stage_kinds/planning/evaluator_blueprint.json",
+        "registry/stage_kinds/planning/mechanic_blueprint.json",
+        "entrypoints/planning/manager_blueprint.md",
+        "entrypoints/planning/contractor_blueprint.md",
+        "entrypoints/planning/evaluator_blueprint.md",
+        "entrypoints/planning/mechanic_blueprint.md",
+        "skills/stage/planning/manager-blueprint-core/SKILL.md",
+        "skills/stage/planning/contractor-blueprint-core/SKILL.md",
+        "skills/stage/planning/evaluator-blueprint-core/SKILL.md",
+        "skills/stage/planning/mechanic-blueprint-core/SKILL.md",
+    ] {
+        assert!(
+            resolved_paths.contains(&expected_path),
+            "blueprint resolution missed {expected_path}"
+        );
+    }
+
+    let learning = resolve_compile_assets(&paths, Some("blueprint_learning_codex")).unwrap();
+    assert_eq!(learning.mode_id, "blueprint_learning_codex");
+    assert!(
+        learning
+            .graph_loops
+            .iter()
+            .any(|graph| graph.graph_loop.loop_id == "learning.standard")
+    );
+    assert_eq!(learning.mode.learning_trigger_rules.len(), 4);
 }
 
 #[test]

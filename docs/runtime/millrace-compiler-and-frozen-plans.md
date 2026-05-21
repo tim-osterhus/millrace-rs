@@ -72,3 +72,23 @@ required grants such as the default `workspace.read` grant. `millrace compile
 show` and compiled-stage-graph JSON exports expose this evidence for inspection
 only; serial and daemon runtime dispatch now consume the sealed grants through
 the pre-dispatch capability-gate surface.
+
+For Python `v0.20.0` workflow authority parity, frozen plans also include
+compiler-validated workflow primitive selections and fingerprints. The
+compiler loads packaged registry assets for work-item families, document
+adapters, artifact contracts, queue claim policies, terminal actions,
+lifecycle mutation plans, runtime effect handlers/rules, request-context
+profiles, runtime failure policies, recovery policies, and workspace schema
+epochs. Validation rejects unknown runtime-effect handlers, duplicate
+node/outcome rule bindings, missing lane conflict policy, invalid
+family/adapter references, invalid terminal action mappings, schema epoch
+drift, and Blueprint graph/mode reference drift.
+
+`millrace compile show` and `millrace compile graph` expose the selected lane
+policy, request-context profile ids, terminal action mappings,
+runtime-effect rule selections, completion behavior, Blueprint references,
+workspace schema epoch authority, primitive fingerprints, and pending-plan
+metadata. Runtime consumers use that compiled authority for queue claiming,
+request context, lifecycle moves, runtime effects, failure policy, lane
+dispatch, and completion behavior instead of reparsing prompt text or registry
+files during dispatch.

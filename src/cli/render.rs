@@ -78,9 +78,34 @@ pub fn compiled_graph_lines(graphs: &[CompiledStageGraphExport]) -> Vec<String> 
                 .join(", ")
         ),
     ];
+    if let Some(epoch) = &graphs[0].workspace_schema_epoch {
+        lines.push(format!("workspace_schema_epoch: {}", epoch.epoch_id));
+    }
+    if let Some(lane_policy) = &graphs[0].lane_policy {
+        lines.push(format!("lane_policy: {}", lane_policy.policy_id));
+    }
+    for (collection, fingerprint) in &graphs[0].workflow_primitive_fingerprints {
+        lines.push(format!(
+            "workflow_primitive_fingerprint.{collection}: {fingerprint}"
+        ));
+    }
     for graph in graphs {
         lines.push(String::new());
         lines.push(format!("{}:", graph.plane.as_str()));
+        for node in &graph.nodes {
+            lines.push(format!(
+                "  node {} lane={} request_context_profile_id={}",
+                node.node_id,
+                option_text(node.lane_id.as_deref()),
+                option_text(node.request_context_profile_id.as_deref())
+            ));
+            for rule_id in &node.runtime_effect_rule_selections {
+                lines.push(format!(
+                    "  runtime_effect_rule_selection {} {}",
+                    node.node_id, rule_id
+                ));
+            }
+        }
         for edge in &graph.edges {
             let target = edge.target_node_id.clone().unwrap_or_else(|| {
                 format!(

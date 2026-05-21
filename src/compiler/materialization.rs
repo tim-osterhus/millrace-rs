@@ -1,7 +1,7 @@
 //! Deterministic materialization of resolved compiler assets into frozen plans.
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt,
 };
 
@@ -20,6 +20,7 @@ use super::{
         GraphLoopResumePolicyDefinition, GraphLoopThresholdPolicyDefinition,
         MaterializedGraphNodePlan, ModeDefinition, RegisteredStageKindDefinition,
     },
+    workflow_primitives::materialize_workflow_primitive_graph_authority,
 };
 use crate::{
     contracts::{
@@ -201,12 +202,18 @@ pub fn materialize_compiled_run_plan(
 
     let mut graphs_by_plane = HashMap::new();
     for graph_asset in &resolved.graph_loops {
-        let graph_plan = materialize_graph_plane_plan(
+        let mut graph_plan = materialize_graph_plane_plan(
             &graph_asset.graph_loop,
             &resolved.mode,
             &resolved.config,
             &stage_kinds,
         )?;
+        materialize_workflow_primitive_graph_authority(
+            &mut graph_plan,
+            &resolved.workflow_primitive_authority.workflow_primitives,
+            &resolved.workflow_primitive_authority.lane_policy,
+        )
+        .map_err(|error| contract_error("workflow_primitive_graph_authority", error))?;
         graphs_by_plane.insert(graph_plan.plane, graph_plan);
     }
 
@@ -264,6 +271,21 @@ pub fn materialize_compiled_run_plan(
         execution_capability_summaries_by_plane,
         concurrency_policy: resolved.mode.concurrency_policy.clone(),
         learning_trigger_rules: resolved.mode.learning_trigger_rules.clone(),
+        workflow_primitives: resolved
+            .workflow_primitive_authority
+            .workflow_primitives
+            .clone(),
+        workflow_primitive_fingerprints: resolved
+            .workflow_primitive_authority
+            .workflow_primitive_fingerprints
+            .clone(),
+        lane_policy: Some(resolved.workflow_primitive_authority.lane_policy.clone()),
+        workspace_schema_epoch: resolved
+            .workflow_primitive_authority
+            .workflow_primitives
+            .workspace_schema_epoch
+            .clone(),
+        pending_compiled_plan: None,
         compiled_at,
         resolved_assets: resolved.resolved_assets.clone(),
         source_refs,
@@ -446,6 +468,7 @@ pub fn materialize_graph_node_plan(
         node_id: node.node_id.clone(),
         stage_kind_id: node.stage_kind_id.clone(),
         plane,
+        lane_id: None,
         entrypoint_path,
         entrypoint_contract_id: Some(format!("{}.contract.v1", node.node_id)),
         running_status_marker: stage_kind.running_status_marker.clone(),
@@ -461,6 +484,9 @@ pub fn materialize_graph_node_plan(
         execution_capability_grants: capability_context.grants,
         execution_capability_warnings: capability_context.warnings,
         execution_capability_policy_fingerprint: capability_context.policy_fingerprint,
+        request_context_profile_id: None,
+        terminal_action_mappings: BTreeMap::new(),
+        runtime_effect_rule_selections: Vec::new(),
     };
     plan.validate()
         .map_err(|error| contract_error("materialized_graph_node_plan", error))?;
@@ -1179,6 +1205,8 @@ pub fn build_graph_source_refs(
             refs.push(format!("graph_completion_behavior:{}", graph.loop_id));
         }
     }
+    refs.push("workflow_primitives:v0.20".to_owned());
+    refs.push("workspace_schema_epoch:v0.20".to_owned());
     refs
 }
 

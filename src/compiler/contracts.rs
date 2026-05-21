@@ -9,10 +9,16 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer, de::DeserializeOwn
 use serde_json::Value;
 
 use crate::contracts::{
-    CapabilityPolicyOverride, CapabilityRequest, CompileDiagnostics, ContractError,
-    ExecutionCapabilityGrant, ExecutionCapabilityWarning, LearningRequestAction, LearningStageName,
-    LoopEdgeKind, Plane, ResultClass, StageName, Timestamp, legal_terminal_results,
-    stage_name_for_value, stage_plane, terminal_result_for_plane, validate_safe_identifier,
+    ArtifactContractDefinition, CapabilityPolicyOverride, CapabilityRequest, CompileDiagnostics,
+    ContractError, ExecutionCapabilityGrant, ExecutionCapabilityWarning, LearningRequestAction,
+    LearningStageName, LifecycleMutationPlanDefinition, LoopEdgeKind, Plane,
+    PlaneQueueClaimPolicyDefinition, RequestContextProfileDefinition, ResultClass,
+    RuntimeEffectHandlerDefinition, RuntimeEffectRuleDefinition, RuntimeFailurePolicyDefinition,
+    RuntimeJsonContract, StageName, TerminalActionDefinition, Timestamp,
+    WorkItemDocumentAdapterDefinition, WorkItemFamilyDefinition,
+    WorkflowPlaneSchedulerPolicyDefinition, WorkflowRecoveryPolicyDefinition,
+    WorkspaceSchemaEpochDefinition, legal_terminal_results, stage_name_for_value, stage_plane,
+    terminal_result_for_plane, validate_safe_identifier,
 };
 
 const SCHEMA_VERSION: &str = "1.0";
@@ -96,6 +102,7 @@ compiler_string_enum! {
         Probe => "probe",
         Spec => "spec",
         Incident => "incident",
+        BlueprintDraft => "blueprint_draft",
         ClosureTarget => "closure_target",
         LearningRequest => "learning_request",
     }
@@ -1139,6 +1146,8 @@ pub struct RegisteredStageKindDefinition {
     #[serde(default)]
     pub declared_output_artifacts: Vec<String>,
     #[serde(default)]
+    pub allowed_work_item_families: Vec<String>,
+    #[serde(default)]
     pub execution_capability_requests: Vec<CapabilityRequest>,
     #[serde(default)]
     pub execution_capability_policy_overrides: Vec<CapabilityPolicyOverride>,
@@ -1205,6 +1214,10 @@ impl RegisteredStageKindDefinition {
         normalize_canonical_ids(
             &mut self.declared_output_artifacts,
             "declared_output_artifacts",
+        )?;
+        normalize_canonical_ids(
+            &mut self.allowed_work_item_families,
+            "allowed_work_item_families",
         )?;
         validate_capability_requests(
             "execution_capability_requests",
@@ -1536,6 +1549,8 @@ pub struct MaterializedGraphNodePlan {
     pub node_id: String,
     pub stage_kind_id: String,
     pub plane: Plane,
+    #[serde(default)]
+    pub lane_id: Option<String>,
     pub entrypoint_path: String,
     pub entrypoint_contract_id: Option<String>,
     pub running_status_marker: String,
@@ -1559,6 +1574,12 @@ pub struct MaterializedGraphNodePlan {
     pub execution_capability_warnings: Vec<ExecutionCapabilityWarning>,
     #[serde(default)]
     pub execution_capability_policy_fingerprint: String,
+    #[serde(default)]
+    pub request_context_profile_id: Option<String>,
+    #[serde(default)]
+    pub terminal_action_mappings: BTreeMap<String, String>,
+    #[serde(default)]
+    pub runtime_effect_rule_selections: Vec<String>,
 }
 
 impl MaterializedGraphNodePlan {
@@ -1566,6 +1587,7 @@ impl MaterializedGraphNodePlan {
     pub fn validate(&mut self) -> Result<(), CompilerContractError> {
         normalize_canonical_id(&mut self.node_id, "node_id")?;
         normalize_canonical_id(&mut self.stage_kind_id, "stage_kind_id")?;
+        require_optional_non_blank("lane_id", &self.lane_id)?;
         validate_markdown_asset_path("entrypoint_path", &mut self.entrypoint_path, "entrypoints/")?;
         require_optional_non_blank("entrypoint_contract_id", &self.entrypoint_contract_id)?;
         normalize_status(&mut self.running_status_marker, "running_status_marker")?;
@@ -1611,6 +1633,15 @@ impl MaterializedGraphNodePlan {
                 "cap-pol-",
             )?;
         }
+        require_optional_non_blank(
+            "request_context_profile_id",
+            &self.request_context_profile_id,
+        )?;
+        validate_non_blank_string_map("terminal_action_mappings", &self.terminal_action_mappings)?;
+        normalize_canonical_ids(
+            &mut self.runtime_effect_rule_selections,
+            "runtime_effect_rule_selections",
+        )?;
         Ok(())
     }
 }
@@ -1728,6 +1759,94 @@ impl FrozenGraphPlanePlan {
     }
 }
 
+/// Workflow primitive definitions selected and frozen by one compile.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct CompiledWorkflowPrimitiveBundle {
+    #[serde(default)]
+    pub artifact_contracts: Vec<ArtifactContractDefinition>,
+    #[serde(default)]
+    pub request_context_profiles: Vec<RequestContextProfileDefinition>,
+    #[serde(default)]
+    pub work_item_families: Vec<WorkItemFamilyDefinition>,
+    #[serde(default)]
+    pub document_adapters: Vec<WorkItemDocumentAdapterDefinition>,
+    #[serde(default)]
+    pub queue_claim_policies: Vec<PlaneQueueClaimPolicyDefinition>,
+    #[serde(default)]
+    pub terminal_actions: Vec<TerminalActionDefinition>,
+    #[serde(default)]
+    pub lifecycle_mutation_plans: Vec<LifecycleMutationPlanDefinition>,
+    #[serde(default)]
+    pub runtime_effect_handlers: Vec<RuntimeEffectHandlerDefinition>,
+    #[serde(default)]
+    pub runtime_effect_rules: Vec<RuntimeEffectRuleDefinition>,
+    #[serde(default)]
+    pub recovery_policies: Vec<WorkflowRecoveryPolicyDefinition>,
+    #[serde(default)]
+    pub runtime_failure_policies: Vec<RuntimeFailurePolicyDefinition>,
+    pub workspace_schema_epoch: Option<WorkspaceSchemaEpochDefinition>,
+}
+
+impl CompiledWorkflowPrimitiveBundle {
+    /// Validates selected primitive definitions at the compiler boundary.
+    pub fn validate(&mut self) -> Result<(), CompilerContractError> {
+        validate_runtime_contracts("artifact_contracts", &mut self.artifact_contracts)?;
+        validate_runtime_contracts(
+            "request_context_profiles",
+            &mut self.request_context_profiles,
+        )?;
+        validate_runtime_contracts("work_item_families", &mut self.work_item_families)?;
+        validate_runtime_contracts("document_adapters", &mut self.document_adapters)?;
+        validate_runtime_contracts("queue_claim_policies", &mut self.queue_claim_policies)?;
+        validate_runtime_contracts("terminal_actions", &mut self.terminal_actions)?;
+        validate_runtime_contracts(
+            "lifecycle_mutation_plans",
+            &mut self.lifecycle_mutation_plans,
+        )?;
+        validate_runtime_contracts("runtime_effect_handlers", &mut self.runtime_effect_handlers)?;
+        validate_runtime_contracts("runtime_effect_rules", &mut self.runtime_effect_rules)?;
+        validate_runtime_contracts("recovery_policies", &mut self.recovery_policies)?;
+        validate_runtime_contracts(
+            "runtime_failure_policies",
+            &mut self.runtime_failure_policies,
+        )?;
+        if let Some(epoch) = &mut self.workspace_schema_epoch {
+            epoch
+                .validate_contract()
+                .map_err(|error| CompilerContractError::InvalidField {
+                    field_name: "workspace_schema_epoch",
+                    message: error.to_string(),
+                })?;
+        }
+        Ok(())
+    }
+}
+
+/// Metadata for a compiled plan prepared for later activation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PendingCompiledPlanMetadata {
+    pub compiled_plan_id: String,
+    pub mode_id: String,
+    pub reason: String,
+    pub created_at: Timestamp,
+    #[serde(default)]
+    pub active_planes: Vec<Plane>,
+}
+
+impl PendingCompiledPlanMetadata {
+    /// Validates pending-plan identity fields.
+    pub fn validate(&self) -> Result<(), CompilerContractError> {
+        require_non_blank(
+            "pending_compiled_plan.compiled_plan_id",
+            &self.compiled_plan_id,
+        )?;
+        require_non_blank("pending_compiled_plan.mode_id", &self.mode_id)?;
+        require_non_blank("pending_compiled_plan.reason", &self.reason)
+    }
+}
+
 /// Three-part fingerprint of inputs used for one compile attempt.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -1792,6 +1911,13 @@ pub struct CompiledRunPlan {
     pub concurrency_policy: Option<PlaneConcurrencyPolicyDefinition>,
     #[serde(default)]
     pub learning_trigger_rules: Vec<LearningTriggerRuleDefinition>,
+    #[serde(default)]
+    pub workflow_primitives: CompiledWorkflowPrimitiveBundle,
+    #[serde(default)]
+    pub workflow_primitive_fingerprints: BTreeMap<String, String>,
+    pub lane_policy: Option<WorkflowPlaneSchedulerPolicyDefinition>,
+    pub workspace_schema_epoch: Option<WorkspaceSchemaEpochDefinition>,
+    pub pending_compiled_plan: Option<PendingCompiledPlanMetadata>,
     pub compiled_at: Timestamp,
     #[serde(default)]
     pub resolved_assets: Vec<ResolvedAssetRef>,
@@ -1925,6 +2051,50 @@ impl CompiledRunPlan {
                 message: "learning_trigger_rules require learning_graph".to_owned(),
             });
         }
+        self.workflow_primitives.validate()?;
+        validate_non_blank_string_map(
+            "workflow_primitive_fingerprints",
+            &self.workflow_primitive_fingerprints,
+        )?;
+        if let Some(lane_policy) = &mut self.lane_policy {
+            lane_policy.validate_contract().map_err(|error| {
+                CompilerContractError::InvalidField {
+                    field_name: "lane_policy",
+                    message: error.to_string(),
+                }
+            })?;
+            let conflict_ids: HashSet<_> = lane_policy
+                .lane_conflict_policies
+                .iter()
+                .map(|policy| policy.policy_id.as_str())
+                .collect();
+            for lane in &lane_policy.lanes {
+                let Some(conflict_policy_id) = &lane.conflict_policy_id else {
+                    return Err(CompilerContractError::InvalidDocument {
+                        message: format!("lane {} is missing lane conflict policy", lane.lane_id),
+                    });
+                };
+                if !conflict_ids.contains(conflict_policy_id.as_str()) {
+                    return Err(CompilerContractError::InvalidDocument {
+                        message: format!(
+                            "lane {} references unknown lane conflict policy {}",
+                            lane.lane_id, conflict_policy_id
+                        ),
+                    });
+                }
+            }
+        }
+        if let Some(epoch) = &mut self.workspace_schema_epoch {
+            epoch
+                .validate_contract()
+                .map_err(|error| CompilerContractError::InvalidField {
+                    field_name: "workspace_schema_epoch",
+                    message: error.to_string(),
+                })?;
+        }
+        if let Some(pending) = &self.pending_compiled_plan {
+            pending.validate()?;
+        }
         for asset in &mut self.resolved_assets {
             asset.validate()?;
         }
@@ -2015,6 +2185,35 @@ fn require_optional_non_blank(
 ) -> Result<(), CompilerContractError> {
     if let Some(value) = value {
         require_non_blank(field_name, value)?;
+    }
+    Ok(())
+}
+
+fn validate_non_blank_string_map(
+    field_name: &'static str,
+    values: &BTreeMap<String, String>,
+) -> Result<(), CompilerContractError> {
+    for (key, value) in values {
+        require_non_blank(field_name, key)?;
+        require_non_blank(field_name, value)?;
+    }
+    Ok(())
+}
+
+fn validate_runtime_contracts<T>(
+    field_name: &'static str,
+    definitions: &mut [T],
+) -> Result<(), CompilerContractError>
+where
+    T: RuntimeJsonContract,
+{
+    for definition in definitions {
+        definition
+            .validate_contract()
+            .map_err(|error| CompilerContractError::InvalidField {
+                field_name,
+                message: error.to_string(),
+            })?;
     }
     Ok(())
 }

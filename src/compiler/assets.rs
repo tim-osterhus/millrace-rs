@@ -15,6 +15,9 @@ use super::contracts::{
     ModeDefinition, RegisteredStageKindDefinition, ResolvedAssetRef,
     validate_graph_stage_kind_references,
 };
+use super::workflow_primitives::{
+    CompiledWorkflowPrimitiveAuthority, load_workflow_primitive_authority,
+};
 use crate::{
     contracts::{
         CapabilityPolicyDecision, Plane, StageName, validate_capability_id,
@@ -375,6 +378,7 @@ pub struct ResolvedCompileAssetSet {
     pub mode: ModeDefinition,
     pub graph_loops: Vec<ResolvedGraphLoopAsset>,
     pub stage_kinds: Vec<ResolvedStageKindAsset>,
+    pub workflow_primitive_authority: CompiledWorkflowPrimitiveAuthority,
     pub resolved_assets: Vec<ResolvedAssetRef>,
     pub config: EffectiveCompileConfig,
     pub compile_input_fingerprint: CompileInputFingerprint,
@@ -660,6 +664,7 @@ pub fn resolve_compile_assets_with_config(
         )?;
     }
     validate_mode_stage_maps(paths, &mode_relative_path, &mode, &graph_loops)?;
+    let workflow_primitive_authority = load_workflow_primitive_authority(paths, &graph_loops)?;
 
     let resolved_assets = build_resolved_asset_refs(
         paths,
@@ -667,6 +672,7 @@ pub fn resolve_compile_assets_with_config(
         &mode_relative_path,
         &graph_loops,
         &stage_kinds,
+        &workflow_primitive_authority.resolved_assets,
     )?;
     let compile_input_fingerprint =
         build_compile_input_fingerprint(&config, &mode_id, &resolved_assets, paths)?;
@@ -678,6 +684,7 @@ pub fn resolve_compile_assets_with_config(
         mode,
         graph_loops,
         stage_kinds,
+        workflow_primitive_authority,
         resolved_assets,
         config,
         compile_input_fingerprint,
@@ -755,6 +762,7 @@ fn build_resolved_asset_refs(
     mode_relative_path: &str,
     graph_loops: &[ResolvedGraphLoopAsset],
     stage_kinds: &[ResolvedStageKindAsset],
+    workflow_primitive_refs: &[ResolvedAssetRef],
 ) -> CompilerAssetResult<Vec<ResolvedAssetRef>> {
     let mut refs = Vec::new();
     push_required_ref(
@@ -784,6 +792,7 @@ fn build_resolved_asset_refs(
             &stage_kind.relative_path,
         )?;
     }
+    refs.extend(workflow_primitive_refs.iter().cloned());
 
     let stage_kind_by_id: HashMap<_, _> = stage_kinds
         .iter()

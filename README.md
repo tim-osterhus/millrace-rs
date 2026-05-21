@@ -4,12 +4,13 @@
 governed runtime for long-running agent work.
 
 The production implementation is currently the Python package
-[`millrace-ai`](https://pypi.org/project/millrace-ai/). The Rust `0.4.0`
-release consolidates the Python `v0.18.6..v0.19.0` execution capability
-governance, approval, runner evidence, run-inspection, docs/version, package,
-and web-gap evidence pass on top of the earlier operator-intervention,
-blocked-recovery, Librarian, Integrator, probe/Recon, and graph/trace ports
-while the crate remains experimental.
+[`millrace-ai`](https://pypi.org/project/millrace-ai/). The Rust `0.5.0`
+release consolidates the Python `v0.19.0..v0.20.0` workflow primitive,
+compiler authority, schema epoch, lane, request-context, runtime-effect,
+failure-policy, Blueprint Planning, CLI/status, docs/version, package, and
+web-gap evidence pass on top of the earlier execution-capability,
+operator-intervention, blocked-recovery, Librarian, Integrator, probe/Recon,
+and graph/trace ports while the crate remains experimental.
 
 ## Package Names
 
@@ -60,14 +61,12 @@ file-backed list, show, search, local/source and fixture/cache-backed remote
 install and refresh, learning-mode-gated create/improve queueing, source
 promotion, and ZIP export behavior. `millrace upgrade` now implements managed
 baseline preview/apply output, safe package updates, missing asset restoration,
-conflict refusal, and removed-asset localization. `millrace run once` parses
-its normal Rust-exposed options, requires an initialized workspace, starts the
-Rust once-mode runtime session, executes exactly one serial tick through the
-runtime-configured runner dispatcher, renders operator-facing outcomes, and
-releases runtime ownership after covered success and failure paths. `millrace
-run daemon` now starts the Rust daemon runtime session, executes the daemon loop
-through the same runtime-configured runner dispatcher, renders final daemon
-summary lines including `runtime_ticks` and Python-compatible `ticks`, and
+conflict refusal, and removed-asset localization. The public
+`millrace run once` subcommand is removed; bounded one-tick operation is exposed
+through `millrace run daemon --max-ticks 1`. `millrace run daemon` now starts
+the Rust daemon runtime session, executes the daemon loop through the
+runtime-configured runner dispatcher, renders final daemon summary lines
+including `runtime_ticks` and Python-compatible `ticks`, and
 supports `--monitor basic` stdout output plus append-mode `--monitor-log` file
 fanout with missing parent-directory creation and without enabling stdout
 monitor mode. The crate also exposes the
@@ -85,6 +84,42 @@ contracts/assets/compiler graph subset for the opt-in
 `execution.with_integrator` graph plus the opt-in `default_codex_integrated`
 and `learning_codex_integrated` modes, and the Python v0.18.3 Librarian
 learning graph/mode subset for Planner-to-Librarian optional-skill preparation.
+The Python v0.20.0 workflow primitive and Blueprint contract/assets slice now
+exposes public Rust contracts for workflow primitive registry definitions,
+Blueprint documents, work references, lane runtime snapshot fields, and
+Blueprint planning metadata, plus packaged Blueprint graph/mode/stage-kind,
+entrypoint, skill, and workflow primitive registry assets. The compiler now
+loads those primitive registries as authority, validates runtime-effect handler
+and terminal-action references, fingerprints the selected primitive collections,
+materializes lane policy, request-context profile, terminal action,
+runtime-effect rule, completion behavior, workspace schema epoch, and
+pending-plan evidence, and exposes that evidence through compiled plans and
+compile show/graph output. The schema epoch and generic lifecycle consumer
+slice now writes and validates workspace schema epoch markers, refuses
+daemon-owned archive resets while moving stale mutable runtime state under
+`millrace-agents/archives/`, installs work-family adapter assets during
+initialization, and applies runtime-owned terminal-action/lifecycle intents for
+built-in families plus compiled Blueprint draft sources. The lanes and
+request-context inspection slice now persists compiler-backed lane state,
+launch-plan authority, pending-plan state, deterministic request-context
+bundles, prompt-context artifacts, visible context refs, artifact-parse status,
+failure-origin metadata, and runtime outcome through status, monitor, runner,
+stage-result, and run-inspection surfaces. The runtime effects/failure-policy
+slice now selects compiled effect rules, writes decision/result artifacts, runs
+packaged Planner disposition handling, applies runtime-owned source lifecycle
+intents, matches failure policies by origin/class/phase/handler/source
+terminal, and exposes runtime-effect evidence through status, monitor, run
+inspection, and run traces. The Blueprint Planning runtime slice now persists
+Blueprint manifests, drafts, packets, evaluations, critiques, and promotions,
+dispatches Manager/Contractor/Evaluator Blueprint effect handlers, promotes
+approved packets into generated execution tasks, routes rejected packets back to
+`contractor_blueprint`, handles missing Manager artifacts through
+`mechanic_blueprint` where policy permits, blocks duplicate or partial
+mutations conservatively, and suppresses Arbiter closure until same-lineage
+Blueprint artifacts and generated execution work drain. The v0.20.0
+docs/version and release evidence pass now reconciles those implemented
+surfaces with Rust `0.5.0` crate metadata, package include rules, runtime
+docs, source-package mapping, release fixtures, and explicit web-gap evidence.
 Integrated runtime routing now preserves standard Builder -> Checker execution
 while the opt-in integrated graph routes Builder success through Integrator
 before Checker and records trace evidence.
@@ -331,9 +366,11 @@ fixtures, including probe documents, add-probe mailbox payloads, and Recon
 packet fixtures, without requiring a live daemon. The compiler parity tests also
 use a committed Python-normalized fixture so ordinary `cargo test` can compare
 compiled-plan structure and key compile CLI output without probing Python; that
-fixture now pins the Python `v0.18.0..v0.18.1` source range, including Recon
-planning graph and graph-export references used by the Rust compiled-stage-graph
-export tests. The
+fixture now pins the Python `v0.19.0..v0.20.0` source range, including workflow
+primitive registry authority, Blueprint compile assets, primitive fingerprints,
+lane/request-context/terminal-action/runtime-effect/schema/completion evidence,
+pending-plan metadata, and the historical graph-export surfaces used by the Rust
+compiled-stage-graph export tests. The
 CLI/runtime parity suite now includes a committed Slice 4 CLI evidence matrix,
 a committed Slice 5 serial runtime evidence matrix, a committed Slice 6 daemon
 runtime evidence matrix, a committed Slice 7 runner adapter evidence matrix,
@@ -368,12 +405,21 @@ checks, package verification, generated-cache exclusions, and Python
 target-facing Python `v0.18.6..v0.19.0` guardrails for planned Rust `0.4.0`
 execution capability contracts/config, compiled grants, approvals, gates,
 runner support/evidence metadata, inspection surfaces, required checks, and
-`millrace-web` v0.19.0 package evidence. The final Rust `0.4.0`
-release fixture now reconciles Cargo metadata, runtime docs, source-package
+`millrace-web` v0.19.0 package evidence, plus target-facing Python
+`v0.19.0..v0.20.0` guardrails for planned Rust `0.5.0` workflow primitive
+assets, compiler authority, schema epochs, lanes, request-context artifacts,
+runtime effects/failure policy, Blueprint Planning, CLI `run once` removal,
+required checks, and `millrace-web` v0.20.0 package evidence. The final Rust
+`0.4.0` release fixture now reconciles Cargo metadata, runtime docs, source-package
 mapping, parity fixture docs, package include readiness, required Builder
 checks, package verification, generated-cache exclusions, run-inspection
 capability output, and Python `millrace-web` v0.19.0 package-version
-unsupported-gap evidence. The
+unsupported-gap evidence, and the final Rust `0.5.0` release fixture now
+reconciles Cargo metadata, runtime docs, source-package mapping, parity fixture
+docs, package include readiness, required Builder checks, package verification,
+generated-cache exclusions, workflow primitive/Blueprint runtime evidence, and
+Python `millrace-web` v0.20.0 package/dashboard-summary unsupported-gap
+evidence. The
 v0.18.4 runner failure classifier contract, blocked metadata
 persistence, manual public retry CLI, auto-recovery config/status, and daemon
 stranded-dependency recovery slices are now implemented with typed runtime JSON
@@ -388,7 +434,7 @@ idle-cycle recovery diagnostics under `millrace-agents/diagnostics/auto-recovery
 `blocked_dependency_auto_requeued` and `blocked_dependency_auto_requeue_skipped`
 event/monitor evidence, and same-cycle dependent dispatch suppression.
 Docs/version and final release evidence are reconciled in the release fixtures
-through Rust `0.4.0`.
+through Rust `0.5.0`.
 The runner normalization/artifact-metadata target is now implemented
 with focused runtime JSON, runner normalization, serial runtime, and
 daemon runtime coverage, and the shipped skill lint/guidance target is now
@@ -397,7 +443,7 @@ guidance asset synchronization.
 The Slice 5
 evidence maps
 Rust fake-runner startup, tick, routing,
-result-application, recovery, closure, and `run once` scenarios back to the
+result-application, recovery, closure, and former run-once scenarios back to the
 Python runtime tests, the Slice 6 evidence maps daemon startup, bounded loop,
 supervisor scheduling, mailbox/reload, watcher intake, monitor rendering,
 shutdown, lock contention, and CLI summary scenarios back to Python daemon
@@ -541,6 +587,50 @@ pre-dispatch capability gates, runner support/evidence metadata, inspection
 surfaces, required release checks, repository-relative Rust target guardrails,
 no-live guarantees, and Python `millrace-web` v0.19.0 package/version
 unsupported-gap evidence.
+The v0.20.0 guardrail fixture maps all 249 generated Python scout paths to
+expected Rust implementation, test, documentation, fixture, package-evidence,
+reference-evidence, unsupported-gap, or planned-new targets while keeping Rust
+`0.4.0` as the previous released baseline and Rust `0.5.0` as the planned
+target. It pins Python v0.19.0/v0.20.0 annotated tag objects and peeled
+commits, workflow primitive assets, compiler authority, schema epochs, lanes,
+request-context artifacts, runtime effects/failure policy, Blueprint Planning,
+CLI `run once` removal, required checks, repository-relative Rust target
+guardrails, no-live guarantees, and Python `millrace-web` v0.20.0
+package/version unsupported-gap evidence.
+The final Rust `0.5.0` release-parity evidence reconciles Cargo metadata,
+runtime docs, source-package mapping, parity fixture docs, package include
+readiness, required Builder checks, package verification, generated-cache
+exclusions, workflow primitive/Blueprint runtime evidence, CLI run-once removal
+evidence, and Python `millrace-web` v0.20.0 package/dashboard-summary
+unsupported-gap evidence.
+The v0.20.0 workflow primitive contracts/assets slice has landed with public
+exports, Blueprint document round trips, workflow primitive registry contract
+coverage, Blueprint mode asset resolution, and workspace initialization asset
+coverage. The compiler authority validation slice has also landed: workflow
+primitive registry collections are compiler-loaded and fingerprinted, lane
+policy, request-context profiles, terminal action mappings, runtime-effect rule
+selections, completion behavior, workspace schema epoch authority, Blueprint
+graph/mode references, and pending-plan metadata are persisted into compiled
+plans and graph exports, and `compile show`/`compile graph` expose the new
+evidence. The schema epoch and generic lifecycle runtime-consumer slice has
+also landed with marker persistence, startup compatibility checks before
+mutable state parsing, daemon-owned archive/reset refusal, clean state
+reinitialization, generic work-item adapters, queue claim metadata, compiled
+terminal-action lifecycle movement, and focused workspace/runtime tests.
+The lanes/request-context inspection slice has also landed with compiled lane
+policy dispatch checks, durable lane snapshot state, launch-plan and
+pending-plan preservation, deterministic request-context bundle/rendered prompt
+artifacts, runner artifact/stage-result metadata propagation, and read-only
+status/monitor/run-inspection evidence. The runtime effects/failure-policy
+slice has also landed with compiled rule selection, decision/result artifacts,
+Planner disposition handling, runtime-owned source lifecycle intents,
+failure-policy matching by origin/class/phase/handler/source terminal, and
+status/monitor/run-inspection/run-trace evidence. The Blueprint Planning
+runtime slice has also landed with manifest/draft state, candidate packet,
+evaluation, critique, promotion, generated task, rejection route-back,
+duplicate/partial-mutation blocking, closure-readiness, and focused Blueprint
+planning-loop coverage. Docs/version and final release evidence are now
+reconciled in the Rust `0.5.0` release fixture.
 The v0.19.0 capability contracts/config slice has landed with public
 Rust contract exports, capability id aliases and scope validation,
 approval-required grant invariants, stable grant fingerprints, approval mailbox
@@ -571,11 +661,11 @@ inspects durable approval records, resolves approve/deny decisions directly
 when no daemon owns the workspace, routes daemon-owned decisions through
 mailbox envelopes, and covers daemon application/archive/event behavior with
 focused CLI, runtime-control, serial, daemon, and runtime JSON tests.
-Focused
-`run once`
-coverage exercises one-stage mocked Codex dispatcher execution, idle/pause/stop
-outcomes, startup failures, lock contention, and run-artifact inspection, and
-focused daemon startup, supervisor, loop, mailbox/reload, and watcher
+Focused CLI run-once removal and bounded daemon coverage exercises public
+`run once` rejection, `run daemon --max-ticks 1` one-stage mocked Codex
+dispatcher execution, idle/pause/stop outcomes, startup failures, lock
+contention, and run-artifact inspection, and focused daemon startup,
+supervisor, loop, mailbox/reload, and watcher
 poll-intake coverage exercises config defaults, daemon projection, lock
 contention, watcher-session preparation, no startup-time work claiming, default
 serial dispatch,
@@ -712,7 +802,21 @@ target-facing Rust `0.4.0` guardrails for Python `v0.18.6..v0.19.0` execution
 capability contracts/config, compiled grants, approvals, pre-dispatch gates,
 runner support/evidence metadata, inspection surfaces, all 61 generated scout
 paths, required checks, `millrace-web` v0.19.0 package evidence, planned-new
-Rust targets, and no-live guarantees. The optional
+Rust targets, and no-live guarantees; and
+`tests/fixtures/cli_parity/auto_port_v0_20_0_parity_evidence.json` records the
+target-facing Rust `0.5.0` guardrails for Python `v0.19.0..v0.20.0` workflow
+primitive assets, compiler authority, schema epochs, lanes, request-context
+artifacts, runtime effects/failure policy, Blueprint Planning, CLI `run once`
+removal, all 249 generated scout paths, required checks, `millrace-web`
+v0.20.0 package evidence, planned-new Rust targets, and no-live guarantees; and
+`tests/fixtures/cli_parity/auto_port_v0_20_0_release_parity_evidence.json`
+records the final Rust `0.5.0` release-parity evidence for version metadata,
+generated-scout path mappings, package include readiness, runtime docs,
+source-package mapping, required Builder verification command results, package
+verification, generated-cache exclusion evidence, workflow primitive/Blueprint
+runtime evidence, and the Python `v0.20.0` `millrace-web`
+package/dashboard-summary unsupported gap.
+The optional
 Python `millrace-web` dashboard
 remains an explicit unsupported Rust parity gap with source references,
 shadow-CLI graph/trace commands, and non-goal wording; native filesystem
@@ -731,10 +835,13 @@ learning triggers with `target_skill_id` and normalized
 and compiled run plan shapes, compiled-stage-graph export contracts and
 projection helpers, resolved asset references, compile outcome data, persisted
 compiled-plan authority, compiled execution capability summary/grant/warning
-fields, and compiled-plan currentness data. It also
+fields, workflow primitive bundles and fingerprints, lane policy, workspace
+schema epoch authority, pending compiled-plan metadata, and compiled-plan
+currentness data. It also
 resolves authoritative
 compile assets from initialized workspace `modes/`,
-`graphs/`, `registry/stage_kinds/`, `entrypoints/`, and `skills/` paths,
+`graphs/`, `registry/stage_kinds/`, workflow primitive `registry/`
+collections, `entrypoints/`, and `skills/` paths,
 canonicalizes `standard_plain` to `default_codex`, fingerprints compile-relevant
 config and resolved asset content while excluding adapter-only runner settings,
 accepts `stages.<stage>.thinking_level` while preserving legacy
@@ -744,9 +851,12 @@ compiled run plans for default Codex, Pi, learning, and the `standard_plain`
 alias mode. The plans include graph node bindings, transitions, policies,
 planning completion
 behavior, learning triggers, learning no-op terminal states, direct Curator
-trigger safe-destination validation, sealed execution capability grants,
-warnings, policy fingerprints, and plan/plane summaries, and supported config,
-skill, entrypoint, runner, model, thinking-level, Codex legacy
+trigger safe-destination validation, selected workflow primitive bundles and
+collection fingerprints, compiled lane policy, node lane ids, request-context
+profile ids, terminal action mappings, runtime-effect rule selections,
+workspace schema epoch authority, pending-plan metadata, sealed execution
+capability grants, warnings, policy fingerprints, and plan/plane summaries, and
+supported config, skill, entrypoint, runner, model, thinking-level, Codex legacy
 reasoning-effort, and timeout overrides. It persists compiler-authoritative
 `compiled_plan.json` and `compile_diagnostics.json`, reports
 missing/current/stale/unknown currentness from compile-input fingerprints,
@@ -757,14 +867,19 @@ graph` commands require an initialized workspace, accept the built-in
 Codex/Pi/learning modes and `standard_plain` alias, persist compiler artifacts,
 and render diagnostics, inspectable compiled-plan fields, or stable
 compiled-stage-graph text/JSON output including selected-plane and output-file
-behavior plus compact execution capability summary/grant/warning lines without
-invoking runtime execution behavior. The committed compiler
-parity fixture is pinned to the Python `v0.18.0..v0.18.1` source range and
+behavior plus workflow primitive fingerprints, lane, request-context,
+terminal-action, runtime-effect, schema-epoch, completion-behavior, pending-plan,
+and compact execution capability summary/grant/warning lines without invoking
+runtime execution behavior. The committed compiler
+parity fixture is pinned to the Python `v0.19.0..v0.20.0` source range and
 covers `default_codex`, `default_pi`, `learning_codex`, `learning_pi`, and
-`standard_plain`, including learning no-op terminal classes,
-success-to-Analyst trigger behavior, and Python graph-export source
-references plus Recon managed asset, planning graph `probe -> recon`, mode
-binding, stage-kind registry, materialization, and graph-export parity. The
+`standard_plain`, including workflow primitive fingerprints, lane policy,
+request-context profiles, terminal action mappings, runtime-effect rule
+selections, completion behavior, workspace schema epoch authority,
+pending-plan metadata, Blueprint compile assets, learning no-op terminal
+classes, success-to-Analyst trigger behavior, Recon managed asset, planning
+graph `probe -> recon`, mode binding, stage-kind registry, materialization, and
+graph-export parity. The
 v0.18.1 compiler scout fixture remains alongside the normalized fixture as
 target-facing source evidence, and the v0.18.2 compiler scout fixture records
 Integrator entrypoint/skill/registry assets, Checker asset updates,
@@ -801,7 +916,15 @@ upgrade preview/apply helpers. It now also includes filesystem queue stores for
 canonical task, probe, spec, incident, and learning-request headed markdown
 documents, plus state stores for runtime snapshot, recovery
 counter, status-file, usage-governance state, and usage-governance ledger
-persistence. Task lifecycle integrity helpers detect duplicate task ids across
+persistence. Workspace schema epoch helpers write
+`state/workspace_schema_epoch.json`, validate marker compatibility before
+runtime startup parses mutable state, warn through doctor on marker drift, and
+archive/reset stale mutable state under `millrace-agents/archives/` only when
+no active daemon owns the workspace. Generic queue claim metadata, built-in
+work-item document adapters, and the source lifecycle interpreter now let
+runtime-owned terminal-action/lifecycle intents move task, spec, probe,
+incident, learning-request, and compiled Blueprint draft sources. Task
+lifecycle integrity helpers detect duplicate task ids across
 `tasks/queue`, `tasks/active`, `tasks/done`, and `tasks/blocked` using parsed
 `Task-ID` values with filename fallback for unparseable artifacts, and task
 completion retires same-root blocked predecessors under
@@ -834,11 +957,10 @@ markdown or JSON through typed work-document APIs, stage idea markdown, and use
 `RuntimeControl` for direct offline writes or active-daemon mailbox routing.
 Upgrade CLI commands compare workspace managed assets against the embedded
 package baseline, apply only safe changes, and localize removed managed assets
-without deleting operator content. `run once` now validates the initialized
-workspace and supported run options, starts the once-mode runtime session, and
-dispatches one runtime-configured serial tick; `run daemon` validates
-initialized workspaces and supported daemon options, starts the daemon runtime
-session, executes the runtime-configured daemon loop, renders final summary tick
+without deleting operator content. Public `run once` is rejected; `run daemon
+--max-ticks 1` validates initialized workspaces and supported daemon options,
+starts the daemon runtime session, executes one bounded runtime-configured
+daemon tick, and renders final summary tick
 lines, and supports basic stdout/log monitor sinks with log parent-directory
 creation. The `queue repair-lineage` CLI now uses the file-backed
 closure-lineage repair boundary to load Arbiter closure targets, scan
@@ -922,8 +1044,8 @@ Python runtime.
 The historical public proof package for the v0.1.0 autonomous port campaign
 lives in
 [`tim-osterhus/millrace-rs-port-docs`](https://github.com/tim-osterhus/millrace-rs-port-docs).
-The crate-local `0.4.0` release evidence lives in `CHANGELOG.md` and
-`tests/fixtures/cli_parity/auto_port_v0_19_0_release_parity_evidence.json`.
+The crate-local `0.5.0` release evidence lives in `CHANGELOG.md` and
+`tests/fixtures/cli_parity/auto_port_v0_20_0_release_parity_evidence.json`.
 
 ## License
 

@@ -113,7 +113,11 @@ string_enum! {
         Recon => "recon",
         Planner => "planner",
         Manager => "manager",
+        ManagerBlueprint => "manager_blueprint",
+        ContractorBlueprint => "contractor_blueprint",
+        EvaluatorBlueprint => "evaluator_blueprint",
         Mechanic => "mechanic",
+        MechanicBlueprint => "mechanic_blueprint",
         Auditor => "auditor",
         Arbiter => "arbiter",
     }
@@ -143,7 +147,11 @@ string_enum! {
         Recon => "recon",
         Planner => "planner",
         Manager => "manager",
+        ManagerBlueprint => "manager_blueprint",
+        ContractorBlueprint => "contractor_blueprint",
+        EvaluatorBlueprint => "evaluator_blueprint",
         Mechanic => "mechanic",
+        MechanicBlueprint => "mechanic_blueprint",
         Auditor => "auditor",
         Arbiter => "arbiter",
         Analyst => "analyst",
@@ -169,7 +177,11 @@ impl StageName {
             Self::Recon
             | Self::Planner
             | Self::Manager
+            | Self::ManagerBlueprint
+            | Self::ContractorBlueprint
+            | Self::EvaluatorBlueprint
             | Self::Mechanic
+            | Self::MechanicBlueprint
             | Self::Auditor
             | Self::Arbiter => Plane::Planning,
             Self::Analyst | Self::Professor | Self::Curator | Self::Librarian => Plane::Learning,
@@ -198,7 +210,11 @@ impl From<PlanningStageName> for StageName {
             PlanningStageName::Recon => Self::Recon,
             PlanningStageName::Planner => Self::Planner,
             PlanningStageName::Manager => Self::Manager,
+            PlanningStageName::ManagerBlueprint => Self::ManagerBlueprint,
+            PlanningStageName::ContractorBlueprint => Self::ContractorBlueprint,
+            PlanningStageName::EvaluatorBlueprint => Self::EvaluatorBlueprint,
             PlanningStageName::Mechanic => Self::Mechanic,
+            PlanningStageName::MechanicBlueprint => Self::MechanicBlueprint,
             PlanningStageName::Auditor => Self::Auditor,
             PlanningStageName::Arbiter => Self::Arbiter,
         }
@@ -242,7 +258,12 @@ string_enum! {
         ReconNoop => "RECON_NOOP",
         PlannerComplete => "PLANNER_COMPLETE",
         ManagerComplete => "MANAGER_COMPLETE",
+        ManagerBlueprintComplete => "MANAGER_BLUEPRINT_COMPLETE",
+        BlueprintCandidateReady => "BLUEPRINT_CANDIDATE_READY",
+        BlueprintApproved => "BLUEPRINT_APPROVED",
+        BlueprintRejected => "BLUEPRINT_REJECTED",
         MechanicComplete => "MECHANIC_COMPLETE",
+        MechanicBlueprintComplete => "MECHANIC_BLUEPRINT_COMPLETE",
         AuditorComplete => "AUDITOR_COMPLETE",
         ArbiterComplete => "ARBITER_COMPLETE",
         RemediationNeeded => "REMEDIATION_NEEDED",
@@ -375,6 +396,7 @@ string_enum! {
         Spec => "spec",
         Incident => "incident",
         LearningRequest => "learning_request",
+        BlueprintDraft => "blueprint_draft",
     }
 }
 

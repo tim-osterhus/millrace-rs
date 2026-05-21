@@ -701,6 +701,7 @@ fn closure_target_state(root_spec_id: &str, root_idea_id: &str) -> ClosureTarget
         closure_open: true,
         closure_blocked_by_lineage_work: false,
         blocking_work_ids: Vec::new(),
+        blocking_work_refs: Vec::new(),
         opened_at: timestamp(NOW),
         closed_at: None,
         last_arbiter_run_id: Some("run-001".to_owned()),

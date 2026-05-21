@@ -18,7 +18,8 @@ use super::{
     RuntimeTickDispatchOutcome, RuntimeTickError, RuntimeTickOptions, RuntimeTickOutcomeKind,
     RuntimeTickResult, StageRunRequest,
     blocked_recovery::attempt_stranded_dependency_auto_recovery,
-    capability_gate_failure_result, evaluate_stage_request_capabilities_with_runner,
+    can_dispatch_lane, capability_gate_failure_result,
+    evaluate_stage_request_capabilities_with_runner, lane_id_for_plane,
     record_capability_gate_result, runtime_monitor_events_from_jsonl,
     tick::{
         self, activate_completion_stage_if_ready, activate_next_claim_for_plane,
@@ -530,6 +531,12 @@ where
                 active_planes(&session.snapshot),
                 Plane::Planning,
             )
+            && can_dispatch_lane(
+                session.compiled_plan.lane_policy.as_ref(),
+                session.compiled_plan.concurrency_policy.as_ref(),
+                active_lane_ids(&session.snapshot),
+                &lane_id_for_plane(Some(&session.compiled_plan), Plane::Planning),
+            )
             && activate_completion_stage_if_ready(session, options, now)?
         {
             return self
@@ -550,6 +557,15 @@ where
             session.compiled_plan.concurrency_policy.as_ref(),
             active_planes(&session.snapshot),
             plane,
+        ) {
+            return Ok(0);
+        }
+        let candidate_lane_id = lane_id_for_plane(Some(&session.compiled_plan), plane);
+        if !can_dispatch_lane(
+            session.compiled_plan.lane_policy.as_ref(),
+            session.compiled_plan.concurrency_policy.as_ref(),
+            active_lane_ids(&session.snapshot),
+            &candidate_lane_id,
         ) {
             return Ok(0);
         }
@@ -1060,6 +1076,14 @@ fn active_planes(snapshot: &RuntimeSnapshot) -> Vec<Plane> {
     DISPATCH_ORDER
         .into_iter()
         .filter(|plane| snapshot.active_runs_by_plane.contains_key(plane))
+        .collect()
+}
+
+fn active_lane_ids(snapshot: &RuntimeSnapshot) -> Vec<String> {
+    DISPATCH_ORDER
+        .into_iter()
+        .filter_map(|plane| tick::active_run_for_plane(snapshot, plane))
+        .map(|active_run| active_run.lane_id)
         .collect()
 }
 

@@ -7,16 +7,23 @@ use std::{
 
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
-use crate::work_documents::{
-    parse_incident_document_with_source, parse_learning_request_document_with_source,
-    parse_spec_document_with_source, parse_task_document_with_source,
+use crate::{
+    contracts::{
+        BlueprintCritiqueDocument, BlueprintDraftDocument, BlueprintEvaluationDocument,
+        BlueprintManifestDocument, BlueprintPacketDocument, BlueprintPromotionRecord,
+        RuntimeJsonContract,
+    },
+    work_documents::{
+        parse_incident_document_with_source, parse_learning_request_document_with_source,
+        parse_spec_document_with_source, parse_task_document_with_source,
+    },
 };
 
 use super::{
-    BaselineManifest, RuntimeOwnershipLockState, WorkspacePaths, find_duplicate_task_lifecycle_ids,
-    inspect_runtime_ownership_lock, load_baseline_manifest, load_execution_status,
-    load_learning_status, load_planning_status, load_recovery_counters, load_snapshot,
-    workspace_paths,
+    BaselineManifest, CURRENT_WORKSPACE_SCHEMA_EPOCH, RuntimeOwnershipLockState, WorkspacePaths,
+    find_duplicate_task_lifecycle_ids, inspect_runtime_ownership_lock, load_baseline_manifest,
+    load_execution_status, load_learning_status, load_planning_status, load_recovery_counters,
+    load_snapshot, load_workspace_schema_epoch_marker, workspace_paths,
 };
 
 /// One workspace doctor finding with deterministic code and optional path context.
@@ -73,8 +80,10 @@ pub fn run_workspace_doctor_for_paths(paths: &WorkspacePaths) -> DoctorReport {
     validate_workspace_layout(paths, &mut errors);
     let baseline_manifest = validate_baseline_manifest(paths, &mut errors);
     validate_status_and_state(paths, &mut errors);
+    validate_schema_epoch_marker(paths, &mut warnings);
     validate_runtime_ownership_lock(paths, &mut errors, &mut warnings);
     validate_queue_parseability(paths, &mut errors);
+    validate_blueprint_artifacts(paths, &mut errors);
     validate_task_lifecycle_uniqueness(paths, &mut errors);
     if let Some(manifest) = baseline_manifest.as_ref() {
         validate_manifest_tracked_managed_files(paths, manifest, &mut errors);
@@ -90,6 +99,31 @@ pub fn run_workspace_doctor_for_paths(paths: &WorkspacePaths) -> DoctorReport {
         checked_at: OffsetDateTime::now_utc()
             .format(&Rfc3339)
             .unwrap_or_else(|_| "1970-01-01T00:00:00Z".to_owned()),
+    }
+}
+
+fn validate_blueprint_artifacts(paths: &WorkspacePaths, errors: &mut Vec<DoctorIssue>) {
+    for target in blueprint_artifact_targets(paths) {
+        validate_blueprint_artifact_directory(&target, errors);
+    }
+}
+
+fn validate_schema_epoch_marker(paths: &WorkspacePaths, warnings: &mut Vec<DoctorIssue>) {
+    match load_workspace_schema_epoch_marker(paths) {
+        Ok(marker) if marker.epoch_id == CURRENT_WORKSPACE_SCHEMA_EPOCH => {}
+        Ok(marker) => warnings.push(DoctorIssue::new(
+            "workspace_schema_epoch_incompatible",
+            format!(
+                "workspace schema epoch {} differs from expected {}",
+                marker.epoch_id, CURRENT_WORKSPACE_SCHEMA_EPOCH
+            ),
+            super::workspace_schema_epoch_marker_path(paths),
+        )),
+        Err(error) => warnings.push(DoctorIssue::new(
+            "workspace_schema_epoch_marker_invalid",
+            error.to_string(),
+            super::workspace_schema_epoch_marker_path(paths),
+        )),
     }
 }
 
@@ -332,6 +366,201 @@ fn validate_runtime_ownership_lock(
 fn validate_queue_parseability(paths: &WorkspacePaths, errors: &mut Vec<DoctorIssue>) {
     for target in queue_targets(paths) {
         validate_queue_directory(target, errors);
+    }
+}
+
+fn blueprint_artifact_targets(paths: &WorkspacePaths) -> Vec<BlueprintArtifactTarget> {
+    let blueprints = paths.runtime_root.join("blueprints");
+    vec![
+        BlueprintArtifactTarget::new(
+            blueprints.join("manifests"),
+            BlueprintArtifactKind::Manifest,
+        ),
+        BlueprintArtifactTarget::new(
+            blueprints.join("drafts/queue"),
+            BlueprintArtifactKind::Draft,
+        ),
+        BlueprintArtifactTarget::new(
+            blueprints.join("drafts/active"),
+            BlueprintArtifactKind::Draft,
+        ),
+        BlueprintArtifactTarget::new(
+            blueprints.join("drafts/approved"),
+            BlueprintArtifactKind::Draft,
+        ),
+        BlueprintArtifactTarget::new(
+            blueprints.join("drafts/blocked"),
+            BlueprintArtifactKind::Draft,
+        ),
+        BlueprintArtifactTarget::new(
+            blueprints.join("drafts/canceled"),
+            BlueprintArtifactKind::Draft,
+        ),
+        BlueprintArtifactTarget::new(
+            blueprints.join("packets/candidates"),
+            BlueprintArtifactKind::Packet,
+        ),
+        BlueprintArtifactTarget::new(
+            blueprints.join("packets/approved"),
+            BlueprintArtifactKind::Packet,
+        ),
+        BlueprintArtifactTarget::new(
+            blueprints.join("packets/rejected"),
+            BlueprintArtifactKind::Packet,
+        ),
+        BlueprintArtifactTarget::new(
+            blueprints.join("critiques"),
+            BlueprintArtifactKind::Critique,
+        ),
+        BlueprintArtifactTarget::new(
+            blueprints.join("evaluations"),
+            BlueprintArtifactKind::Evaluation,
+        ),
+        BlueprintArtifactTarget::new(
+            blueprints.join("promotions"),
+            BlueprintArtifactKind::Promotion,
+        ),
+    ]
+}
+
+struct BlueprintArtifactTarget {
+    directory: PathBuf,
+    kind: BlueprintArtifactKind,
+}
+
+impl BlueprintArtifactTarget {
+    fn new(directory: PathBuf, kind: BlueprintArtifactKind) -> Self {
+        Self { directory, kind }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum BlueprintArtifactKind {
+    Manifest,
+    Draft,
+    Packet,
+    Critique,
+    Evaluation,
+    Promotion,
+}
+
+impl BlueprintArtifactKind {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Manifest => "blueprint_manifest",
+            Self::Draft => "blueprint_draft",
+            Self::Packet => "blueprint_packet",
+            Self::Critique => "blueprint_critique",
+            Self::Evaluation => "blueprint_evaluation",
+            Self::Promotion => "blueprint_promotion",
+        }
+    }
+}
+
+fn validate_blueprint_artifact_directory(
+    target: &BlueprintArtifactTarget,
+    errors: &mut Vec<DoctorIssue>,
+) {
+    if !target.directory.exists() {
+        return;
+    }
+    let mut entries = match fs::read_dir(&target.directory) {
+        Ok(entries) => match entries.collect::<Result<Vec<_>, io::Error>>() {
+            Ok(entries) => entries,
+            Err(error) => {
+                errors.push(DoctorIssue::new(
+                    "blueprint_artifact_invalid",
+                    format!("failed to read {} directory: {error}", target.kind.label()),
+                    target.directory.clone(),
+                ));
+                return;
+            }
+        },
+        Err(error) => {
+            errors.push(DoctorIssue::new(
+                "blueprint_artifact_invalid",
+                format!("failed to read {} directory: {error}", target.kind.label()),
+                target.directory.clone(),
+            ));
+            return;
+        }
+    };
+    entries.sort_by_key(|entry| entry.path());
+
+    for entry in entries {
+        let path = entry.path();
+        if !path.is_file() || path.extension().and_then(|value| value.to_str()) != Some("json") {
+            continue;
+        }
+        validate_blueprint_artifact(&path, target.kind, errors);
+    }
+}
+
+fn validate_blueprint_artifact(
+    path: &Path,
+    kind: BlueprintArtifactKind,
+    errors: &mut Vec<DoctorIssue>,
+) {
+    let raw = match fs::read_to_string(path) {
+        Ok(raw) => raw,
+        Err(error) => {
+            errors.push(DoctorIssue::new(
+                "blueprint_artifact_invalid",
+                format!("failed to read {} artifact: {error}", kind.label()),
+                path.to_path_buf(),
+            ));
+            return;
+        }
+    };
+    let parsed_id = match parse_blueprint_artifact(kind, &raw) {
+        Ok(parsed_id) => parsed_id,
+        Err(error) => {
+            errors.push(DoctorIssue::new(
+                "blueprint_artifact_invalid",
+                format!("invalid {} artifact: {error}", kind.label()),
+                path.to_path_buf(),
+            ));
+            return;
+        }
+    };
+    let stem = path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default();
+    if stem != parsed_id {
+        errors.push(DoctorIssue::new(
+            "blueprint_artifact_invalid",
+            format!(
+                "filename stem does not match {} id: expected {}, found {}",
+                kind.label(),
+                parsed_id,
+                stem
+            ),
+            path.to_path_buf(),
+        ));
+    }
+}
+
+fn parse_blueprint_artifact(kind: BlueprintArtifactKind, raw: &str) -> Result<String, String> {
+    match kind {
+        BlueprintArtifactKind::Manifest => BlueprintManifestDocument::from_json_str(raw)
+            .map(|document| document.manifest_id)
+            .map_err(|error| error.to_string()),
+        BlueprintArtifactKind::Draft => BlueprintDraftDocument::from_json_str(raw)
+            .map(|document| document.draft_id)
+            .map_err(|error| error.to_string()),
+        BlueprintArtifactKind::Packet => BlueprintPacketDocument::from_json_str(raw)
+            .map(|document| document.blueprint_id)
+            .map_err(|error| error.to_string()),
+        BlueprintArtifactKind::Critique => BlueprintCritiqueDocument::from_json_str(raw)
+            .map(|document| document.critique_id)
+            .map_err(|error| error.to_string()),
+        BlueprintArtifactKind::Evaluation => BlueprintEvaluationDocument::from_json_str(raw)
+            .map(|document| document.evaluation_id)
+            .map_err(|error| error.to_string()),
+        BlueprintArtifactKind::Promotion => BlueprintPromotionRecord::from_json_str(raw)
+            .map(|document| document.promotion_id)
+            .map_err(|error| error.to_string()),
     }
 }
 

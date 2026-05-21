@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "kind": "web_dashboard_parity_decision",
   "release_surface": "python_packages_millrace_web",
-  "summary": "Python v0.17.3 added the optional millrace-web read-only dashboard package, Python v0.17.4 synced that package's version and millrace-ai runtime dependency, Python v0.18.0 added graph/trace dashboard evidence, and Python v0.18.1, v0.18.2, v0.18.3, v0.18.4, v0.18.5, v0.18.6, and v0.19.0 repeat package/runtime app version sync. Rust records this release surface as an intentional unsupported parity gap because the accepted Rust boundary is the CLI plus local millrace-agents workspace artifacts, not a web server, static shell, dashboard HTTP API, SSE stream, or separate dashboard package.",
+  "summary": "Python v0.17.3 added the optional millrace-web read-only dashboard package, Python v0.17.4 synced that package's version and millrace-ai runtime dependency, Python v0.18.0 added graph/trace dashboard evidence, Python v0.18.1 through v0.19.0 repeated package/runtime app version sync, and Python v0.20.0 adds summary/queue-reader/static UI changes plus package/version sync. Rust records this release surface as an intentional unsupported parity gap because the accepted Rust boundary is the CLI plus local millrace-agents workspace artifacts, not a web server, static shell, dashboard HTTP API, SSE stream, or separate dashboard package.",
   "rust_decision": {
     "status": "deferred_unsupported_gap",
     "arbiter_visible": true,
@@ -358,5 +358,28 @@
     "cargo test --test parity_cli",
     "cargo test --test workspace_queue_state_stores",
     "cargo test --test runtime_serial"
-  ]
+  ],
+  "v0_20_0_version_package_evidence": {
+    "python_previous_tag": "v0.19.0",
+    "python_target_tag": "v0.20.0",
+    "diff_range": "v0.19.0..v0.20.0",
+    "changed_python_sources": [
+      "../millrace-py/packages/millrace-web/CHANGELOG.md",
+      "../millrace-py/packages/millrace-web/pyproject.toml",
+      "../millrace-py/packages/millrace-web/src/millrace_web/__init__.py",
+      "../millrace-py/packages/millrace-web/src/millrace_web/app.py",
+      "../millrace-py/packages/millrace-web/src/millrace_web/models.py",
+      "../millrace-py/packages/millrace-web/src/millrace_web/services/queue_reader.py",
+      "../millrace-py/packages/millrace-web/src/millrace_web/static/assets/app.js",
+      "../millrace-py/packages/millrace-web/tests/test_app.py",
+      "../millrace-py/packages/millrace-web/tests/test_summary_services.py"
+    ],
+    "python_changes": [
+      "millrace-web package version 0.19.0 -> 0.20.0",
+      "millrace-ai dependency floor 0.19.0 -> 0.20.0",
+      "FastAPI application version 0.19.0 -> 0.20.0",
+      "summary models and queue-reader/dashboard static UI surfaces changed"
+    ],
+    "rust_release_handling": "Recorded as v0.20.0 package/version and dashboard summary evidence for the existing unsupported dashboard gap; no Rust web server, static shell, SSE stream, dashboard HTTP API, or separate dashboard package is added."
+  }
 }

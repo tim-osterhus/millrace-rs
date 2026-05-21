@@ -160,6 +160,8 @@ impl StageRunnerAdapter for FakeRunner {
         invocation.validate()?;
         write_runner_invocation(&paths.invocation_path, &invocation)?;
 
+        maybe_write_fake_planner_disposition(request, result, &self.config.fixed_ended_at)?;
+
         let (stdout_path, terminal_result_path) = write_fake_output(
             &paths.stdout_path,
             &paths.terminal_result_path,
@@ -380,6 +382,65 @@ fn write_fake_output(
             )?;
             Ok((None, Some(terminal_result_path.display().to_string())))
         }
+    }
+}
+
+fn maybe_write_fake_planner_disposition(
+    request: &StageRunRequest,
+    result: &FakeRunnerResult,
+    created_at: &Timestamp,
+) -> RunnerResult<()> {
+    if request.stage != StageName::Planner {
+        return Ok(());
+    }
+    if fake_terminal_result_token(&result.output) != Some("PLANNER_COMPLETE") {
+        return Ok(());
+    }
+    let path = Path::new(&request.run_dir).join("planner_disposition.json");
+    if path.exists() {
+        return Ok(());
+    }
+    let kind_family_id = request.active_work_item_kind.map(|kind| kind.as_str());
+    let source_work_item_family_id = request
+        .active_work_item_family_id
+        .as_deref()
+        .or(kind_family_id)
+        .unwrap_or("spec");
+    let payload = json!({
+        "schema_version": "1.0",
+        "kind": "planner_disposition",
+        "source_work_item_family_id": source_work_item_family_id,
+        "source_work_item_id": request.active_work_item_id.as_deref().unwrap_or("unknown"),
+        "disposition": "active_source_ready_for_manager",
+        "emitted_spec_ids": [],
+        "refined_active_source": true,
+        "recommended_next_action": "continue_to_manager",
+        "created_at": created_at.as_str(),
+        "created_by": "planner",
+    });
+    let mut body = serde_json::to_string_pretty(&payload).map_err(|error| RunnerError::Json {
+        artifact: "planner_disposition",
+        message: error.to_string(),
+    })?;
+    body.push('\n');
+    write_text(&path, &body)
+}
+
+fn fake_terminal_result_token(output: &FakeRunnerOutput) -> Option<&str> {
+    match output {
+        FakeRunnerOutput::TerminalMarker(marker) => marker
+            .trim()
+            .strip_prefix("### ")
+            .or_else(|| Some(marker.trim())),
+        FakeRunnerOutput::Stdout(stdout) => stdout
+            .lines()
+            .map(str::trim)
+            .find_map(|line| line.strip_prefix("### "))
+            .map(str::trim),
+        FakeRunnerOutput::StructuredTerminalResult {
+            terminal_result, ..
+        } => Some(terminal_result.as_str()),
+        FakeRunnerOutput::MissingTerminalOutput => None,
     }
 }
 

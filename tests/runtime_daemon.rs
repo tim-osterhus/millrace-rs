@@ -939,11 +939,15 @@ fn force_execution_updater_active(
     let active_since = timestamp("2026-04-29T02:14:00Z");
     let active_run = ActiveRunState {
         plane: Plane::Execution,
+        lane_id: String::new(),
         stage: StageName::Updater,
         node_id: "updater".to_owned(),
         stage_kind_id: "updater".to_owned(),
         run_id: run_id.to_owned(),
+        compiled_plan_id: String::new(),
+        compiled_plan_fingerprint: String::new(),
         request_kind: ActiveRunRequestKind::ActiveWorkItem,
+        work_item_family_id: None,
         work_item_kind: Some(WorkItemKind::Task),
         work_item_id: Some(task_id.to_owned()),
         closure_target_root_spec_id: None,
@@ -975,11 +979,15 @@ fn force_planning_manager_active(
     let active_since = timestamp("2026-04-29T02:14:30Z");
     let active_run = ActiveRunState {
         plane: Plane::Planning,
+        lane_id: String::new(),
         stage: StageName::Manager,
         node_id: "manager".to_owned(),
         stage_kind_id: "manager".to_owned(),
         run_id: run_id.to_owned(),
+        compiled_plan_id: String::new(),
+        compiled_plan_fingerprint: String::new(),
         request_kind: ActiveRunRequestKind::ActiveWorkItem,
+        work_item_family_id: None,
         work_item_kind: Some(WorkItemKind::Spec),
         work_item_id: Some(spec_id.to_owned()),
         closure_target_root_spec_id: None,
@@ -1184,6 +1192,23 @@ fn basic_monitor_renders_startup_stage_router_and_status_lines() {
                     "execution": 2,
                     "planning": 0,
                     "learning": 1
+                },
+                "lane_state": {
+                    "execution.main": {
+                        "plane": "execution",
+                        "status": "idle",
+                        "active_run_ids": []
+                    },
+                    "learning.main": {
+                        "plane": "learning",
+                        "status": "active",
+                        "active_run_ids": ["run-learning"]
+                    }
+                },
+                "pending_plan": {
+                    "compiled_plan_id": "plan-124.pending",
+                    "compiled_plan_path": "millrace-agents/state/compiled_plan.json",
+                    "compiled_plan_fingerprint": "compile-input-abc123"
                 }
             }),
         ),
@@ -1198,7 +1223,13 @@ fn basic_monitor_renders_startup_stage_router_and_status_lines() {
                 "run_id": "run-b27cb14119bf410ab390a0ad124d309d",
                 "work_item_kind": "spec",
                 "work_item_id": "idea-corebound-north-star-spec",
-                "status_marker": "### PLANNER_RUNNING"
+                "status_marker": "### PLANNER_RUNNING",
+                "lane_id": "planning.main",
+                "launch_plan_id": "plan-123",
+                "request_context_profile_id": "default",
+                "context_bundle_path": "millrace-agents/runs/run-b27cb14119bf410ab390a0ad124d309d/context/request_context.json",
+                "visible_context_refs": ["spec:idea-corebound-north-star-spec"],
+                "rendered_prompt_context_path": "millrace-agents/runs/run-b27cb14119bf410ab390a0ad124d309d/context/rendered_prompt_context.md"
             }),
         ),
         monitor_event(
@@ -1235,9 +1266,22 @@ fn basic_monitor_renders_startup_stage_router_and_status_lines() {
         output.contains("concurrency exclusive=execution+planning concurrent=learning+execution")
     );
     assert!(output.contains("snapshot status execution=IDLE planning=IDLE learning=IDLE"));
+    assert!(output.contains("lane execution.main plane=execution status=idle active_runs=none"));
+    assert!(
+        output.contains("lane learning.main plane=learning status=active active_runs=run-learning")
+    );
+    assert!(output.contains(
+        "pending plan plan-124.pending path=millrace-agents/state/compiled_plan.json fingerprint=compile-input-abc123"
+    ));
     assert!(output.contains(
         "[02:14:04] stage start planning/planner run=b27cb141 work=spec:idea-corebound-north-star-spec"
     ));
+    assert!(output.contains("lane_id=planning.main"));
+    assert!(output.contains("launch_plan_id=plan-123"));
+    assert!(output.contains("request_context_profile_id=default"));
+    assert!(output.contains("context_bundle_path=millrace-agents/runs/run-b27cb14119bf410ab390a0ad124d309d/context/request_context.json"));
+    assert!(output.contains("visible_context_refs=spec:idea-corebound-north-star-spec"));
+    assert!(output.contains("rendered_prompt_context_path=millrace-agents/runs/run-b27cb14119bf410ab390a0ad124d309d/context/rendered_prompt_context.md"));
     assert!(
         output.contains("[02:14:05] route planning -> manager reason=planner:PLANNER_COMPLETE")
     );
@@ -1262,6 +1306,26 @@ fn basic_monitor_renders_stage_completion_tokens_and_run_aggregate() {
             "duration_seconds": 39.2,
             "started_at": "2026-04-29T02:14:03Z",
             "completed_at": "2026-04-29T02:14:42.200Z",
+            "lane_id": "execution.main",
+            "launch_plan_id": "plan-runtime",
+            "request_context_profile_id": "default",
+            "context_bundle_path": "millrace-agents/runs/run-123/context/request_context.json",
+            "visible_context_refs": ["task:task-runtime"],
+            "rendered_prompt_context_path": "millrace-agents/runs/run-123/context/rendered_prompt_context.md",
+            "artifact_parse_status": "valid",
+            "failure_origin": "stage_terminal",
+            "runtime_effect_handler_id": "planner_disposition",
+            "runtime_effect_decision": "request_complete_source",
+            "runtime_effect_mutation_phase": "pre_mutation",
+            "runtime_effect_failure_class": null,
+            "runtime_effect_failure_policy_id": null,
+            "runtime_effect_recovery_action": null,
+            "runtime_effect_source_lifecycle_plan_id": "complete_source_after_effect",
+            "runtime_effect_source_lifecycle_action": "complete",
+            "runtime_effect_created_paths": [
+                "millrace-agents/specs/queue/spec-runtime-child.md"
+            ],
+            "runtime_outcome": "complete",
             "token_usage": {
                 "input_tokens": 1200,
                 "cached_input_tokens": 300,
@@ -1275,6 +1339,29 @@ fn basic_monitor_renders_stage_completion_tokens_and_run_aggregate() {
     assert!(output.contains(
         "stage done execution/builder run=run-123 result=BUILDER_COMPLETE dur=39.2s tokens=in=1200 cached=300 out=410 think=900 total=2810"
     ));
+    assert!(output.contains("lane_id=execution.main"));
+    assert!(output.contains("launch_plan_id=plan-runtime"));
+    assert!(output.contains("request_context_profile_id=default"));
+    assert!(
+        output.contains(
+            "context_bundle_path=millrace-agents/runs/run-123/context/request_context.json"
+        )
+    );
+    assert!(output.contains("visible_context_refs=task:task-runtime"));
+    assert!(output.contains("rendered_prompt_context_path=millrace-agents/runs/run-123/context/rendered_prompt_context.md"));
+    assert!(output.contains("artifact_parse_status=valid"));
+    assert!(output.contains("failure_origin=stage_terminal"));
+    assert!(output.contains("runtime_effect_handler_id=planner_disposition"));
+    assert!(output.contains("runtime_effect_decision=request_complete_source"));
+    assert!(output.contains("runtime_effect_mutation_phase=pre_mutation"));
+    assert!(
+        output.contains("runtime_effect_source_lifecycle_plan_id=complete_source_after_effect")
+    );
+    assert!(output.contains("runtime_effect_source_lifecycle_action=complete"));
+    assert!(output.contains(
+        "runtime_effect_created_paths=millrace-agents/specs/queue/spec-runtime-child.md"
+    ));
+    assert!(output.contains("runtime_outcome=complete"));
     assert!(output.contains(
         "run execution run=run-123 elapsed=39.2s tokens=in=1200 cached=300 out=410 think=900 total=2810"
     ));
@@ -2554,9 +2641,24 @@ fn daemon_mailbox_reload_defers_while_active_and_applies_after_planes_drain() {
         .unwrap();
 
     assert_eq!(first.dispatched_count, 1);
+    let deferred_snapshot = load_snapshot(&paths).unwrap();
     assert_eq!(
-        load_snapshot(&paths).unwrap().last_reload_error.as_deref(),
+        deferred_snapshot.last_reload_error.as_deref(),
         Some("deferred until active planes drain")
+    );
+    assert_eq!(
+        deferred_snapshot.pending_compiled_plan_id.as_deref(),
+        Some(format!("{compiled_before}.pending").as_str())
+    );
+    assert_eq!(
+        deferred_snapshot.pending_compiled_plan_path.as_deref(),
+        Some("millrace-agents/state/compiled_plan.json")
+    );
+    assert!(
+        deferred_snapshot
+            .pending_compiled_plan_fingerprint
+            .as_deref()
+            .is_some_and(|fingerprint| fingerprint.starts_with("compile-input-"))
     );
     let incoming_after_defer = mailbox_file_stems(&paths.mailbox_incoming_dir);
     assert_eq!(incoming_after_defer.len(), 1);
@@ -2588,6 +2690,9 @@ fn daemon_mailbox_reload_defers_while_active_and_applies_after_planes_drain() {
     assert_eq!(session.snapshot.watcher_mode, WatcherMode::Off);
     assert_ne!(session.snapshot.config_version, config_before);
     assert_ne!(session.snapshot.compiled_plan_id, compiled_before);
+    assert_eq!(session.snapshot.pending_compiled_plan_id, None);
+    assert_eq!(session.snapshot.pending_compiled_plan_path, None);
+    assert_eq!(session.snapshot.pending_compiled_plan_fingerprint, None);
     assert_eq!(directory_file_count(&paths.mailbox_incoming_dir), 0);
     assert_eq!(archive_values(&paths.mailbox_processed_dir).len(), 2);
     assert!(runtime_events(&paths).iter().any(|event| {

@@ -21,7 +21,7 @@ Run the published-package verification path on a clean release candidate:
 cargo publish --dry-run
 ```
 
-During active Millrace Builder/Checker worktree validation, the `0.4.0`
+During active Millrace Builder/Checker worktree validation, the `0.5.0`
 release fixture records offline package verification as Builder evidence.
 The non-uploading dirty-worktree substitutes are:
 
@@ -34,8 +34,8 @@ cargo package --allow-dirty --offline
 
 The test suite covers:
 
-- compiler assets, contracts, materialization, persistence, and Python fixture
-  parity
+- compiler assets, contracts, workflow primitive authority, materialization,
+  persistence, and Python fixture parity
 - public contract exports and runtime JSON schemas
 - work-document parsing and rendering
 - CLI parity for init, status text/JSON diagnostics, config, modes, queue,
@@ -48,8 +48,8 @@ The test suite covers:
   metadata, managed live/baseline assets, `execution.with_integrator`
   materialization/export, workspace baseline synchronization, opt-in integrated
   mode resolution, runtime routing, and run-trace evidence
-- release fixtures through Rust `0.4.0` version metadata, docs, package
-  include rules including generated-cache exclusions, Python `v0.19.0` source
+- release fixtures through Rust `0.5.0` version metadata, docs, package
+  include rules including generated-cache exclusions, Python `v0.20.0` source
   references, required release-readiness command results, package verification
   evidence, and explicit web-gap evidence
 - target-facing Python `v0.18.2..v0.18.3` guardrail fixtures for Rust `0.3.3`
@@ -97,6 +97,54 @@ The test suite covers:
   runtime prompt/artifact metadata coverage, and `config show`/`compile show`
   parity coverage; docs/version and final release evidence are reconciled in
   `tests/fixtures/cli_parity/auto_port_v0_19_0_release_parity_evidence.json`
+- target-facing Python `v0.19.0..v0.20.0` guardrail fixtures for planned Rust
+  `0.5.0` workflow primitive assets, compiler authority, schema epochs, lanes,
+  request context, runtime effects/failure policy, Blueprint Planning, CLI
+  `run once` removal, all 249 generated scout paths, required checks,
+  `millrace-web` v0.20.0 package evidence, and no-live guarantees, with the
+  workflow primitive contracts/assets slice now implemented through focused
+  workflow primitive, Blueprint, runtime JSON, public export, compiler asset,
+  and workspace initialization tests, and with compiler authority validation now
+  implemented through `tests/compiler_workflow_primitives.rs`, compiler
+  contracts/assets/materialization/persistence/parity coverage, and
+  `compile show`/`compile graph` parity checks for primitive fingerprints, lane
+  policy, request-context profiles, terminal action mappings, runtime-effect
+  rules, completion behavior, workspace schema epoch authority, Blueprint
+  references, and pending-plan evidence. The workspace schema epoch and generic
+  lifecycle runtime-consumer slice is now implemented through
+  `tests/workspace_schema_epoch.rs`, `tests/workspace_work_item_adapters.rs`,
+  `tests/workspace_doctor.rs`, `tests/workspace_queue_state_stores.rs`,
+  `tests/runtime_serial.rs`, and `tests/workspace_init_parity.rs`, covering
+  marker persistence, daemon-owned archive/reset refusal, clean mutable-state
+  initialization, startup compatibility checks, generic work-item adapters,
+  queue claim metadata, and compiled terminal-action lifecycle moves.
+  The lanes/request-context inspection slice is now implemented through
+  `tests/runtime_lanes.rs`, `tests/runtime_request_context.rs`,
+  `tests/runtime_run_inspection.rs`, `tests/runtime_daemon.rs`,
+  `tests/runtime_serial.rs`, `tests/runners_normalization.rs`, and
+  `tests/parity_cli.rs`, covering durable lane state, lane conflict dispatch,
+  pending-plan and launch-plan preservation, deterministic context bundles,
+  runner/stage-result context metadata, and status/monitor/run-inspection
+  evidence. The runtime effects/failure-policy slice is now implemented through
+  `tests/runtime_effects.rs`, `tests/runtime_failure_policy.rs`,
+  `tests/runtime_serial.rs`, `tests/runtime_daemon.rs`, and
+  `tests/runtime_run_inspection.rs`, covering compiled rule selection,
+  decision/result artifacts, Planner disposition handling, runtime-owned source
+  lifecycle intents, failure-policy matching by origin/class/phase/handler and
+  source terminal state, monitor/status/run-inspection evidence, and run-trace
+  artifacts. The Blueprint Planning runtime slice is now implemented through
+  `tests/blueprint_contracts.rs`, `tests/blueprint_effects.rs`,
+  `tests/blueprint_planning_loop.rs`, `tests/runtime_effects.rs`,
+  `tests/runtime_request_context.rs`, and
+  `tests/compiler_workflow_primitives.rs`, covering manifest/draft state,
+  Manager/Contractor/Evaluator Blueprint effects, approved packet/evaluation
+  and promotion records, generated execution task promotion, rejection
+  critique persistence and route-back, duplicate/partial-mutation blocking,
+  Planner disposition mismatch blocking, same-lineage closure blockers, and
+  drained Arbiter readiness. CLI/status run-once removal and bounded
+  `run daemon --max-ticks 1` parity are covered in `tests/parity_cli.rs`;
+  docs/version and final release evidence are reconciled in
+  `tests/fixtures/cli_parity/auto_port_v0_20_0_release_parity_evidence.json`.
 - Recon invalid-handoff hardening coverage for handoff-specific emitted-id
   validation, generated task/spec id checks before import, durable
   `recon_handoff_invalid` runtime error evidence, active-probe blocking, and

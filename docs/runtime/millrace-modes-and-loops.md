@@ -53,3 +53,19 @@ learning requests. Targeted Librarian learning requests now dispatch to the
 Librarian node; complete/no-op outcomes move requests to done with the correct
 success/no-op result class, and blocked outcomes preserve recoverable-failure
 evidence.
+
+Python `v0.20.0` adds opt-in Blueprint Planning modes:
+
+- `blueprint_codex`
+- `blueprint_learning_codex`
+
+Both modes select `planning.blueprint`, which adds Manager Blueprint,
+Contractor Blueprint, Evaluator Blueprint, and Mechanic Blueprint to the
+Planning plane. Blueprint stages operate on `blueprint_draft` work items and
+runtime-effect artifacts rather than directly moving queue files. The compiler
+validates the graph, stage kinds, work-item family, document adapter,
+runtime-effect rules, failure policies, and completion behavior together.
+
+The default modes keep the standard planning loop. Blueprint modes are
+explicit opt-ins so operators can inspect the compiled authority with
+`millrace compile show` or `millrace compile graph` before dispatch.

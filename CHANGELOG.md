@@ -3,6 +3,43 @@
 All notable user-facing changes to the experimental Rust `millrace-ai` crate
 are documented in this file.
 
+## [0.5.0] - 2026-05-21
+
+### Added
+
+- Added Rust release evidence for the Python `v0.19.0..v0.20.0` parity pass,
+  covering compiler-authoritative workflow primitive registries, Blueprint
+  Planning assets and runtime effects, workspace schema epochs, generic
+  work-item lifecycle, lanes, deterministic request context, runtime
+  effects/failure policy, status/run-inspection evidence, removed public
+  `run once` behavior, docs, package verification, and the optional
+  `millrace-web` `v0.20.0` package/dashboard-summary unsupported-gap surface.
+- Added release fixture coverage for v0.20.0 parity fixtures, runtime docs,
+  source package mapping, required Builder verification command results,
+  package verification, generated-cache package exclusions, and forbidden
+  release actions.
+
+### Changed
+
+- Bumped the Rust crate, lockfile package metadata, and version-visible CLI
+  output from `0.4.0` to `0.5.0`.
+- Updated README, roadmap, source-package map, runtime docs, outline, fixture
+  docs, and release evidence to target Python `v0.20.0` at
+  `c432786242e9e7cf9f7262ec0ec4f906f4bb7bf7`.
+- Documented `millrace run daemon --max-ticks 1` as the bounded one-tick
+  operator path after removal of the public `millrace run once` command.
+
+### Known Gaps
+
+- The optional Python `packages/millrace-web` `v0.20.0` package version,
+  `millrace-ai>=0.20.0` dependency floor, FastAPI app version, summary models,
+  queue-reader behavior, and static dashboard UI changes are recorded as
+  explicit evidence for the existing unsupported Rust web gap. Rust still does
+  not ship a web server, static dashboard shell, SSE stream, dashboard HTTP
+  API, or separate `millrace-web` package.
+- Native filesystem watcher integration, live subscription-quota provider
+  polling, and live Codex/Pi smoke runs remain opt-in or preview-only.
+
 ## [0.4.0] - 2026-05-18
 
 ### Added

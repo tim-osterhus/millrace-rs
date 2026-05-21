@@ -3,36 +3,52 @@ use std::{any::type_name, collections::BTreeSet};
 use serde_json::{Value, json};
 
 use millrace_ai::contracts::{
-    ActiveRunRequestKind, ActiveRunState, ApprovalPolicyRef, BASE_EXECUTION_CAPABILITY_IDS,
+    ActiveRunRequestKind, ActiveRunState, ApprovalPolicyRef, ArtifactContractDefinition,
+    ArtifactFilenameAdapterDefinition, ArtifactFormat, BASE_EXECUTION_CAPABILITY_IDS,
+    BlueprintCritiqueDocument, BlueprintDraftDocument, BlueprintDraftStatus,
+    BlueprintEvaluationDecision, BlueprintEvaluationDocument, BlueprintManifestDocument,
+    BlueprintPacketDocument, BlueprintPromotionRecord, BlueprintSourceWorkItemKind,
     CapabilityContractError, CapabilityDecisionState, CapabilityEnforcementMode,
     CapabilityEvidenceStatus, CapabilityPolicyDecision, CapabilityPolicyOverride,
     CapabilityRequest, CapabilityScope, CapabilitySupportDecision, CapabilitySupportState,
-    CompileDiagnostics, CompiledStageGraphExport, ContractError, ExecutionCapabilityGrant,
-    ExecutionCapabilityWarning, ExecutionStageName, ExecutionTerminalResult, GraphExportContract,
-    GraphExportContractError, GraphExportEdge, GraphExportEntry, GraphExportNode,
-    GraphExportTerminalState, IdentifierErrorReason, IncidentDecision, IncidentDocument,
-    IncidentSeverity, LearningRequestAction, LearningRequestDocument, LearningStageName,
-    LearningTerminalResult, LoopEdgeKind, MailboxAddIdeaPayload, MailboxAddProbePayload,
-    MailboxArchiveBlockedTaskPayload, MailboxArchiveInvalidIncidentPayload,
-    MailboxCancelWorkItemPayload, MailboxCommand, MailboxCommandEnvelope,
-    MailboxExecutionCapabilityApprovalPayload, MailboxIncidentInterventionPayload,
-    MailboxRetargetTaskDependencyPayload, MailboxSupersedeCascade, MailboxSupersedeTaskPayload,
-    OutcomeResultClasses, PauseSource, Plane, PlanningStageName, PlanningTerminalResult,
-    ProbeDocument, ProbeStatusHint, ReconConfidence, ReconDecision, ReconHandoffTarget,
-    ReconPacketDocument, ReconPacketError, ReconPathFinding, ReconRiskLevel, ReconVerificationPlan,
-    RecoveryCounterEntry, RecoveryCounters, ReloadOutcome, ResultClass, RootIntakeKind,
-    RuntimeErrorCode, RuntimeErrorContext, RuntimeJsonContract, RuntimeJsonError, RuntimeMode,
+    ClosureBlockingWorkRef, CompileDiagnostics, CompiledStageGraphExport, ContractError,
+    ExecutionCapabilityGrant, ExecutionCapabilityWarning, ExecutionStageName,
+    ExecutionTerminalResult, GraphExportContract, GraphExportContractError, GraphExportEdge,
+    GraphExportEntry, GraphExportNode, GraphExportTerminalState, IdentifierErrorReason,
+    IncidentDecision, IncidentDocument, IncidentSeverity, LaneConflictPolicyDefinition,
+    LaneRuntimeState, LaneRuntimeStatus, LearningRequestAction, LearningRequestDocument,
+    LearningStageName, LearningTerminalResult, LifecycleMutationPlanDefinition, LoopEdgeKind,
+    MailboxAddIdeaPayload, MailboxAddProbePayload, MailboxArchiveBlockedTaskPayload,
+    MailboxArchiveInvalidIncidentPayload, MailboxCancelWorkItemPayload, MailboxCommand,
+    MailboxCommandEnvelope, MailboxExecutionCapabilityApprovalPayload,
+    MailboxIncidentInterventionPayload, MailboxRetargetTaskDependencyPayload,
+    MailboxSupersedeCascade, MailboxSupersedeTaskPayload, OperatorControlCapabilityDefinition,
+    OutcomeArtifactDefinition, OutcomeResultClasses, PauseSource, Plane,
+    PlaneQueueClaimPolicyDefinition, PlanningStageName, PlanningTerminalResult, ProbeDocument,
+    ProbeStatusHint, ReconConfidence, ReconDecision, ReconHandoffTarget, ReconPacketDocument,
+    ReconPacketError, ReconPathFinding, ReconRiskLevel, ReconVerificationPlan,
+    RecoveryCounterEntry, RecoveryCounters, ReloadOutcome, RequestContextProfileDefinition,
+    RequestContextRenderPlan, ResultClass, RootIntakeKind, RuntimeEffectHandlerDefinition,
+    RuntimeEffectMutationPhase, RuntimeEffectRuleDefinition, RuntimeErrorCode, RuntimeErrorContext,
+    RuntimeFailurePolicyDefinition, RuntimeJsonContract, RuntimeJsonError, RuntimeMode,
     RuntimeSnapshot, SAFE_ID_PATTERN_DESCRIPTION, STAGE_LEGAL_TERMINAL_RESULTS,
     STAGE_METADATA_BY_VALUE, STAGE_NAME_BY_VALUE, STAGE_TO_PLANE, SpecDocument, SpecSourceType,
-    StageMetadata, StageName, StageResultEnvelope, TaskDocument, TaskStatusHint, TerminalResult,
-    Timestamp, TokenUsage, WORK_DOCUMENT_SCHEMA_VERSION, WatcherMode, WorkDocument,
-    WorkDocumentError, WorkItemKind, allowed_result_classes_by_outcome, blocked_terminal_for_plane,
-    capability_grant_fingerprint, capability_key_aliases, is_base_execution_capability_id,
-    known_stage_values, known_stage_values_for_plane, legal_terminal_markers,
-    legal_terminal_results, normalize_capability_id, parse_terminal_marker_for_plane,
-    running_status_marker, stage_metadata, stage_metadata_for_value, stage_name_for_plane,
-    stage_name_for_value, stage_plane, terminal_result_for_plane, validate_capability_id,
-    validate_safe_identifier, validate_stage_result_class, validate_terminal_marker_for_stage,
+    StageMetadata, StageName, StageResultEnvelope, TaskDocument, TaskStatusHint,
+    TerminalActionDefinition, TerminalResult, Timestamp, TokenUsage, WORK_DOCUMENT_SCHEMA_VERSION,
+    WatcherMode, WorkDocument, WorkDocumentError, WorkItemDocumentAdapterDefinition,
+    WorkItemFamilyDefinition, WorkItemKind, WorkItemPartitionSelectorDefinition, WorkItemQueueDirs,
+    WorkflowCompletionBehaviorDefinition, WorkflowLaneDefinition,
+    WorkflowPlaneSchedulerPolicyDefinition, WorkflowPrimitiveBundle,
+    WorkflowRecoveryPolicyDefinition, WorkspaceSchemaEpochDefinition,
+    allowed_result_classes_by_outcome, blocked_terminal_for_plane, capability_grant_fingerprint,
+    capability_key_aliases, coerce_family_and_kind, family_id_for_work_item_kind,
+    is_base_execution_capability_id, known_stage_values, known_stage_values_for_plane,
+    legacy_work_item_kind_for_family_id, legal_terminal_markers, legal_terminal_results,
+    normalize_capability_id, normalize_work_item_family_id, parse_terminal_marker_for_plane,
+    plane_for_work_item_family_id, running_status_marker, stage_metadata, stage_metadata_for_value,
+    stage_name_for_plane, stage_name_for_value, stage_plane, terminal_result_for_plane,
+    validate_capability_id, validate_safe_identifier, validate_stage_result_class,
+    validate_terminal_marker_for_stage,
 };
 use millrace_ai::recon_packets::{parse_recon_packet, read_recon_packet, render_recon_packet};
 use millrace_ai::work_documents::{
@@ -84,6 +100,18 @@ fn public_contract_exports_remain_importable() {
         type_name::<ActiveRunRequestKind>(),
         type_name::<ActiveRunState>(),
         type_name::<ApprovalPolicyRef>(),
+        type_name::<ArtifactContractDefinition>(),
+        type_name::<ArtifactFilenameAdapterDefinition>(),
+        type_name::<ArtifactFormat>(),
+        type_name::<BlueprintCritiqueDocument>(),
+        type_name::<BlueprintDraftDocument>(),
+        type_name::<BlueprintDraftStatus>(),
+        type_name::<BlueprintEvaluationDecision>(),
+        type_name::<BlueprintEvaluationDocument>(),
+        type_name::<BlueprintManifestDocument>(),
+        type_name::<BlueprintPacketDocument>(),
+        type_name::<BlueprintPromotionRecord>(),
+        type_name::<BlueprintSourceWorkItemKind>(),
         type_name::<CapabilityContractError>(),
         type_name::<CapabilityDecisionState>(),
         type_name::<CapabilityEnforcementMode>(),
@@ -97,6 +125,7 @@ fn public_contract_exports_remain_importable() {
         type_name::<CompileDiagnostics>(),
         type_name::<CompiledStageGraphExport>(),
         type_name::<ContractError>(),
+        type_name::<ClosureBlockingWorkRef>(),
         type_name::<ExecutionCapabilityGrant>(),
         type_name::<ExecutionCapabilityWarning>(),
         type_name::<ExecutionStageName>(),
@@ -110,10 +139,14 @@ fn public_contract_exports_remain_importable() {
         type_name::<IncidentDecision>(),
         type_name::<IncidentDocument>(),
         type_name::<IncidentSeverity>(),
+        type_name::<LaneConflictPolicyDefinition>(),
+        type_name::<LaneRuntimeState>(),
+        type_name::<LaneRuntimeStatus>(),
         type_name::<LearningRequestAction>(),
         type_name::<LearningRequestDocument>(),
         type_name::<LearningStageName>(),
         type_name::<LearningTerminalResult>(),
+        type_name::<LifecycleMutationPlanDefinition>(),
         type_name::<LoopEdgeKind>(),
         type_name::<MailboxAddIdeaPayload>(),
         type_name::<MailboxAddProbePayload>(),
@@ -127,9 +160,12 @@ fn public_contract_exports_remain_importable() {
         type_name::<MailboxRetargetTaskDependencyPayload>(),
         type_name::<MailboxSupersedeCascade>(),
         type_name::<MailboxSupersedeTaskPayload>(),
+        type_name::<OperatorControlCapabilityDefinition>(),
+        type_name::<OutcomeArtifactDefinition>(),
         type_name::<OutcomeResultClasses>(),
         type_name::<PauseSource>(),
         type_name::<Plane>(),
+        type_name::<PlaneQueueClaimPolicyDefinition>(),
         type_name::<PlanningStageName>(),
         type_name::<PlanningTerminalResult>(),
         type_name::<ProbeDocument>(),
@@ -145,10 +181,16 @@ fn public_contract_exports_remain_importable() {
         type_name::<ReconRiskLevel>(),
         type_name::<ReconVerificationPlan>(),
         type_name::<ReloadOutcome>(),
+        type_name::<RequestContextProfileDefinition>(),
+        type_name::<RequestContextRenderPlan>(),
         type_name::<ResultClass>(),
         type_name::<RootIntakeKind>(),
+        type_name::<RuntimeEffectHandlerDefinition>(),
+        type_name::<RuntimeEffectMutationPhase>(),
+        type_name::<RuntimeEffectRuleDefinition>(),
         type_name::<RuntimeErrorCode>(),
         type_name::<RuntimeErrorContext>(),
+        type_name::<RuntimeFailurePolicyDefinition>(),
         type_name::<RuntimeJsonError>(),
         type_name::<RuntimeMode>(),
         type_name::<RuntimeSnapshot>(),
@@ -161,6 +203,7 @@ fn public_contract_exports_remain_importable() {
         type_name::<StageRunRequestError>(),
         type_name::<TaskDocument>(),
         type_name::<TaskStatusHint>(),
+        type_name::<TerminalActionDefinition>(),
         type_name::<TerminalResult>(),
         type_name::<Timestamp>(),
         type_name::<TokenUsage>(),
@@ -170,7 +213,17 @@ fn public_contract_exports_remain_importable() {
         type_name::<WorkspaceResult<WorkspacePaths>>(),
         type_name::<WorkDocument>(),
         type_name::<WorkDocumentError>(),
+        type_name::<WorkItemDocumentAdapterDefinition>(),
+        type_name::<WorkItemFamilyDefinition>(),
         type_name::<WorkItemKind>(),
+        type_name::<WorkItemPartitionSelectorDefinition>(),
+        type_name::<WorkItemQueueDirs>(),
+        type_name::<WorkflowCompletionBehaviorDefinition>(),
+        type_name::<WorkflowLaneDefinition>(),
+        type_name::<WorkflowPlaneSchedulerPolicyDefinition>(),
+        type_name::<WorkflowPrimitiveBundle>(),
+        type_name::<WorkflowRecoveryPolicyDefinition>(),
+        type_name::<WorkspaceSchemaEpochDefinition>(),
         type_name::<AllowedResultClassPolicy>(),
         type_name::<AllowedResultClassesByOutcome>(),
         type_name::<ExecutionCapabilitiesConfig>(),
@@ -217,6 +270,15 @@ fn public_contract_exports_remain_importable() {
     );
 
     assert_runtime_contract::<CompileDiagnostics>();
+    assert_runtime_contract::<ArtifactContractDefinition>();
+    assert_runtime_contract::<BlueprintCritiqueDocument>();
+    assert_runtime_contract::<BlueprintDraftDocument>();
+    assert_runtime_contract::<BlueprintEvaluationDocument>();
+    assert_runtime_contract::<BlueprintManifestDocument>();
+    assert_runtime_contract::<BlueprintPacketDocument>();
+    assert_runtime_contract::<BlueprintPromotionRecord>();
+    assert_runtime_contract::<LaneConflictPolicyDefinition>();
+    assert_runtime_contract::<LifecycleMutationPlanDefinition>();
     assert_runtime_contract::<MailboxArchiveBlockedTaskPayload>();
     assert_runtime_contract::<MailboxArchiveInvalidIncidentPayload>();
     assert_runtime_contract::<MailboxCancelWorkItemPayload>();
@@ -226,8 +288,25 @@ fn public_contract_exports_remain_importable() {
     assert_runtime_contract::<MailboxRetargetTaskDependencyPayload>();
     assert_runtime_contract::<MailboxSupersedeTaskPayload>();
     assert_runtime_contract::<RecoveryCounters>();
+    assert_runtime_contract::<RequestContextProfileDefinition>();
+    assert_runtime_contract::<RequestContextRenderPlan>();
+    assert_runtime_contract::<RuntimeEffectHandlerDefinition>();
+    assert_runtime_contract::<RuntimeEffectRuleDefinition>();
+    assert_runtime_contract::<RuntimeFailurePolicyDefinition>();
     assert_runtime_contract::<RuntimeSnapshot>();
+    assert_runtime_contract::<OperatorControlCapabilityDefinition>();
+    assert_runtime_contract::<OutcomeArtifactDefinition>();
+    assert_runtime_contract::<PlaneQueueClaimPolicyDefinition>();
+    assert_runtime_contract::<TerminalActionDefinition>();
     assert_runtime_contract::<TokenUsage>();
+    assert_runtime_contract::<WorkItemDocumentAdapterDefinition>();
+    assert_runtime_contract::<WorkItemFamilyDefinition>();
+    assert_runtime_contract::<WorkItemPartitionSelectorDefinition>();
+    assert_runtime_contract::<WorkflowCompletionBehaviorDefinition>();
+    assert_runtime_contract::<WorkflowLaneDefinition>();
+    assert_runtime_contract::<WorkflowPlaneSchedulerPolicyDefinition>();
+    assert_runtime_contract::<WorkflowRecoveryPolicyDefinition>();
+    assert_runtime_contract::<WorkspaceSchemaEpochDefinition>();
     assert_graph_export_contract::<CompiledStageGraphExport>();
 
     let _adapter: Option<&dyn StageRunnerAdapter> = None;
@@ -371,6 +450,88 @@ fn public_exports_v0_19_0_guardrail_fixture_requires_capability_contract_exports
 }
 
 #[test]
+fn public_exports_v0_20_0_guardrail_fixture_requires_workflow_blueprint_and_context_contract_exports()
+ {
+    let fixture: Value = serde_json::from_str(include_str!(
+        "fixtures/runtime_json/auto_port_v0_20_0_runtime_contract_scout.json"
+    ))
+    .expect("parse v0.20.0 runtime contract scout");
+    assert_eq!(fixture["kind"], "auto_port_v0_20_0_runtime_contract_scout");
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.20.0");
+    assert_eq!(fixture["rust_reference"]["planned_crate_version"], "0.5.0");
+
+    let workflow = &fixture["workflow_primitive_contract"];
+    let contract_models: BTreeSet<_> = workflow["contract_models"]
+        .as_array()
+        .expect("workflow contract models are present")
+        .iter()
+        .map(|value| value.as_str().expect("contract model"))
+        .collect();
+    for model in [
+        "WorkflowPrimitiveSet",
+        "ArtifactContractDefinition",
+        "DocumentAdapterDefinition",
+        "WorkItemFamilyDefinition",
+        "TerminalActionDefinition",
+        "RuntimeEffectRuleDefinition",
+        "RequestContextProfileDefinition",
+        "WorkspaceSchemaEpochDefinition",
+        "LanePolicyDefinition",
+        "ContextRenderPlanDefinition",
+    ] {
+        assert!(
+            contract_models.contains(model),
+            "missing v0.20.0 public workflow contract model {model}"
+        );
+    }
+
+    let targets: BTreeSet<_> = fixture["expected_rust_contract_targets"]
+        .as_array()
+        .expect("expected Rust contract targets are present")
+        .iter()
+        .map(|value| value.as_str().expect("expected Rust target"))
+        .collect();
+    for target in [
+        "src/lib.rs",
+        "src/contracts/mod.rs",
+        "src/contracts/runtime_json.rs",
+        "src/contracts/workflow_primitives.rs",
+        "src/contracts/blueprint.rs",
+        "src/contracts/work_refs.rs",
+        "tests/contracts_public_exports.rs",
+        "tests/contracts_runtime_json.rs",
+        "tests/contracts_workflow_primitives.rs",
+        "tests/contracts_blueprint.rs",
+    ] {
+        assert!(
+            targets.contains(target),
+            "missing v0.20.0 public export target {target}"
+        );
+    }
+
+    assert_eq!(
+        fixture["blueprint_contract"]["mode_ids"],
+        json!(["blueprint_codex", "blueprint_learning_codex"])
+    );
+    assert!(
+        fixture["schema_epoch_contract"]["required_behaviors"]
+            .as_array()
+            .expect("schema epoch behaviors are present")
+            .iter()
+            .any(|value| value.as_str() == Some("no_stale_json_parse_before_compatibility")),
+        "missing v0.20.0 schema epoch safety behavior"
+    );
+    assert!(
+        fixture["lane_request_context_contract"]["inspection_fields"]
+            .as_array()
+            .expect("inspection fields are present")
+            .iter()
+            .any(|value| value.as_str() == Some("context_bundle_path")),
+        "missing v0.20.0 request-context public inspection field"
+    );
+}
+
+#[test]
 fn public_metadata_helpers_expose_the_stage_contract_boundary() {
     assert_eq!(millrace_ai::PACKAGE_NAME, "millrace-ai");
     assert_eq!(millrace_ai::CRATE_NAME, "millrace_ai");
@@ -461,7 +622,16 @@ fn public_metadata_helpers_expose_the_stage_contract_boundary() {
     assert_eq!(
         known_stage_values_for_plane(Plane::Planning),
         [
-            "recon", "planner", "manager", "mechanic", "auditor", "arbiter"
+            "recon",
+            "planner",
+            "manager",
+            "manager_blueprint",
+            "contractor_blueprint",
+            "evaluator_blueprint",
+            "mechanic",
+            "mechanic_blueprint",
+            "auditor",
+            "arbiter"
         ]
     );
     assert!(known_stage_values().contains(&"builder"));
@@ -517,6 +687,31 @@ fn public_metadata_helpers_expose_the_stage_contract_boundary() {
     assert_eq!(
         validate_safe_identifier("task-001.alpha_beta", "task_id").unwrap(),
         "task-001.alpha_beta"
+    );
+    assert_eq!(
+        normalize_work_item_family_id("blueprint_draft", "work_item_family_id").unwrap(),
+        "blueprint_draft"
+    );
+    assert_eq!(
+        family_id_for_work_item_kind(WorkItemKind::BlueprintDraft),
+        "blueprint_draft"
+    );
+    assert_eq!(
+        legacy_work_item_kind_for_family_id("blueprint_draft").unwrap(),
+        Some(WorkItemKind::BlueprintDraft)
+    );
+    assert_eq!(
+        plane_for_work_item_family_id("blueprint_draft")
+            .unwrap()
+            .unwrap(),
+        Plane::Planning
+    );
+    assert_eq!(
+        coerce_family_and_kind(Some("blueprint_draft"), None).unwrap(),
+        (
+            Some("blueprint_draft".to_owned()),
+            Some(WorkItemKind::BlueprintDraft)
+        )
     );
 }
 

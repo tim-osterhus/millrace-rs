@@ -38,7 +38,16 @@ fn enum_values_match_python_reference_contracts() {
     assert_eq!(
         values(PlanningStageName::ALL, PlanningStageName::as_str),
         [
-            "recon", "planner", "manager", "mechanic", "auditor", "arbiter"
+            "recon",
+            "planner",
+            "manager",
+            "manager_blueprint",
+            "contractor_blueprint",
+            "evaluator_blueprint",
+            "mechanic",
+            "mechanic_blueprint",
+            "auditor",
+            "arbiter",
         ]
     );
     assert_eq!(
@@ -73,7 +82,12 @@ fn enum_values_match_python_reference_contracts() {
             "RECON_NOOP",
             "PLANNER_COMPLETE",
             "MANAGER_COMPLETE",
+            "MANAGER_BLUEPRINT_COMPLETE",
+            "BLUEPRINT_CANDIDATE_READY",
+            "BLUEPRINT_APPROVED",
+            "BLUEPRINT_REJECTED",
             "MECHANIC_COMPLETE",
+            "MECHANIC_BLUEPRINT_COMPLETE",
             "AUDITOR_COMPLETE",
             "ARBITER_COMPLETE",
             "REMEDIATION_NEEDED",
@@ -107,7 +121,14 @@ fn enum_values_match_python_reference_contracts() {
     );
     assert_eq!(
         values(WorkItemKind::ALL, WorkItemKind::as_str),
-        ["task", "probe", "spec", "incident", "learning_request"]
+        [
+            "task",
+            "probe",
+            "spec",
+            "incident",
+            "learning_request",
+            "blueprint_draft",
+        ]
     );
     assert_eq!(
         values(LearningRequestAction::ALL, LearningRequestAction::as_str),
@@ -306,7 +327,16 @@ fn every_stage_has_metadata_and_plane() {
     assert_eq!(
         known_stage_values_for_plane(Plane::Planning),
         [
-            "recon", "planner", "manager", "mechanic", "auditor", "arbiter"
+            "recon",
+            "planner",
+            "manager",
+            "manager_blueprint",
+            "contractor_blueprint",
+            "evaluator_blueprint",
+            "mechanic",
+            "mechanic_blueprint",
+            "auditor",
+            "arbiter",
         ]
     );
     assert_eq!(

@@ -13,9 +13,9 @@ https://github.com/tim-osterhus/millrace-rs-port-docs
 
 ## Current Parity Target
 
-The Rust `0.4.0` release target is Python `v0.19.0` at commit
-`efb9c5881f524d23dcb78aecfc96fdf7cda9d26f`, ported from the previous Rust
-parity baseline of Python `v0.18.6`.
+The Rust `0.5.0` release target is Python `v0.20.0` at commit
+`c432786242e9e7cf9f7262ec0ec4f906f4bb7bf7`, ported from the previous Rust
+parity baseline of Python `v0.19.0`.
 
 The stable surface for parity is operator-visible behavior:
 
@@ -32,6 +32,8 @@ The stable surface for parity is operator-visible behavior:
 - runner request/result artifacts
 - Codex CLI and Pi RPC adapter contracts
 - execution capability contracts, grants, gates, approvals, and evidence
+- workflow primitive registries, schema epochs, lanes, request context,
+  runtime effects, failure policy, and Blueprint Planning assets
 - learning, Arbiter, closure, recovery, and usage-governance behavior
 
 Rust source layout does not need to mirror the Python module layout. The contract
@@ -48,7 +50,7 @@ is the CLI plus the on-disk workspace format.
 
 ## Release Evidence
 
-- `CHANGELOG.md` records the Rust `0.4.0` release-facing summary.
+- `CHANGELOG.md` records the Rust `0.5.0` release-facing summary.
 - `ROADMAP.md` records the crate-level current release target and explicit
   gaps.
 - `docs/runtime/` records Rust runtime docs for graph exports, run traces,
@@ -115,6 +117,16 @@ is the CLI plus the on-disk workspace format.
   approval CLI/runtime-control behavior, runner support/evidence metadata,
   run-inspection output, package readiness, required Builder verification
   command results, and explicit web package unsupported-gap evidence.
+- `tests/fixtures/cli_parity/auto_port_v0_20_0_parity_evidence.json` ties the
+  Python `v0.19.0..v0.20.0` workflow primitive, compiler authority, schema
+  epoch, lane, request-context, runtime-effect, failure-policy, Blueprint,
+  CLI/status, docs, package, and web evidence delta to Rust tests and fixtures.
+- `tests/fixtures/cli_parity/auto_port_v0_20_0_release_parity_evidence.json`
+  ties the Python `v0.19.0..v0.20.0` source/test/docs/package changes to Rust
+  tests, docs, package metadata, workflow primitive authority, Blueprint
+  Planning runtime behavior, status/run-inspection output, package readiness,
+  required Builder verification command results, and explicit web package
+  unsupported-gap evidence.
 - `tests/parity_cli.rs` rejects missing, malformed, unknown, stale, or omitted
   Rust test references in the final auto-port fixtures.
 
@@ -126,11 +138,12 @@ is the CLI plus the on-disk workspace format.
   exports, run-trace summaries, recent-trace Flow overlays, trace outcome
   labels, and version/dependency sync for that package, Python v0.18.1 syncs
   the package version, `millrace-ai>=0.18.1` dependency floor, and FastAPI
-  application version, and Python v0.18.2, v0.18.3, v0.18.4, v0.18.5,
-  v0.18.6, and v0.19.0 repeat that package/runtime version sync through
-  `0.19.0`. The Rust crate does not currently implement a web
-  server, static dashboard shell, SSE event stream, dashboard HTTP API, or
-  separate dashboard package. Its deferred reader
+  application version, Python v0.18.2, v0.18.3, v0.18.4, v0.18.5, v0.18.6,
+  and v0.19.0 repeat that package/runtime version sync through `0.19.0`, and
+  Python v0.20.0 adds summary model, queue-reader, and static dashboard UI
+  changes while syncing the package to `0.20.0`. The Rust crate does not
+  currently implement a web server, static dashboard shell, SSE event stream,
+  dashboard HTTP API, or separate dashboard package. Its deferred reader
   evidence names the workspace registry, summary DTO, queue, run, snapshot,
   baseline, compiled-plan, Arbiter, usage-governance, graph, and trace reader
   surfaces. The accepted Rust inspection target remains local read-only CLI
@@ -149,5 +162,5 @@ is the CLI plus the on-disk workspace format.
   Pi RPC CLI.
 
 For proof of the historical v0.1.0 autonomous port campaign, see
-`tim-osterhus/millrace-rs-port-docs`. For the crate-local `0.4.0` release
+`tim-osterhus/millrace-rs-port-docs`. For the crate-local `0.5.0` release
 evidence pass, use the fixture and changelog paths listed above.

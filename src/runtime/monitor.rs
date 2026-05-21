@@ -429,6 +429,25 @@ fn render_runtime_started(payload: &Map<String, Value>) -> Vec<String> {
         }
     }
     lines.push(snapshot);
+    if let Some(lanes) = payload.get("lane_state").and_then(Value::as_object) {
+        let mut lane_ids = lanes.keys().cloned().collect::<Vec<_>>();
+        lane_ids.sort();
+        for lane_id in lane_ids {
+            let Some(lane) = lanes.get(&lane_id).and_then(Value::as_object) else {
+                continue;
+            };
+            lines.push(format!(
+                "lane {} plane={} status={} active_runs={}",
+                lane_id,
+                string(lane.get("plane")),
+                string(lane.get("status")),
+                value_list(lane.get("active_run_ids"))
+            ));
+        }
+    }
+    if let Some(pending) = payload.get("pending_plan") {
+        lines.push(format!("pending plan {}", pending_plan_text(pending)));
+    }
     lines
 }
 
@@ -468,6 +487,12 @@ fn render_stage_started(
     if let Some(status) = nonredundant_running_status(payload) {
         parts.push(format!("status={status}"));
     }
+    push_optional_payload_part(&mut parts, payload, "lane_id");
+    push_optional_payload_part(&mut parts, payload, "launch_plan_id");
+    push_optional_payload_part(&mut parts, payload, "request_context_profile_id");
+    push_optional_payload_part(&mut parts, payload, "context_bundle_path");
+    push_list_payload_part(&mut parts, payload, "visible_context_refs");
+    push_optional_payload_part(&mut parts, payload, "rendered_prompt_context_path");
     parts.join(" ")
 }
 
@@ -511,7 +536,46 @@ fn render_stage_completed(
     if let Some(token_usage) = format_token_usage(payload.get("token_usage")) {
         parts.push(format!("tokens={token_usage}"));
     }
+    push_optional_payload_part(&mut parts, payload, "lane_id");
+    push_optional_payload_part(&mut parts, payload, "launch_plan_id");
+    push_optional_payload_part(&mut parts, payload, "request_context_profile_id");
+    push_optional_payload_part(&mut parts, payload, "context_bundle_path");
+    push_list_payload_part(&mut parts, payload, "visible_context_refs");
+    push_optional_payload_part(&mut parts, payload, "rendered_prompt_context_path");
+    push_optional_payload_part(&mut parts, payload, "artifact_parse_status");
+    push_optional_payload_part(&mut parts, payload, "failure_origin");
+    push_optional_payload_part(&mut parts, payload, "runtime_effect_handler_id");
+    push_optional_payload_part(&mut parts, payload, "runtime_effect_decision");
+    push_optional_payload_part(&mut parts, payload, "runtime_effect_mutation_phase");
+    push_optional_payload_part(&mut parts, payload, "runtime_effect_failure_class");
+    push_optional_payload_part(&mut parts, payload, "runtime_effect_failure_policy_id");
+    push_optional_payload_part(&mut parts, payload, "runtime_effect_recovery_action");
+    push_optional_payload_part(
+        &mut parts,
+        payload,
+        "runtime_effect_source_lifecycle_plan_id",
+    );
+    push_optional_payload_part(
+        &mut parts,
+        payload,
+        "runtime_effect_source_lifecycle_action",
+    );
+    push_list_payload_part(&mut parts, payload, "runtime_effect_created_paths");
+    push_optional_payload_part(&mut parts, payload, "runtime_outcome");
     parts.join(" ")
+}
+
+fn push_optional_payload_part(parts: &mut Vec<String>, payload: &Map<String, Value>, key: &str) {
+    if let Some(value) = optional_string(payload.get(key)) {
+        parts.push(format!("{key}={value}"));
+    }
+}
+
+fn push_list_payload_part(parts: &mut Vec<String>, payload: &Map<String, Value>, key: &str) {
+    let values = string_list(payload.get(key));
+    if !values.is_empty() {
+        parts.push(format!("{key}={}", values.join(",")));
+    }
 }
 
 fn render_router_decision(payload: &Map<String, Value>) -> String {
@@ -1112,6 +1176,30 @@ fn string_list(value: Option<&Value>) -> Vec<String> {
         .and_then(Value::as_array)
         .map(|values| values.iter().filter_map(optional_value_string).collect())
         .unwrap_or_default()
+}
+
+fn value_list(value: Option<&Value>) -> String {
+    let values = string_list(value);
+    if values.is_empty() {
+        "none".to_owned()
+    } else {
+        values.join(",")
+    }
+}
+
+fn pending_plan_text(value: &Value) -> String {
+    if value.is_null() {
+        return "none".to_owned();
+    }
+    let Some(object) = value.as_object() else {
+        return "unknown".to_owned();
+    };
+    format!(
+        "{} path={} fingerprint={}",
+        string(object.get("compiled_plan_id")),
+        string(object.get("compiled_plan_path")),
+        string(object.get("compiled_plan_fingerprint"))
+    )
 }
 
 fn optional_value_string(value: &Value) -> Option<String> {

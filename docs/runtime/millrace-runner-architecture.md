@@ -13,6 +13,10 @@ item, closure target, artifact, legal terminal, skill, and execution capability
 context. For `0.4.0`, the request also carries compiled execution capability
 grants and adapter support decisions so the prompt and runner artifacts can
 explain which operations are granted, unsupported, advisory, or approval-bound.
+For `0.5.0`, the request also carries deterministic request-context evidence:
+compiled plan id/fingerprint, lane id, launch-plan authority, source lifecycle,
+visible context refs, prompt-context render paths, artifact parse status,
+failure-origin metadata, and runtime outcome fields.
 
 ## Adapter Boundary
 
@@ -40,10 +44,13 @@ Missing required capability evidence normalizes to
 `capability_evidence_missing`. Denied or unsupported grants are blocked earlier
 by runtime capability gates, before runner invocation.
 
+Request-context bundle and prompt-render artifacts are preserved separately
+from runner stdout/stderr so run inspection can distinguish malformed artifacts
+from runtime routing or runtime-effect outcomes.
+
 ## Release Boundary
 
 Normal Millrace stages do not publish, upload, deploy, push, or tag release
 artifacts. The runner boundary records what a stage did and what evidence it
 produced; release validation remains an operator/package-readiness concern
 recorded in fixtures and command outputs.
-

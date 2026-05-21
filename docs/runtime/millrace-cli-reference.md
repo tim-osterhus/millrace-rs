@@ -11,7 +11,7 @@ millrace --version
 millrace version
 ```
 
-For Rust `0.4.0`, both commands print `millrace 0.4.0`.
+For Rust `0.5.0`, both commands print `millrace 0.5.0`.
 
 ## Probe Intake And Inspection
 
@@ -101,6 +101,28 @@ and `latest_operator_intervention` when intervention event evidence exists.
 `millrace status watch` remains text-only and rejects JSON format requests
 deterministically.
 
+For Python `v0.20.0` parity, status and run inspection also expose compiled
+lane state, pending compiled-plan evidence, latest failure origin,
+runtime-effect decision/result refs, source lifecycle intent evidence,
+Blueprint counters/artifacts, generated task refs, request-context bundle refs,
+artifact parse validity, and runtime route/effect outcome without mutating the
+inspected workspace.
+
+## Run Commands
+
+The public `millrace run once` command is removed for Python `v0.20.0` parity.
+Use daemon mode with one tick when an operator needs a bounded single-cycle
+run:
+
+```bash
+millrace run daemon --workspace <workspace> --max-ticks 1
+```
+
+`--max-ticks 1` preserves the one-tick operator workflow through daemon startup,
+runtime ownership, compiled-plan authority, runner dispatch, and final daemon
+summary rendering. The removed command is rejected instead of silently aliasing
+to daemon mode.
+
 ## Graph And Trace Inspection
 
 `millrace compile graph` exports the selected compiled-plan topology as text or
@@ -131,10 +153,10 @@ artifacts.
 
 ## Web Boundary
 
-Python `millrace-web` exposes graph and trace data through read-only dashboard
-routes, and Python `v0.19.0` syncs that optional package through version
-`0.19.0`.
-Rust `0.4.0` shadows the accepted local inspection behavior through the CLI
+Python `millrace-web` exposes graph, trace, summary, queue-reader, and static
+dashboard data through read-only dashboard routes, and Python `v0.20.0` syncs
+that optional package through version `0.20.0`.
+Rust `0.5.0` shadows the accepted local inspection behavior through the CLI
 commands above and keeps the optional web dashboard as an explicit unsupported
 gap. No Rust web server, dashboard HTTP API, static shell, SSE stream, separate
 dashboard package, or Rust-managed web asset is part of this crate release.

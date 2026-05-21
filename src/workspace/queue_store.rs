@@ -27,6 +27,8 @@ use crate::{
     },
 };
 
+use super::blueprint_state::{active_blueprint_draft_count, claim_next_blueprint_draft};
+use super::queue_claims::QueueClaim;
 use super::task_lifecycle_integrity::retire_stale_blocked_task_duplicate_after_done;
 use super::{WorkspaceError, WorkspacePaths, initialize_workspace};
 
@@ -112,17 +114,6 @@ impl From<WorkspaceError> for QueueStoreError {
     fn from(value: WorkspaceError) -> Self {
         Self::Workspace(value)
     }
-}
-
-/// Claimed queue ownership for one work item.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct QueueClaim {
-    /// Kind of work item claimed.
-    pub work_item_kind: WorkItemKind,
-    /// Canonical work item id.
-    pub work_item_id: String,
-    /// Active path now owning the work item.
-    pub path: PathBuf,
 }
 
 /// Stale active artifact detection result.
@@ -1061,6 +1052,11 @@ fn parse_lookup_entry(
                     .map_err(|error| QueueStoreError::work_document(path, error))?;
             (document.learning_request_id, document.title)
         }
+        WorkItemKind::BlueprintDraft => {
+            return Err(QueueStoreError::invalid_state(
+                "blueprint_draft inspection is not backed by markdown queue documents",
+            ));
+        }
     };
     Ok(QueueInspectionEntry {
         work_item_kind: kind,
@@ -1258,11 +1254,11 @@ pub fn claim_next_execution_task(
             })?);
         match fs::rename(&source, &destination) {
             Ok(()) => {
-                return Ok(Some(QueueClaim {
-                    work_item_kind: WorkItemKind::Task,
-                    work_item_id: task_id,
-                    path: destination,
-                }));
+                return Ok(Some(
+                    QueueClaim::for_builtin(WorkItemKind::Task, task_id, destination)
+                        .with_source("queue", source)
+                        .with_claim_policy("execution.default", 0),
+                ));
             }
             Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
             Err(error) => return Err(QueueStoreError::io(&source, error)),
@@ -1270,7 +1266,7 @@ pub fn claim_next_execution_task(
     }
 }
 
-/// Claim the oldest planning incident, or the oldest spec when no incident is eligible.
+/// Claim the oldest planning incident, Blueprint draft, probe, or spec.
 pub fn claim_next_planning_item(
     paths: &WorkspacePaths,
     root_spec_id: Option<&str>,
@@ -1278,12 +1274,19 @@ pub fn claim_next_planning_item(
     let active_specs = list_markdown_files(&paths.specs_active_dir)?;
     let active_probes = list_markdown_files(&paths.probes_active_dir)?;
     let active_incidents = list_markdown_files(&paths.incidents_active_dir)?;
-    if active_specs.len() + active_probes.len() + active_incidents.len() > 1 {
+    let active_blueprint_drafts = active_blueprint_draft_count(paths)?;
+    if active_specs.len() + active_probes.len() + active_incidents.len() + active_blueprint_drafts
+        > 1
+    {
         return Err(QueueStoreError::invalid_state(
             "multiple active planning items found",
         ));
     }
-    if !active_specs.is_empty() || !active_probes.is_empty() || !active_incidents.is_empty() {
+    if !active_specs.is_empty()
+        || !active_probes.is_empty()
+        || !active_incidents.is_empty()
+        || active_blueprint_drafts > 0
+    {
         return Ok(None);
     }
 
@@ -1298,15 +1301,19 @@ pub fn claim_next_planning_item(
                 })?);
             match fs::rename(&source, &destination) {
                 Ok(()) => {
-                    return Ok(Some(QueueClaim {
-                        work_item_kind: WorkItemKind::Incident,
-                        work_item_id: incident_id,
-                        path: destination,
-                    }));
+                    return Ok(Some(
+                        QueueClaim::for_builtin(WorkItemKind::Incident, incident_id, destination)
+                            .with_source("incoming", source)
+                            .with_claim_policy("planning.default", 0),
+                    ));
                 }
                 Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
                 Err(error) => return Err(QueueStoreError::io(&source, error)),
             }
+        }
+
+        if let Some(claim) = claim_next_blueprint_draft(paths, root_spec_id)? {
+            return Ok(Some(claim));
         }
 
         let Some((work_item_kind, item_id, source)) =
@@ -1328,11 +1335,16 @@ pub fn claim_next_planning_item(
         })?);
         match fs::rename(&source, &destination) {
             Ok(()) => {
-                return Ok(Some(QueueClaim {
-                    work_item_kind,
-                    work_item_id: item_id,
-                    path: destination,
-                }));
+                let claim_order = match work_item_kind {
+                    WorkItemKind::Probe => 2,
+                    WorkItemKind::Spec => 3,
+                    _ => 0,
+                };
+                return Ok(Some(
+                    QueueClaim::for_builtin(work_item_kind, item_id, destination)
+                        .with_source("queue", source)
+                        .with_claim_policy("planning.default", claim_order),
+                ));
             }
             Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
             Err(error) => return Err(QueueStoreError::io(&source, error)),
@@ -1365,11 +1377,15 @@ pub fn claim_next_learning_request(paths: &WorkspacePaths) -> QueueStoreResult<O
             })?);
         match fs::rename(&source, &destination) {
             Ok(()) => {
-                return Ok(Some(QueueClaim {
-                    work_item_kind: WorkItemKind::LearningRequest,
-                    work_item_id: learning_request_id,
-                    path: destination,
-                }));
+                return Ok(Some(
+                    QueueClaim::for_builtin(
+                        WorkItemKind::LearningRequest,
+                        learning_request_id,
+                        destination,
+                    )
+                    .with_source("queue", source)
+                    .with_claim_policy("learning.default", 0),
+                ));
             }
             Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
             Err(error) => return Err(QueueStoreError::io(&source, error)),
@@ -2039,7 +2055,9 @@ pub fn detect_planning_stale_state(
             WorkItemKind::Probe => ids_in_directory(&paths.probes_queue_dir)?,
             WorkItemKind::Spec => ids_in_directory(&paths.specs_queue_dir)?,
             WorkItemKind::Incident => ids_in_directory(&paths.incidents_incoming_dir)?,
-            WorkItemKind::Task | WorkItemKind::LearningRequest => Vec::new(),
+            WorkItemKind::Task | WorkItemKind::LearningRequest | WorkItemKind::BlueprintDraft => {
+                Vec::new()
+            }
         };
         if queued_ids.contains(&item_id.to_owned()) {
             reasons.push("snapshot_points_to_queued_item");
@@ -2866,7 +2884,7 @@ fn locate_cancelable_for_kind(
             ("incoming", &paths.incidents_incoming_dir),
             ("blocked", &paths.incidents_blocked_dir),
         ],
-        WorkItemKind::LearningRequest => Vec::new(),
+        WorkItemKind::LearningRequest | WorkItemKind::BlueprintDraft => Vec::new(),
     };
     directories
         .into_iter()

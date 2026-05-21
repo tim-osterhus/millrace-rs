@@ -12,8 +12,10 @@ safe managed updates through the baseline manifest.
 
 Execution entrypoints include Builder, Checker, Fixer, Doublechecker, Updater,
 Troubleshooter, Consultant, and the opt-in Integrator entrypoint. Planning
-entrypoints include Recon, Planner, Manager, Mechanic, Auditor, and Arbiter.
-Learning entrypoints include Analyst, Professor, Curator, and Librarian.
+entrypoints include Recon, Planner, Manager, Mechanic, Auditor, Arbiter,
+Manager Blueprint, Contractor Blueprint, Evaluator Blueprint, and Mechanic
+Blueprint. Learning entrypoints include Analyst, Professor, Curator, and
+Librarian.
 
 The v0.18.3 parity line adds:
 
@@ -21,6 +23,18 @@ The v0.18.3 parity line adds:
 - `millrace-agents/entrypoints/learning/librarian.md`
 - `src/assets/baseline/registry/stage_kinds/learning/librarian.json`
 - `src/assets/baseline/skills/stage/learning/librarian-core/SKILL.md`
+
+The v0.20.0 Blueprint Planning parity line adds:
+
+- `src/assets/baseline/entrypoints/planning/manager_blueprint.md`
+- `src/assets/baseline/entrypoints/planning/contractor_blueprint.md`
+- `src/assets/baseline/entrypoints/planning/evaluator_blueprint.md`
+- `src/assets/baseline/entrypoints/planning/mechanic_blueprint.md`
+- `src/assets/baseline/registry/stage_kinds/planning/manager_blueprint.json`
+- `src/assets/baseline/registry/stage_kinds/planning/contractor_blueprint.json`
+- `src/assets/baseline/registry/stage_kinds/planning/evaluator_blueprint.json`
+- `src/assets/baseline/registry/stage_kinds/planning/mechanic_blueprint.json`
+- `src/assets/baseline/skills/stage/planning/*-blueprint-core/SKILL.md`
 
 ## Request Contract
 
@@ -37,3 +51,9 @@ learning requests use:
 Required stage-core skills are compile-time stage metadata. Optional secondary
 skills remain advisory and must be present in the packaged or installed skills
 surface before an entrypoint can reference them.
+
+Blueprint draft stage requests use `active_work_item_kind = blueprint_draft`
+and active paths under `millrace-agents/blueprints/drafts/active/`. Blueprint
+stage results are interpreted by compiled runtime-effect rules; the stage
+entrypoint does not own draft lifecycle movement, generated task promotion, or
+closure suppression.

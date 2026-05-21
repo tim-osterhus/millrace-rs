@@ -3,7 +3,10 @@ mod support;
 use std::fs;
 use std::path::Path;
 
-use millrace_ai::workspace::{initialize_workspace, load_baseline_manifest};
+use millrace_ai::workspace::{
+    CURRENT_WORKSPACE_SCHEMA_EPOCH, initialize_workspace, load_baseline_manifest,
+    load_workspace_schema_epoch_marker,
+};
 use serde_json::Value;
 use support::parity::read_fixture;
 use tempfile::TempDir;
@@ -88,6 +91,9 @@ fn rust_init_matches_python_selected_bootstrap_file_fixture() {
     let recovery_counters: Value =
         serde_json::from_str(&fs::read_to_string(&paths.recovery_counters_file).unwrap()).unwrap();
     assert_eq!(recovery_counters, fixture["recovery_counters"]);
+
+    let marker = load_workspace_schema_epoch_marker(&paths).unwrap();
+    assert_eq!(marker.epoch_id, CURRENT_WORKSPACE_SCHEMA_EPOCH);
 }
 
 #[test]
@@ -121,6 +127,40 @@ fn rust_init_deploys_python_expected_managed_asset_families() {
         assert!(
             manifest.entry_for(relative_path).is_some(),
             "manifest missing representative managed asset: {relative_path}"
+        );
+    }
+
+    for relative_path in [
+        "modes/blueprint_codex.json",
+        "modes/blueprint_learning_codex.json",
+        "graphs/planning/blueprint.json",
+        "registry/work_item_families/blueprint_draft.json",
+        "registry/document_adapters/builtin_markdown_v1.json",
+        "registry/document_adapters/blueprint_draft_markdown_v1.json",
+        "registry/queue_claim_policies/default_queue_claim_policies.json",
+        "registry/lifecycle_mutation_plans/default_lifecycle_mutations.json",
+        "registry/terminal_actions/default_terminal_actions.json",
+        "registry/artifact_contracts/default_artifact_contracts.json",
+        "registry/request_context_profiles/default_request_context_profiles.json",
+        "registry/runtime_effect_rules/blueprint_effect_rules.json",
+        "registry/runtime_failure_policies/default_runtime_failure_policies.json",
+        "registry/workspace_schema_epochs/current.json",
+        "entrypoints/planning/manager_blueprint.md",
+        "entrypoints/planning/contractor_blueprint.md",
+        "entrypoints/planning/evaluator_blueprint.md",
+        "entrypoints/planning/mechanic_blueprint.md",
+        "skills/stage/planning/manager-blueprint-core/SKILL.md",
+        "skills/stage/planning/contractor-blueprint-core/SKILL.md",
+        "skills/stage/planning/evaluator-blueprint-core/SKILL.md",
+        "skills/stage/planning/mechanic-blueprint-core/SKILL.md",
+    ] {
+        assert!(
+            paths.runtime_root.join(relative_path).is_file(),
+            "missing v0.20.0 managed asset: {relative_path}"
+        );
+        assert!(
+            manifest.entry_for(relative_path).is_some(),
+            "manifest missing v0.20.0 managed asset: {relative_path}"
         );
     }
 }

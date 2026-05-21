@@ -152,6 +152,39 @@ fn doctor_flags_unparseable_queue_artifacts_and_filename_id_mismatches() {
 }
 
 #[test]
+fn doctor_flags_invalid_blueprint_artifacts() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
+    let draft_dir = paths.runtime_root.join("blueprints/drafts/queue");
+    fs::create_dir_all(&draft_dir).unwrap();
+    fs::write(
+        draft_dir.join("draft-invalid.json"),
+        serde_json::json!({
+            "schema_version": "1.0",
+            "kind": "blueprint_draft",
+            "draft_id": "draft-other"
+        })
+        .to_string()
+            + "\n",
+    )
+    .unwrap();
+
+    let report = run_workspace_doctor_for_paths(&paths);
+
+    assert!(!report.ok);
+    let issue = report
+        .errors
+        .iter()
+        .find(|issue| issue.code == "blueprint_artifact_invalid")
+        .expect("blueprint artifact diagnostic");
+    assert!(issue.message.contains("blueprint_draft"));
+    assert_eq!(
+        issue.path.as_ref(),
+        Some(&draft_dir.join("draft-invalid.json"))
+    );
+}
+
+#[test]
 fn doctor_flags_duplicate_task_lifecycle_state_with_workspace_relative_paths() {
     let temp_dir = TempDir::new().unwrap();
     let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();

@@ -8,8 +8,9 @@ use tempfile::TempDir;
 use millrace_ai::contracts::{
     AutoRecoveryPreRecoverySnapshot, BlockedDependencyAutoRecoveryDiagnostic, BlockedItemMetadata,
     BlockedOrigin, BlockedTaskRequeueResult, CompileDiagnostics, ExecutionTerminalResult,
-    FailureClassifierCode, FailureScope, LatestOperatorIntervention, LearningTerminalResult,
-    MailboxAddProbePayload, MailboxArchiveBlockedTaskPayload, MailboxArchiveInvalidIncidentPayload,
+    FailureClassifierCode, FailureScope, LaneRuntimeState, LaneRuntimeStatus,
+    LatestOperatorIntervention, LearningTerminalResult, MailboxAddProbePayload,
+    MailboxArchiveBlockedTaskPayload, MailboxArchiveInvalidIncidentPayload,
     MailboxCancelWorkItemPayload, MailboxCommand, MailboxCommandEnvelope,
     MailboxExecutionCapabilityApprovalPayload, MailboxIncidentInterventionPayload,
     MailboxRetargetTaskDependencyPayload, MailboxSupersedeCascade, MailboxSupersedeTaskPayload,
@@ -444,6 +445,17 @@ fn read_only_status_payload_serializes_python_compatible_json_fields() {
         active_work_item_kind: None,
         active_work_item_id: None,
         active_run_count: 0,
+        lane_state: json!({
+            "planning.main": {
+                "plane": "planning",
+                "status": "idle",
+                "compiled_plan_id": "plan-001"
+            }
+        }),
+        pending_plan: json!({
+            "compiled_plan_id": "plan-002",
+            "compiled_plan_path": "millrace-agents/compiled/compiled_plan.json"
+        }),
         execution_queue_depth: 0,
         planning_queue_depth: 0,
         learning_queue_depth: 0,
@@ -452,6 +464,25 @@ fn read_only_status_payload_serializes_python_compatible_json_fields() {
         learning_status_marker: "### IDLE".to_owned(),
         blocked_idle: true,
         current_failure_class: Some("recon_handoff_invalid".to_owned()),
+        latest_failure_origin: Some("stage_terminal".to_owned()),
+        context_bundle_path: Some(
+            "millrace-agents/runs/run-001/context/request_context.json".to_owned(),
+        ),
+        latest_launch_plan_id: Some("plan-001".to_owned()),
+        latest_visible_context_refs: vec!["task:task-001".to_owned()],
+        latest_artifact_parse_status: Some("valid".to_owned()),
+        latest_runtime_outcome: Some("blocked".to_owned()),
+        latest_runtime_effect_handler_id: Some("planner_child_specs".to_owned()),
+        latest_runtime_effect_decision: Some("applied".to_owned()),
+        latest_runtime_effect_mutation_phase: Some("complete_mutation".to_owned()),
+        latest_runtime_effect_failure_class: Some("child_spec_write_failed".to_owned()),
+        latest_runtime_effect_failure_policy_id: Some("planner_child_spec_failure".to_owned()),
+        latest_runtime_effect_recovery_action: Some("route_to_troubleshooter".to_owned()),
+        latest_runtime_effect_source_lifecycle_plan_id: Some("source_spec_complete".to_owned()),
+        latest_runtime_effect_source_lifecycle_action: Some("mark_done".to_owned()),
+        latest_runtime_effect_created_paths: vec![
+            "millrace-agents/specs/queue/spec-child.md".to_owned(),
+        ],
         latest_runtime_error_report_path: Some(
             "millrace-agents/runs/run-001/runtime_error_report.md".to_owned(),
         ),
@@ -486,6 +517,19 @@ fn read_only_status_payload_serializes_python_compatible_json_fields() {
     assert_eq!(
         value["latest_operator_intervention"]["work_item_id"],
         "task-cancelled"
+    );
+    assert_eq!(value["latest_launch_plan_id"], "plan-001");
+    assert_eq!(value["latest_visible_context_refs"][0], "task:task-001");
+    assert_eq!(value["latest_artifact_parse_status"], "valid");
+    assert_eq!(value["latest_runtime_outcome"], "blocked");
+    assert_eq!(
+        value["latest_runtime_effect_handler_id"],
+        "planner_child_specs"
+    );
+    assert_eq!(value["latest_runtime_effect_decision"], "applied");
+    assert_eq!(
+        value["latest_runtime_effect_created_paths"][0],
+        "millrace-agents/specs/queue/spec-child.md"
     );
     assert_eq!(value["closure_target_open"], true);
 
@@ -1914,6 +1958,179 @@ fn auto_port_v0_19_0_runtime_contract_scout_pins_execution_capability_contracts(
 }
 
 #[test]
+fn auto_port_v0_20_0_runtime_contract_scout_pins_workflow_blueprint_and_runtime_effect_contracts() {
+    let fixture: Value = python_model_dump_fixture(include_str!(
+        "fixtures/runtime_json/auto_port_v0_20_0_runtime_contract_scout.json"
+    ));
+    assert_eq!(fixture["schema_version"], "1.0");
+    assert_eq!(fixture["kind"], "auto_port_v0_20_0_runtime_contract_scout");
+    assert_eq!(fixture["python_reference"]["previous_tag"], "v0.19.0");
+    assert_eq!(
+        fixture["python_reference"]["previous_tag_object"],
+        "11c45b03428226f04f56fe078e083bea2464e6b0"
+    );
+    assert_eq!(
+        fixture["python_reference"]["previous_peeled_commit"],
+        "efb9c5881f524d23dcb78aecfc96fdf7cda9d26f"
+    );
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.20.0");
+    assert_eq!(
+        fixture["python_reference"]["target_tag_object"],
+        "25d86f0c560d60d66039611e34df2737a64bebe3"
+    );
+    assert_eq!(
+        fixture["python_reference"]["target_peeled_commit"],
+        "c432786242e9e7cf9f7262ec0ec4f906f4bb7bf7"
+    );
+    assert_eq!(
+        fixture["python_reference"]["diff_range"],
+        "v0.19.0..v0.20.0"
+    );
+    assert_eq!(fixture["python_reference"]["changed_path_count"], 249);
+    assert_eq!(
+        fixture["rust_reference"]["current_repo_crate_version"],
+        "0.4.0"
+    );
+    assert_eq!(fixture["rust_reference"]["planned_crate_version"], "0.5.0");
+
+    let sources: BTreeSet<_> = fixture["contract_sources"]
+        .as_array()
+        .expect("contract source references are present")
+        .iter()
+        .map(|value| value.as_str().expect("contract source"))
+        .collect();
+    for source_path in [
+        "../millrace-py/src/millrace_ai/architecture/workflow_primitives.py",
+        "../millrace-py/src/millrace_ai/contracts/blueprint.py",
+        "../millrace-py/src/millrace_ai/contracts/work_refs.py",
+        "../millrace-py/src/millrace_ai/runtime/request_context.py",
+        "../millrace-py/src/millrace_ai/runtime/lanes.py",
+        "../millrace-py/src/millrace_ai/runtime/effects.py",
+        "../millrace-py/src/millrace_ai/runtime/failure_policy.py",
+        "../millrace-py/src/millrace_ai/runtime/blueprint_effects.py",
+        "../millrace-py/src/millrace_ai/workspace/schema_epoch.py",
+        "../millrace-py/src/millrace_ai/assets/registry/runtime_effect_rules/blueprint_effect_rules.json",
+        "../millrace-py/tests/blueprint/test_effects.py",
+        "../millrace-py/tests/runtime/test_request_context.py",
+    ] {
+        assert!(
+            sources.contains(source_path),
+            "missing v0.20.0 runtime contract source {source_path}"
+        );
+    }
+
+    let targets: BTreeSet<_> = fixture["expected_rust_contract_targets"]
+        .as_array()
+        .expect("expected Rust contract targets are present")
+        .iter()
+        .map(|value| value.as_str().expect("expected Rust target"))
+        .collect();
+    for target_path in [
+        "src/contracts/workflow_primitives.rs",
+        "src/contracts/blueprint.rs",
+        "src/contracts/work_refs.rs",
+        "src/runtime/request_context.rs",
+        "src/runtime/effects.rs",
+        "src/runtime/failure_policy.rs",
+        "src/runtime/blueprint_effects.rs",
+        "src/runtime/lanes.rs",
+        "src/workspace/schema_epoch.rs",
+        "tests/contracts_runtime_json.rs",
+        "tests/contracts_public_exports.rs",
+        "tests/compiler_contracts.rs",
+        "tests/compiler_materialization.rs",
+        "tests/compiler_persistence.rs",
+    ] {
+        assert!(
+            targets.contains(target_path),
+            "missing v0.20.0 Rust contract target {target_path}"
+        );
+    }
+
+    let workflow = &fixture["workflow_primitive_contract"];
+    for model in [
+        "WorkflowPrimitiveSet",
+        "ArtifactContractDefinition",
+        "DocumentAdapterDefinition",
+        "WorkItemFamilyDefinition",
+        "QueueClaimPolicyDefinition",
+        "TerminalActionDefinition",
+        "LifecycleMutationPlanDefinition",
+        "RuntimeEffectRuleDefinition",
+        "RuntimeFailurePolicyDefinition",
+        "RequestContextProfileDefinition",
+        "WorkspaceSchemaEpochDefinition",
+        "LanePolicyDefinition",
+        "ContextRenderPlanDefinition",
+    ] {
+        assert!(
+            workflow["contract_models"]
+                .as_array()
+                .expect("workflow contract models are present")
+                .iter()
+                .any(|value| value.as_str() == Some(model)),
+            "missing v0.20.0 workflow primitive model {model}"
+        );
+    }
+    assert!(
+        workflow["registry_collections"]
+            .as_array()
+            .expect("registry collections are present")
+            .iter()
+            .any(|value| value.as_str() == Some("workspace_schema_epochs")),
+        "missing v0.20.0 workspace schema epoch registry evidence"
+    );
+    assert_eq!(
+        fixture["blueprint_contract"]["stage_kind_ids"],
+        json!([
+            "manager_blueprint",
+            "contractor_blueprint",
+            "evaluator_blueprint",
+            "mechanic_blueprint"
+        ])
+    );
+    assert_eq!(
+        fixture["lane_request_context_contract"]["context_bundle_artifacts"],
+        json!(["request_context.json", "prompt_context.md"])
+    );
+    assert_eq!(
+        fixture["runtime_effect_contract"]["failure_policy_selectors"],
+        json!([
+            "failure_origin",
+            "failure_class",
+            "mutation_phase",
+            "handler_id",
+            "source_terminal"
+        ])
+    );
+    assert_eq!(
+        fixture["cli_status_contract"]["removed_public_commands"],
+        json!(["millrace run once"])
+    );
+
+    let guarantees = fixture["no_live_guarantees"]
+        .as_array()
+        .expect("non-live guarantees are present");
+    for guarantee in [
+        "no live Python execution beyond checked-out ../millrace-py diff inspection",
+        "no live Codex runner",
+        "no live Pi runner",
+        "no network",
+        "no credentials",
+        "no web server",
+        "no release upload",
+        "no publishing",
+    ] {
+        assert!(
+            guarantees
+                .iter()
+                .any(|value| value.as_str() == Some(guarantee)),
+            "missing v0.20.0 runtime contract scout guarantee {guarantee}"
+        );
+    }
+}
+
+#[test]
 fn python_v0_18_6_mailbox_intervention_payload_contracts_round_trip_and_validate() {
     let fixture = python_model_dump_fixture(include_str!(
         "fixtures/runtime_json/mailbox_intervention_payloads.json"
@@ -2245,6 +2462,26 @@ fn python_v0_18_1_probe_mailbox_and_recon_stage_json_contracts_round_trip() {
         TerminalResult::Planning(PlanningTerminalResult::ReconToExecution)
     );
     assert_eq!(decoded.work_item_kind.as_str(), "probe");
+
+    let mut blueprint_stage = stage_result_json();
+    blueprint_stage["plane"] = json!("planning");
+    blueprint_stage["stage"] = json!("contractor_blueprint");
+    blueprint_stage["node_id"] = json!("contractor_blueprint");
+    blueprint_stage["stage_kind_id"] = json!("contractor_blueprint");
+    blueprint_stage["work_item_kind"] = json!("blueprint_draft");
+    blueprint_stage["work_item_id"] = json!("draft-001");
+    blueprint_stage["terminal_result"] = json!("BLUEPRINT_CANDIDATE_READY");
+    blueprint_stage["summary_status_marker"] = json!("### BLUEPRINT_CANDIDATE_READY");
+    blueprint_stage["detected_marker"] = json!("### BLUEPRINT_CANDIDATE_READY");
+    blueprint_stage["artifact_paths"] = json!(["blueprint_packet.json"]);
+
+    let decoded = round_trip_stage_result(blueprint_stage);
+    assert_eq!(decoded.stage, StageName::ContractorBlueprint);
+    assert_eq!(
+        decoded.terminal_result,
+        TerminalResult::Planning(PlanningTerminalResult::BlueprintCandidateReady)
+    );
+    assert_eq!(decoded.work_item_kind, WorkItemKind::BlueprintDraft);
 }
 
 #[test]
@@ -2295,6 +2532,59 @@ fn runtime_snapshot_round_trips_python_shaped_active_state() {
             .map(String::as_str),
         Some("learning.standard")
     );
+}
+
+#[test]
+fn runtime_snapshot_round_trips_v0_20_lane_and_family_projection_fields() {
+    let mut raw = snapshot_json();
+    raw["compiled_plan_fingerprint"] = json!("compile-input-deadbeef");
+    raw["active_work_item_family_id"] = json!("task");
+    raw["active_runs_by_plane"]["execution"]["lane_id"] = json!("execution.main");
+    raw["active_runs_by_plane"]["execution"]["compiled_plan_id"] = json!("plan-001");
+    raw["active_runs_by_plane"]["execution"]["compiled_plan_fingerprint"] =
+        json!("compile-input-deadbeef");
+    raw["active_runs_by_plane"]["execution"]["work_item_family_id"] = json!("task");
+    raw["lanes_by_id"] = json!({
+        "execution.main": {
+            "lane_id": "execution.main",
+            "plane": "execution",
+            "status": "active",
+            "compiled_plan_id": "plan-001",
+            "compiled_plan_fingerprint": "compile-input-deadbeef",
+            "active_run_ids": ["run-001"],
+            "active_work_refs": ["task:task-001"],
+            "pause_requested": false,
+            "stop_requested": false,
+            "drain_requested": false,
+            "mutation_lock_refs": [],
+            "completion_target_refs": [],
+            "failure_counter_refs": [],
+            "last_claim_attempt_at": NOW,
+            "last_terminal_outcome": "BUILDER_COMPLETE"
+        }
+    });
+
+    let snapshot = round_trip_contract::<RuntimeSnapshot>(raw);
+    assert_eq!(snapshot.active_work_item_family_id.as_deref(), Some("task"));
+    let active = snapshot
+        .active_runs_by_plane
+        .get(&Plane::Execution)
+        .unwrap();
+    assert_eq!(active.lane_id, "execution.main");
+    assert_eq!(active.work_item_family_id.as_deref(), Some("task"));
+    assert_eq!(
+        snapshot.lanes_by_id.get("execution.main").unwrap().status,
+        LaneRuntimeStatus::Active
+    );
+
+    let idle_lane = LaneRuntimeState::from_json_value(json!({
+        "lane_id": "planning.main",
+        "plane": "planning",
+        "compiled_plan_id": "plan-001",
+        "compiled_plan_fingerprint": "compile-input-deadbeef"
+    }))
+    .unwrap();
+    assert_eq!(idle_lane.status, LaneRuntimeStatus::Idle);
 }
 
 #[test]

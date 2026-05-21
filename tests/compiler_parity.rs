@@ -178,47 +178,53 @@ fn compiler_parity_fixture_documents_regeneration_surface() {
             .expect("read compiler parity fixture"),
     )
     .expect("parse compiler parity fixture");
-    assert_eq!(fixture["source"]["previous_version"], "0.18.0");
-    assert_eq!(fixture["source"]["target_version"], "0.18.1");
-    assert_eq!(fixture["source"]["version"], "0.18.1");
-    assert_eq!(fixture["source"]["previous_tag"], "v0.18.0");
+    assert_eq!(fixture["source"]["previous_version"], "0.19.0");
+    assert_eq!(fixture["source"]["target_version"], "0.20.0");
+    assert_eq!(fixture["source"]["version"], "0.20.0");
+    assert_eq!(fixture["source"]["previous_tag"], "v0.19.0");
     assert_eq!(
         fixture["source"]["previous_commit"],
-        "e4ccf099c8345a8b8708cdaa1ac510bdc7851387"
+        "efb9c5881f524d23dcb78aecfc96fdf7cda9d26f"
     );
-    assert_eq!(fixture["source"]["target_tag"], "v0.18.1");
+    assert_eq!(fixture["source"]["target_tag"], "v0.20.0");
     assert_eq!(
         fixture["source"]["target_commit"],
-        "0396c7852793b212d31345862b38a7d6f3f02854"
+        "c432786242e9e7cf9f7262ec0ec4f906f4bb7bf7"
     );
-    assert_eq!(fixture["source"]["diff_range"], "v0.18.0..v0.18.1");
+    assert_eq!(fixture["source"]["diff_range"], "v0.19.0..v0.20.0");
     assert_ne!(
         fixture["source"]["target_version"], fixture["source"]["previous_version"],
         "compiler parity fixture is still pinned to the previous Python baseline as target",
     );
     for source_path in [
-        "src/millrace_ai/config/models.py",
-        "src/millrace_ai/contracts/modes.py",
-        "src/millrace_ai/contracts/stage_metadata.py",
-        "src/millrace_ai/architecture/loop_graphs.py",
-        "src/millrace_ai/assets/entrypoints/planning/recon.md",
-        "src/millrace_ai/assets/graphs/planning/standard.json",
-        "src/millrace_ai/assets/registry/stage_kinds/planning/recon.json",
-        "src/millrace_ai/assets/skills/stage/planning/recon-core/SKILL.md",
-        "src/millrace_ai/cli/commands/compile.py",
-        "src/millrace_ai/cli/formatting.py",
+        "src/millrace_ai/architecture/workflow_primitives.py",
+        "src/millrace_ai/assets/graphs/planning/blueprint.json",
+        "src/millrace_ai/assets/modes/blueprint_codex.json",
+        "src/millrace_ai/assets/registry/artifact_contracts/default_artifact_contracts.json",
+        "src/millrace_ai/assets/registry/document_adapters/blueprint_draft_markdown_v1.json",
+        "src/millrace_ai/assets/registry/runtime_effect_rules/blueprint_effect_rules.json",
+        "src/millrace_ai/assets/registry/runtime_effect_rules/planner_effect_rules.json",
+        "src/millrace_ai/assets/registry/terminal_actions/default_terminal_actions.json",
+        "src/millrace_ai/assets/registry/work_item_families/blueprint_draft.json",
+        "src/millrace_ai/assets/registry/workspace_schema_epochs/current.json",
+        "src/millrace_ai/compilation/assets.py",
+        "src/millrace_ai/compilation/currentness.py",
+        "src/millrace_ai/compilation/fingerprints.py",
         "src/millrace_ai/compilation/graph_exports.py",
-        "src/millrace_ai/compilation/learning_triggers.py",
-        "src/millrace_ai/compilation/node_materialization.py",
-        "src/millrace_ai/cli/compile_view.py",
-        "src/millrace_ai/contracts/graph_exports.py",
-        "tests/config/test_config.py",
-        "tests/cli/test_graph_trace_cli.py",
+        "src/millrace_ai/compilation/graph_materialization.py",
+        "src/millrace_ai/compilation/plan_authority.py",
+        "src/millrace_ai/compilation/validation.py",
+        "src/millrace_ai/compilation/workspace_plan.py",
+        "tests/architecture/test_lane_contracts.py",
+        "tests/architecture/test_workflow_primitives.py",
+        "tests/assets/test_blueprint_assets.py",
         "tests/assets/test_loop_graphs.py",
         "tests/assets/test_modes.py",
         "tests/assets/test_stage_kinds.py",
+        "tests/assets/test_workflow_assets.py",
+        "tests/compilation/test_lane_validation.py",
+        "tests/compilation/test_workflow_validation.py",
         "tests/integration/test_compiler.py",
-        "tests/integration/test_graph_exports.py",
     ] {
         assert!(
             fixture["source"]["contract_sources"]
@@ -604,6 +610,21 @@ fn normalize_plan_value(value: Value, key: Option<&str>, mode_id: Option<String>
                         child = Value::Array(assets);
                     }
                 }
+                if child_key == "workflow_primitive_fingerprints" {
+                    if let Value::Object(fingerprints) = child {
+                        child = Value::Object(
+                            fingerprints
+                                .into_iter()
+                                .map(|(fingerprint_key, _)| {
+                                    (
+                                        fingerprint_key,
+                                        Value::String("<content-sha256>".to_owned()),
+                                    )
+                                })
+                                .collect(),
+                        );
+                    }
+                }
                 normalized.insert(child_key, child);
             }
             Value::Object(normalized)
@@ -641,6 +662,7 @@ fn normalize_cli_output(stdout: &str) -> Value {
     let mut diagnostics = Map::new();
     let mut show = Map::new();
     let mut entries = Vec::new();
+    let mut lanes = Vec::new();
     let mut completion_behavior = Map::new();
     let mut stages: Vec<Value> = Vec::new();
     let mut current_stage: Option<Map<String, Value>> = None;
@@ -680,6 +702,11 @@ fn normalize_cli_output(stdout: &str) -> Value {
             continue;
         }
 
+        if key == "lane" {
+            lanes.push(Value::String(raw_value.to_owned()));
+            continue;
+        }
+
         if key.starts_with("completion_behavior.") {
             completion_behavior.insert(key.to_owned(), value);
             continue;
@@ -695,6 +722,13 @@ fn normalize_cli_output(stdout: &str) -> Value {
             continue;
         }
 
+        if is_repeated_stage_field(key) {
+            if let Some(stage) = current_stage.as_mut() {
+                push_repeated_value(stage, key, value);
+            }
+            continue;
+        }
+
         if is_stage_field(key) {
             if let Some(stage) = current_stage.as_mut() {
                 stage.insert(key.to_owned(), value);
@@ -707,7 +741,7 @@ fn normalize_cli_output(stdout: &str) -> Value {
             continue;
         }
 
-        if is_show_field(key) {
+        if is_show_field(key) || is_workflow_primitive_show_field(key) {
             show.insert(key.to_owned(), value);
             continue;
         }
@@ -723,6 +757,10 @@ fn normalize_cli_output(stdout: &str) -> Value {
     result.insert("diagnostics".to_owned(), Value::Object(diagnostics));
     if !show.is_empty() {
         show.insert("entries".to_owned(), Value::Array(entries));
+        if !lanes.is_empty() {
+            lanes.sort_by(|left, right| left.as_str().cmp(&right.as_str()));
+            show.insert("lanes".to_owned(), Value::Array(lanes));
+        }
         if !completion_behavior.is_empty() {
             show.insert(
                 "completion_behavior".to_owned(),
@@ -748,6 +786,7 @@ fn normalize_cli_value(key: &str, value: &str) -> Value {
         }
         "baseline_manifest_id" => "<baseline_manifest_id>".to_owned(),
         "baseline_seed_package_version" => "<package_version>".to_owned(),
+        key if key.starts_with("workflow_primitive_fingerprint.") => "<content-sha256>".to_owned(),
         "entrypoint_path" => normalize_runtime_path(value),
         "required_skills" | "attached_skills" => value
             .split(", ")
@@ -757,6 +796,16 @@ fn normalize_cli_value(key: &str, value: &str) -> Value {
         _ => value.to_owned(),
     };
     Value::String(normalized)
+}
+
+fn push_repeated_value(stage: &mut Map<String, Value>, key: &str, value: Value) {
+    let entry = stage
+        .entry(key.to_owned())
+        .or_insert_with(|| Value::Array(Vec::new()));
+    if let Value::Array(values) = entry {
+        values.push(value);
+        values.sort_by(|left, right| left.as_str().cmp(&right.as_str()));
+    }
 }
 
 fn normalize_compiled_plan_id(value: &str) -> String {
@@ -814,10 +863,23 @@ fn is_show_field(key: &str) -> bool {
     )
 }
 
+fn is_workflow_primitive_show_field(key: &str) -> bool {
+    key.starts_with("workflow_primitives.")
+        || key.starts_with("workflow_primitive_fingerprint.")
+        || matches!(
+            key,
+            "workspace_schema_epoch"
+                | "workspace_schema_epoch.minimum_supported"
+                | "lane_policy"
+                | "pending_compiled_plan"
+        )
+}
+
 fn is_stage_field(key: &str) -> bool {
     matches!(
         key,
         "stage_kind_id"
+            | "lane_id"
             | "running_status_marker"
             | "entrypoint_path"
             | "entrypoint_contract_id"
@@ -828,6 +890,16 @@ fn is_stage_field(key: &str) -> bool {
             | "thinking_level"
             | "model_reasoning_effort"
             | "timeout_seconds"
+            | "request_context_profile_id"
+    )
+}
+
+fn is_repeated_stage_field(key: &str) -> bool {
+    matches!(
+        key,
+        "terminal_action_mapping"
+            | "runtime_effect_rule_selection"
+            | "runtime_effect_rule_selections"
     )
 }
 

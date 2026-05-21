@@ -105,6 +105,79 @@ fn compiler_materialization_v0_19_0_guardrail_fixture_requires_compiled_capabili
 }
 
 #[test]
+fn compiler_materialization_v0_20_0_guardrail_fixture_requires_primitive_materialization_fields() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "fixtures/compiler_parity/auto_port_v0_20_0_compiler_contract_scout.json"
+    ))
+    .expect("parse v0.20.0 compiler contract scout");
+    assert_eq!(fixture["kind"], "auto_port_v0_20_0_compiler_contract_scout");
+    assert_eq!(fixture["python_reference"]["target_tag"], "v0.20.0");
+
+    let sources: BTreeSet<_> = fixture["compiler_sources"]
+        .as_array()
+        .expect("compiler source references are present")
+        .iter()
+        .map(|value| value.as_str().expect("compiler source"))
+        .collect();
+    for source in [
+        "../millrace-py/src/millrace_ai/compilation/assets.py",
+        "../millrace-py/src/millrace_ai/compilation/graph_materialization.py",
+        "../millrace-py/src/millrace_ai/compilation/node_materialization.py",
+        "../millrace-py/src/millrace_ai/compilation/workspace_plan.py",
+        "../millrace-py/src/millrace_ai/assets/workflows.py",
+        "../millrace-py/tests/compilation/test_workflow_validation.py",
+    ] {
+        assert!(
+            sources.contains(source),
+            "missing v0.20.0 primitive materialization source {source}"
+        );
+    }
+
+    let persisted_fields = fixture["persisted_plan_fields"]
+        .as_array()
+        .expect("persisted plan fields are present");
+    for field in [
+        "workflow_primitives",
+        "workflow_primitive_fingerprints",
+        "lane_policy",
+        "request_context_profile_id",
+        "terminal_action_mappings",
+        "runtime_effect_rule_selections",
+        "completion_behavior",
+        "workspace_schema_epoch",
+    ] {
+        assert!(
+            persisted_fields
+                .iter()
+                .any(|value| value.as_str() == Some(field)),
+            "missing v0.20.0 primitive materialization field {field}"
+        );
+    }
+
+    let primitive_collections = fixture["primitive_collections"]
+        .as_array()
+        .expect("primitive collections are present");
+    for collection in [
+        "artifact_contracts",
+        "document_adapters",
+        "work_item_families",
+        "queue_claim_policies",
+        "terminal_actions",
+        "runtime_effect_rules",
+        "runtime_failure_policies",
+        "request_context_profiles",
+        "workspace_schema_epochs",
+    ] {
+        assert!(
+            primitive_collections
+                .iter()
+                .any(|value| value.as_str() == Some(collection)),
+            "missing v0.20.0 primitive collection {collection}"
+        );
+    }
+}
+
+#[test]
 fn default_codex_materializes_execution_and_planning_graphs() {
     let temp_dir = TempDir::new().unwrap();
     let paths = initialize_workspace(temp_dir.path().join("workspace")).unwrap();
@@ -538,6 +611,8 @@ fn learning_modes_materialize_learning_graph_triggers_and_concurrency_policy() {
             "graph_loop:learning.standard".to_owned(),
             "graph_loop:planning.standard".to_owned(),
             "graph_completion_behavior:planning.standard".to_owned(),
+            "workflow_primitives:v0.20".to_owned(),
+            "workspace_schema_epoch:v0.20".to_owned(),
         ]
     );
 }
